@@ -26,5 +26,32 @@
         </form>
     </div>
     <script src="../logica/Inicio.js"></script>
+    <script>
+        const { ipcRenderer } = require('electron');
+        
+        ipcRenderer.on('update_available', () => {
+            ipcRenderer.removeAllListeners('update_available');
+            Swal.fire({
+                title: '¡Actualización disponible!',
+                text: 'Se está descargando una nueva versión. Te notificaremos cuando esté lista.',
+                icon: 'info'
+            });
+        });
+        
+        ipcRenderer.on('update_downloaded', () => {
+            ipcRenderer.removeAllListeners('update_downloaded');
+            Swal.fire({
+                title: '¡Actualización lista!',
+                text: 'Se ha descargado una nueva versión. La aplicación se reiniciará para instalar la actualización.',
+                icon: 'success',
+                showCancelButton: false,
+                confirmButtonText: 'Reiniciar ahora'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    ipcRenderer.send('restart_app');
+                }
+            });
+        });
+    </script>
 </body>
 </html>

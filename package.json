@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "electron .",
-    "package": "electron-builder",
+    "package": "electron-builder -p always",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -35,9 +35,6 @@
     ],
     "appId": "com.tuempresa.syscuareport",
     "productName": "SysCua-Report",
-    "directories": {
-      "output": "dist"
-    },
     "win": {
       "target": [
         "nsis"

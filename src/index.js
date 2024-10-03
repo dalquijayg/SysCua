@@ -15,23 +15,21 @@ let cuadreWindow = null;
 let historialwindow = null;
 let criteriowindow = null;
 
-app.on('ready', ()=>{
-  createWindow()
-  autoUpdater.checkForUpdatesAndNotify()
-})
+app.on('ready',  createWindow)
 
-autoUpdater.on("update-available", ()=>{
-  log.info("update-available")
-})
-autoUpdater.on("checking-for-update", ()=>{
-  log.info("checking-for-update")
-})
-autoUpdater.on("download-progress", ()=>{
-  log.info("download-progress")
-})
-autoUpdater.on("update-downloaded", ()=>{
-  log.info("update-downloaded")
-})
+autoUpdater.on('update-available', (info) => {
+  log.info("update available");
+  mainWindow.webContents.send('update_available');
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  log.info("update-downloaded");
+  mainWindow.webContents.send('update_downloaded');
+});
+
+ipcMain.on('restart_app', () => {
+  autoUpdater.quitAndInstall();
+});
 function createWindow() {
   mainWindow = new BrowserWindow({
     webPreferences: {
@@ -46,6 +44,10 @@ function createWindow() {
 
   mainWindow.maximize();
   mainWindow.loadFile(path.join(__dirname, 'vistas/inicio.html'));
+  
+  mainWindow.webContents.once('dom-ready', ()=>{
+    autoUpdater.checkForUpdatesAndNotify();
+  });
 }
 
 
