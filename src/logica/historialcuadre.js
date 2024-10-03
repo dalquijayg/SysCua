@@ -1,3 +1,5 @@
+
+const xlsx = require('xlsx');
 const odbc = require('odbc');
 const Swal = require('sweetalert2');
 const conexionfacturas = 'DSN=facturas';
@@ -374,9 +376,79 @@ function updateDataTable(data) {
         tbody.appendChild(tr);
     });
 }
+function exportToExcel() {
+    // Obtener la tabla
+    const table = document.getElementById('data-table');
+    
+    // Convertir la tabla a una matriz de datos
+    const data = Array.from(table.querySelectorAll('tr')).map(row => 
+        Array.from(row.querySelectorAll('th, td')).map(cell => cell.textContent)
+    );
+    
+    // Crear una nueva hoja de trabajo
+    const ws = xlsx.utils.aoa_to_sheet(data);
+    
+    // Formatear la columna UPC como texto
+    const range = xlsx.utils.decode_range(ws['!ref']);
+    const upcColumnIndex = 1; // Asumiendo que UPC es la segunda columna (índice 1)
+    
+    for (let row = range.s.r + 1; row <= range.e.r; row++) {
+        const cellAddress = xlsx.utils.encode_cell({r: row, c: upcColumnIndex});
+        if (ws[cellAddress]) {
+            ws[cellAddress].t = 's'; // Establecer el tipo de celda como string
+            ws[cellAddress].v = String(ws[cellAddress].v).padStart(13, '0'); // Asegurar 13 dígitos
+            ws[cellAddress].z = '@'; // Aplicar formato de texto
+        }
+    }
+    
+    // Crear un nuevo libro de trabajo
+    const wb = xlsx.utils.book_new();
+    
+    // Añadir la hoja de trabajo al libro
+    xlsx.utils.book_append_sheet(wb, ws, "Historial de Cuadre");
+    
+    // Generar el archivo XLSX
+    const wbout = xlsx.write(wb, {bookType:'xlsx', type:'binary'});
+    
+    // Convertir a un Blob
+    const blob = new Blob([s2ab(wbout)], {type:"application/octet-stream"});
+    
+    // Crear un enlace de descarga
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = 'historial_cuadre.xlsx';
+    
+    // Simular un clic en el enlace para iniciar la descarga
+    document.body.appendChild(a);
+    a.click();
+    
+    // Limpiar
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // Mostrar alerta de confirmación
+        Swal.fire({
+            icon: 'success',
+            title: 'Exportación Completada',
+            text: 'El archivo de Excel se ha descargado exitosamente.',
+            timer: 3000,
+            showConfirmButton: false
+        });
+    }, 100);
+}
 
+// Función auxiliar para convertir string a ArrayBuffer
+function s2ab(s) {
+    const buf = new ArrayBuffer(s.length);
+    const view = new Uint8Array(buf);
+    for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
+    return buf;
+}
 // Agregar evento al botón de búsqueda
 document.getElementById('search-btn').addEventListener('click', performSearch);
+document.getElementById('export-btn').addEventListener('click', exportToExcel);
 
 // Capturar errores no manejados
 window.addEventListener('error', function(event) {
