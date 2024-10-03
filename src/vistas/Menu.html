@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menú Principal</title>
+    <link rel="stylesheet" href="../disenos/Menu.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <header>
+        <nav class="main-nav">
+            <button class="main-nav-button active" data-tab="Inicio">Inicio</button>
+            <div class="dropdown">
+                <button class="main-nav-button" data-tab="Costos">Costos</button>
+                <div class="dropdown-content">
+                    <div class="submenu">
+                        <button class="submenu-button">Operaciones</button>
+                        <div class="submenu-content">
+                            <a href="#" id="cuadreFacturasLink">Cuadre de facturas</a>
+                            <a href="#" id="criteriosCuadreLink">Criterios de cuadre</a>
+                        </div>
+                    </div>
+                    <div class="submenu">
+                        <button class="submenu-button">Reportes</button>
+                        <div class="submenu-content">
+                            <a href="#" id="historialCuadresLink">Historial de cuadres</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button class="main-nav-button" data-tab="GestionAdministracion">Gestión y Administración</button>
+        </nav>
+    </header>
+    <div id="welcomeMessage">
+        <i class="fas fa-user-circle"></i>
+        <div class="welcome-text">
+            <span id="greetingText"></span>
+            <span id="userName"></span>
+        </div>
+        <p id="welcomeText"></p>
+    </div>
+    <div id="dashboardContainer" class="dashboard">
+        <div class="dashboard-card blue-card">
+            <div class="card-header">
+                <h3 class="card-title">Total de Cuadres del Día</h3>
+                <i class="card-icon fas fa-chart-line"></i>
+            </div>
+            <p class="card-value" id="totalCuadrexdia">Cargando...</p>
+        </div>
+        <div class="dashboard-card green-card">
+            <div class="card-header">
+                <h3 class="card-title">Total de Cuadres por Factura</h3>
+                <i class="card-icon fas fa-file-invoice"></i>
+            </div>
+            <p class="card-value" id="totalCuadrexdiafactura">Cargando...</p>
+        </div>
+        <div class="dashboard-card yellow-card">
+            <div class="card-header">
+                <h3 class="card-title">UPCs Ceros</h3>
+                <i class="card-icon fas fa-exclamation-triangle"></i>
+            </div>
+            <p class="card-value" id="totalUpsceros">Cargando...</p>
+        </div>
+        <div class="dashboard-card red-card">
+            <div class="card-header">
+                <h3 class="card-title">Montos Facturados Ceros</h3>
+                <span class="card-icon">Q</span>
+            </div>
+            <p class="card-value" id="totalMontoFacturadocero">Cargando...</p>
+        </div>
+    </div>
+    <div class="date-selector">
+        <label for="dateFrom">Desde:</label>
+        <input type="date" id="dateFrom">
+        <label for="dateTo">Hasta:</label>
+        <input type="date" id="dateTo">
+        <button id="updateCharts">Cargar</button>
+    </div>
+    <div class="charts-container">
+        <div class="chart-wrapper">
+            <h3>Total Cuadres por Día (Usuario)</h3>
+            <canvas id="totalCuadresPorDiaChart"></canvas>
+        </div>
+        <div class="chart-wrapper">
+            <h3>Total SKUs Cuadrados por Día (Usuario)</h3>
+            <canvas id="totalSkusCuadradosChart"></canvas>
+        </div>
+    </div>
+    <script src="../logica/Menu.js"></script>
+</body>
+</html>

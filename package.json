@@ -1,0 +1,52 @@
+{
+  "name": "syscua-report",
+  "version": "1.0.3",
+  "description": "Aplicación para cuadre y gestión",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-builder",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chart.js": "^4.4.4",
+    "electron-log": "^5.2.0",
+    "electron-reload": "^2.0.0-alpha.1",
+    "electron-updater": "^6.3.4",
+    "mysql2": "^3.11.0",
+    "odbc": "^2.4.8",
+    "sweetalert2": "^11.12.4",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "electron": "^31.4.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "publish":[
+      {
+        "provider": "github",
+        "owner": "dalquijayg",
+        "repo": "SysCua"
+      }
+    ],
+    "appId": "com.tuempresa.syscuareport",
+    "productName": "SysCua-Report",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "src/icono.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

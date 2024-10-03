@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cuadre de Inventario</title>
+    <link rel="stylesheet" href="../disenos/Cuadre.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="header">
+        <h1>Cuadre de Facturas "COSTOS"</h1>
+    </div>
+
+    <div class="main-container">
+        <div class="search-container">
+            <div class="form-group">
+                <label for="sucursal-select">Seleccione Sucursal:</label>
+                <select id="sucursal-select" class="custom-select">
+                    <!-- Opciones se llenarán dinámicamente -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="inventario-id">ID Inventario:</label>
+                <input type="text" id="inventario-id" placeholder="ID Inventario" class="custom-input">
+            </div>
+            <button id="buscar-btn" class="custom-button">Buscar</button>
+            <div id="criterio-cuadre-container" class="criterio-cuadre-box">
+                <strong>Criterio de Cuadre:</strong> <span id="criterio-cuadre"></span>
+            </div>
+            <div id="total-factura-container" class="total-factura-box">
+                <strong>Total Factura:</strong> <span id="total-factura">0.00</span>
+            </div>
+        </div>
+        
+        <div class="info-container">
+            <div class="accordion">
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="inventarioHeader">
+                        <button class="accordion-button" type="button" aria-expanded="true" aria-controls="inventarioContent">
+                            Información del Inventario
+                        </button>
+                    </h2>
+                    <div id="inventarioContent" class="accordion-collapse collapse show" aria-labelledby="inventarioHeader">
+                        <div class="accordion-body">
+                            <h2>Información del Inventario</h2>
+                            <div class="info-grid">
+                                <p><strong>Fecha:</strong> <span id="fecha"></span></p>
+                                <p><strong>Serie:</strong> <span id="serie"></span></p>
+                                <p><strong>Número:</strong> <span id="numero"></span></p>
+                                <p><strong>Fecha Factura:</strong> <span id="fecha-factura"></span></p>
+                                <p><strong>Departamento:</strong> <span id="departamento"></span></p>
+                                <p><strong>Proveedor:</strong> <span id="proveedor"></span></p>
+                                <p><strong>Razón Social:</strong> <span id="razon-social"></span></p>
+                                <p><strong>Observaciones:</strong> <span id="observaciones"></span></p>
+                            </div>
+                            <button id="guardar-btn" class="custom-button guardar-btn">Guardar Cuadre</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+        
+    </div>
+    <div id="detalle-inventario" class="table-section">
+        <h2>Detalle del Inventario</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="upc-column">UPC</th>
+                        <th class="descripcion-column">Descripción</th>
+                        <th class="cantidad-column">Cantidad</th>
+                        <th class="costo-column">Costo</th>
+                        <th class="costo-alterno-column" style="display: none;">Costo Alterno</th>
+                        <th class="bonificacion-column">Bonificación</th>
+                        <th class="precio-column">Precio Facturado</th>
+                        <th class="descuento-column">Descuento</th>
+                        <th class="costo-facturado-column">Costo Facturado</th>
+                        <th class="diferencia-column">Diferencia</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Se llenará dinámicamente -->
+                </tbody>
+            </table>
+        </div>
+        <button id="descuento-btn" class="custom-button">Aplicar Descuento</button>
+    </div>
+    <div id="searchWindow" class="search-window" style="display: none;">
+        <div class="search-content">
+            <input type="text" id="searchInput" placeholder="Buscar descripción...">
+            <button id="searchButton">Buscar</button>
+        </div>
+    </div>
+    <script src="../logica/Cuadre.js"></script>
+</body>
+</html>

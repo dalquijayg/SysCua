@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial Cuadre</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="../disenos/historialcuadre.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Historial de Cuadre</h1>
+        </header>
+        <section class="filters">
+            <div class="filter-group">
+                <label for="start-date">Fecha Inicio:</label>
+                <input type="date" id="start-date">
+            </div>
+            <div class="filter-group">
+                <label for="end-date">Fecha Fin:</label>
+                <input type="date" id="end-date">
+            </div>
+            <div class="filter-group">
+                <label for="provider">Proveedor:</label>
+                <select id="provider">
+                    <option value="">Seleccionar Proveedor</option>
+                    <!-- Opciones se llenarán dinámicamente -->
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="department">Departamento:</label>
+                <div class="custom-select" id="department-select">
+                    <div class="select-selected">Seleccionar Departamento</div>
+                    <div class="select-items select-hide">
+                        <!-- Opciones se llenarán dinámicamente -->
+                    </div>
+                </div>
+            </div>
+            <div class="filter-group">
+                <label for="user">Usuario:</label>
+                <select id="user">
+                    <option value="">Seleccionar Usuario</option>
+                    <!-- Opciones se llenarán dinámicamente -->
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="id-inventory">Id Inventario:</label>
+                <input type="text" id="id-inventory">
+            </div>
+            <div class="filter-group">
+                <label for="invoice-number">Número de Factura:</label>
+                <input type="text" id="invoice-number">
+            </div>
+            <div class="filter-group">
+                <label for="serie">Serie:</label>
+                <input type="text" id="serie">
+            </div>
+            <div class="filter-group">
+                <label for="upc">UPC de Producto:</label>
+                <input type="text" id="upc">
+            </div>
+            <div class="buttons">
+                <button id="search-btn"><i class="fas fa-search"></i> Buscar</button>
+                <button id="export-btn"><i class="fas fa-file-export"></i> Exportar</button>
+            </div>
+        </section>
+        <section class="data-table">
+            <table id="data-table">
+                <thead>
+                    <tr>
+                        <th>Id Inventario</th>
+                        <th>UPC</th>
+                        <th>Descripción</th>
+                        <th>Departamento</th>
+                        <th>Proveedor</th>
+                        <th>Unidades Ingresadas</th>
+                        <th>Bonificación</th>
+                        <th>Fecha Factura</th>
+                        <th>No. Factura</th>
+                        <th>Serie</th>
+                        <th>Costo Sistema</th>
+                        <th>Costo Facturado</th>
+                        <th>Costo Fiscal</th>
+                        <th>Diferencia</th>
+                        <th>Sucursal</th>
+                        <th>Fecha de Cuadre</th>
+                        <th>Usuario</th>
+                        <th>Razón Social</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Aquí se llenarán los datos -->
+                </tbody>
+            </table>
+        </section>
+    </div>
+    <script src="../logica/historialcuadre.js"></script>
+</body>
+</html>
