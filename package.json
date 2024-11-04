@@ -1,6 +1,6 @@
 {
   "name": "syscua-report",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Aplicación para cuadre y gestión",
   "main": "src/index.js",
   "scripts": {
@@ -37,7 +37,10 @@
     "productName": "SysCua-Report",
     "win": {
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
+        }
       ],
       "icon": "src/icono.ico"
     },
