@@ -1,6 +1,6 @@
 {
   "name": "syscua-report",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Aplicación para cuadre y gestión",
   "main": "src/index.js",
   "scripts": {
