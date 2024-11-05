@@ -14,6 +14,7 @@ let mainWindow;
 let cuadreWindow = null;
 let historialwindow = null;
 let criteriowindow = null;
+let ingresosWindow = null;
 
 app.on('ready',  createWindow)
 
@@ -139,5 +140,31 @@ ipcMain.on('open-criterio-window', () => {
     criteriowindow.on('closed', () => {
       criteriowindow = null; // Limpiar la referencia cuando se cierre la ventana
     });
+  }
+});
+ipcMain.on('open-ingresos-window', () => {
+  if (ingresosWindow) {
+      // Si la ventana ya está abierta, enfócala
+      ingresosWindow.focus();
+  } else {
+      // Si no está abierta, crea una nueva ventana
+      ingresosWindow = new BrowserWindow({
+          webPreferences: {
+              nodeIntegration: true,
+              contextIsolation: false,
+              webSecurity: false,
+              enableRemoteModule: true
+          },
+          icon: path.join(__dirname, 'ingresos.ico'),  // Asegúrate de tener este ícono
+          autoHideMenuBar: true
+      });
+
+      ingresosWindow.maximize();
+      ingresosWindow.loadFile(path.join(__dirname, 'vistas/Ingresos.html'));
+
+      // Manejar el evento de cierre de la ventana
+      ingresosWindow.on('closed', () => {
+          ingresosWindow = null; // Limpiar la referencia cuando se cierre la ventana
+      });
   }
 });

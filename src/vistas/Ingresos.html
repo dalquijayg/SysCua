@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Ingresos</title>
+    <link rel="stylesheet" href="../disenos/Ingreso.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Sección de Búsqueda -->
+        <div class="search-section">
+            <h2>Búsqueda de Ingresos</h2>
+            <form id="ingresoForm">
+                <div class="form-group date-container">
+                    <div>
+                        <label for="fechaInicio">Fecha de Inicio</label>
+                        <input type="date" id="fechaInicio" required>
+                    </div>
+                    <div>
+                        <label for="fechaFin">Fecha de Fin</label>
+                        <input type="date" id="fechaFin" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="razonSocial">Razón Social</label>
+                    <select id="razonSocial">
+                        <option value="">Todas las razones sociales</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="upc">UPC</label>
+                    <input type="text" id="upc" placeholder="Ingrese el UPC">
+                    <span class="error-message" id="upcError">Por favor ingrese solo números</span>
+                    <span class="descripcion-producto" id="descProducto"></span>
+                </div>
+
+                <button type="submit" class="search-button">Procesar</button>
+            </form>
+        </div>
+
+        <!-- Sección de Resultados -->
+        <div class="results-section">
+            <h2>Resultados de la Búsqueda</h2>
+            <div class="table-container">
+                <div class="table-header">
+                    <h3>Listado de Ingresos</h3>
+                    <div class="records-count">
+                        Total registros: <span id="totalRegistros">0</span>
+                    </div>
+                </div>
+                <div class="table-scroll">
+                    <table id="inventarioTable" class="data-grid">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>UPC</th>
+                                <th>Descripción</th>
+                                <th>Cantidad</th>
+                                <th>Bonificación</th>
+                                <th>Costo</th>
+                                <th>Fecha Factura</th>
+                                <th>Fecha Recepción</th>
+                                <th>Proveedor</th>
+                                <th>Número</th>
+                                <th>Serie</th>
+                                <th>Razón Social</th>
+                                <th>Sucursal</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Los datos se cargarán dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="../logica/Ingreso.js"></script>
+</body>
+</html>

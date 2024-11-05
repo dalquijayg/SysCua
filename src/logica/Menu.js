@@ -117,6 +117,10 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         ipcRenderer.send('open-criterio-window');
     });
+    document.getElementById('ingresosLink').addEventListener('click', (e) => {
+        e.preventDefault();
+        ipcRenderer.send('open-ingresos-window');
+    });
     // Función para obtener el saludo e icono según la hora del día
     function getGreetingAndIcon() {
         const hour = new Date().getHours();
