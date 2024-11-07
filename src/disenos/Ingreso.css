@@ -1,81 +1,83 @@
 :root {
-    --primary-color: #2563eb;
-    --primary-hover: #1d4ed8;
-    --secondary-color: #1e40af;
+    --primary-color: #1a56db;
+    --primary-hover: #1e40af;
+    --secondary-color: #64748b;
     --background-color: #f8fafc;
-    --table-header: #f1f5f9;
-    --text-color: #1e293b;
+    --surface-color: #ffffff;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
     --border-color: #e2e8f0;
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-}
-
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    --accent-color: #3b82f6;
 }
 
 body {
     background-color: var(--background-color);
-    color: var(--text-color);
+    color: var(--text-primary);
     min-height: 100vh;
-    padding: 2rem;
-    line-height: 1.5;
+    margin: 0;
+    padding: 0.5rem;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 .container {
-    max-width: 1400px;
+    max-width: none;
     margin: 0 auto;
-    display: grid;
-    gap: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    height: calc(100vh - 1rem);
 }
 
 /* Sección de Búsqueda */
 .search-section {
-    background: white;
+    background: var(--surface-color);
     padding: 1.5rem;
-    border-radius: 1rem;
+    border-radius: 0.75rem;
     box-shadow: var(--shadow-md);
     border: 1px solid var(--border-color);
-    max-width: 800px; /* Limitamos el ancho máximo */
-    margin: 0 auto; /* Centramos el contenedor */
 }
 
 .search-section h2 {
     color: var(--primary-color);
-    font-size: 1.25rem;
-    margin-bottom: 1.25rem;
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
     font-weight: 600;
+    text-align: left;
+    padding-left: 0.5rem;
+    border-left: 4px solid var(--primary-color);
 }
 
 #ingresoForm {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr); /* 2 columnas */
-    gap: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    align-items: flex-end;
 }
 
 .form-group {
-    margin-bottom: 1rem;
-}
-
-.form-group.full-width {
-    grid-column: 1 / -1; /* Ocupa ambas columnas */
+    flex: 1;
+    min-width: 200px;
+    margin: 0;
 }
 
 .date-container {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    display: flex;
     gap: 1rem;
-    grid-column: 1 / -1; /* Ocupa ambas columnas */
+    flex: 2;
+    min-width: 300px;
+}
+
+.date-container > div {
+    flex: 1;
 }
 
 label {
-    display: block;
-    margin-bottom: 0.25rem;
     font-weight: 500;
-    color: var(--text-color);
+    margin-bottom: 0.5rem;
+    display: block;
+    color: var(--text-secondary);
     font-size: 0.875rem;
 }
 
@@ -83,54 +85,65 @@ input[type="date"],
 select,
 input[type="text"] {
     width: 100%;
-    padding: 0.5rem 0.75rem;
+    padding: 0.625rem;
     border: 1px solid var(--border-color);
     border-radius: 0.5rem;
     font-size: 0.875rem;
-    background-color: white;
+    color: var(--text-primary);
+    background-color: var(--surface-color);
     transition: all 0.2s ease;
 }
 
 input:focus,
 select:focus {
     outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .search-button {
     background-color: var(--primary-color);
     color: white;
-    padding: 0.5rem 1rem;
+    padding: 0.625rem 1.25rem;
     border: none;
     border-radius: 0.5rem;
     font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
-    width: auto; /* Ajusta el ancho al contenido */
-    min-width: 120px; /* Ancho mínimo */
-    justify-self: end; /* Alinea el botón a la derecha */
-    grid-column: 2; /* Coloca el botón en la segunda columna */
+    transition: all 0.2s ease;
+    min-width: 120px;
+    height: 38px;
 }
 
 .search-button:hover {
     background-color: var(--primary-hover);
 }
 
-/* El resto del CSS se mantiene igual */
+/* Sección de Resultados */
 .results-section {
-    background: white;
-    border-radius: 1rem;
+    background: var(--surface-color);
+    border-radius: 0.75rem;
     box-shadow: var(--shadow-md);
     border: 1px solid var(--border-color);
-    overflow: hidden;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .results-section h2 {
     color: var(--primary-color);
-    font-size: 1.5rem;
-    margin: 1.5rem;
-    font-weight: 600;
+    font-size: 1.25rem;
+    margin: 0;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.table-container {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .table-header {
@@ -138,56 +151,58 @@ select:focus {
     justify-content: space-between;
     align-items: center;
     padding: 1rem 1.5rem;
+    background-color: var(--background-color);
     border-bottom: 1px solid var(--border-color);
-    background-color: var(--table-header);
 }
 
 .table-header h3 {
     font-size: 1rem;
     font-weight: 600;
-    color: var(--text-color);
+    color: var(--text-secondary);
+    margin: 0;
 }
 
 .records-count {
     font-size: 0.875rem;
-    color: var(--text-color);
+    color: var(--primary-color);
     font-weight: 500;
 }
 
 .table-scroll {
-    overflow-x: auto;
-    max-height: 600px;
+    flex: 1;
+    overflow: auto;
+    border-radius: 0 0 0.75rem 0.75rem;
 }
 
 .data-grid {
     width: 100%;
     border-collapse: collapse;
-    white-space: nowrap;
     font-size: 0.875rem;
 }
 
 .data-grid th {
-    background-color: var(--table-header);
+    background-color: var(--background-color);
     font-weight: 600;
-    color: var(--text-color);
+    color: var(--text-secondary);
     padding: 0.75rem 1rem;
     text-align: left;
     position: sticky;
     top: 0;
     z-index: 10;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 2px solid var(--border-color);
 }
 
 .data-grid td {
     padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--border-color);
-    color: var(--text-color);
+    color: var(--text-primary);
 }
 
 .data-grid tbody tr:hover {
-    background-color: #f8fafc;
+    background-color: rgba(59, 130, 246, 0.05);
 }
 
+/* Estados */
 .estado-activo {
     color: #059669;
     font-weight: 500;
@@ -198,7 +213,7 @@ select:focus {
     font-weight: 500;
 }
 
-/* Mensajes y descripciones */
+/* Mensajes de error */
 .error-message {
     color: #dc2626;
     font-size: 0.75rem;
@@ -207,42 +222,84 @@ select:focus {
 }
 
 .descripcion-producto {
-    display: block;
     margin-top: 0.5rem;
-    color: var(--text-color);
+    color: var(--text-secondary);
     font-size: 0.875rem;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
     body {
+        padding: 0.5rem;
+    }
+    
+    .container {
+        gap: 0.5rem;
+    }
+    
+    .search-section {
         padding: 1rem;
     }
     
     .date-container {
-        grid-template-columns: 1fr;
+        flex-direction: column;
     }
     
-    .table-scroll {
-        margin: 0 -1rem;
-    }
-}
-@media (max-width: 768px) {
-    body {
-        padding: 1rem;
-    }
-    
-    #ingresoForm {
-        grid-template-columns: 1fr; /* Una sola columna en móviles */
-    }
-    
-    .date-container {
-        grid-template-columns: 1fr;
+    .form-group {
+        min-width: 100%;
     }
     
     .search-button {
         width: 100%;
-        grid-column: 1;
-        justify-self: stretch;
+    }
+}
+.pagination-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background-color: var(--background-color);
+    border-top: 1px solid var(--border-color);
+}
+
+.pagination-info {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.pagination-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.pagination-buttons button {
+    padding: 0.5rem 1rem;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.pagination-buttons button:hover:not(:disabled) {
+    background-color: var(--primary-hover);
+}
+
+.pagination-buttons button:disabled {
+    background-color: var(--secondary-color);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+@media (max-width: 768px) {
+    .pagination-controls {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .pagination-info {
+        text-align: center;
     }
 }
