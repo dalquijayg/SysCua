@@ -3,6 +3,7 @@ const odbc = require('odbc');
 const conexionfacturas = 'DSN=facturas';
 const conexionbodegona = 'DSN=ComprasBodegona';
 const conexiongestion = 'DSN=Gestion';
+const ExcelJS = require('exceljs');
 
 document.addEventListener('DOMContentLoaded', function() {
     const upcInput = document.getElementById('upc');
@@ -12,8 +13,153 @@ document.addEventListener('DOMContentLoaded', function() {
     const fechaFin = document.getElementById('fechaFin');
     const razonSocialSelect = document.getElementById('razonSocial');
     const descProductoSpan = document.getElementById('descProducto');
-    const totalRegistrosSpan = document.getElementById('totalRegistros');
-    const inventarioTable = document.getElementById('inventarioTable').getElementsByTagName('tbody')[0];
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        try {
+            // Mostrar indicador de carga
+            Swal.fire({
+                title: 'Procesando datos',
+                html: 'Esto puede tomar varios minutos...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            const fechaInicio = document.getElementById('fechaInicio').value;
+            const fechaFin = document.getElementById('fechaFin').value;
+            const razonSocial = document.getElementById('razonSocial').value;
+            const upc = document.getElementById('upc').value;
+
+            // Obtener los datos
+            const datos = await consultarDatos(fechaInicio, fechaFin, razonSocial, upc);
+            
+            if (datos.length === 0) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Sin resultados',
+                    text: 'No se encontraron datos para exportar',
+                    confirmButtonText: 'Entendido'
+                });
+                return;
+            }
+
+            await exportarExcel(datos, fechaInicio, fechaFin);
+            
+            Swal.fire({
+                icon: 'success',
+                title: 'Exportación completada',
+                text: 'El archivo ha sido generado exitosamente',
+                confirmButtonText: 'Entendido'
+            });
+
+        } catch (error) {
+            console.error('Error en la exportación:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error en la exportación',
+                text: `Ocurrió un error: ${error.message}`,
+                confirmButtonText: 'Entendido'
+            });
+        }
+    });
+    
+    async function exportarExcel(datos, fechaInicio, fechaFin) {
+        // Crear un nuevo libro de trabajo
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Reporte de Ingresos');
+    
+        // Definir las columnas
+        worksheet.columns = [
+            { header: 'ID Inventario', key: 'IdInventario', width: 15 },
+            { header: 'UPC', key: 'Upc', width: 15 },
+            { header: 'Descripción', key: 'Descripcion', width: 40 },
+            { header: 'Cantidad', key: 'Cantidad', width: 12 },
+            { header: 'Bonificación', key: 'Bonificiacion', width: 12 },
+            { header: 'Costo', key: 'Costo', width: 12 },
+            { header: 'Fecha Factura', key: 'FechaFactura', width: 15 },
+            { header: 'Fecha Recepción', key: 'FechaRecepcion', width: 15 },
+            { header: 'Proveedor', key: 'Proveedor', width: 30 },
+            { header: 'Número', key: 'Numero', width: 12 },
+            { header: 'Serie', key: 'Serie', width: 10 },
+            { header: 'Razón Social', key: 'RazonSocial', width: 30 },
+            { header: 'Sucursal', key: 'Sucursal', width: 20 },
+            { header: 'Estado Operación', key: 'EstadoOperacion', width: 15 }
+        ];
+    
+        // Estilo para los encabezados
+        worksheet.getRow(1).font = { bold: true };
+        worksheet.getRow(1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFE0E0E0' }
+        };
+    
+        // Procesar los datos en lotes para manejar grandes cantidades
+        const BATCH_SIZE = 1000;
+        for (let i = 0; i < datos.length; i += BATCH_SIZE) {
+            const batch = datos.slice(i, i + BATCH_SIZE);
+            
+            batch.forEach(row => {
+                // Formatear fechas antes de agregar la fila
+                if (row.FechaFactura) {
+                    row.FechaFactura = new Date(row.FechaFactura).toLocaleDateString();
+                }
+                if (row.FechaRecepcion) {
+                    row.FechaRecepcion = new Date(row.FechaRecepcion).toLocaleDateString();
+                }
+                
+                // Formatear números
+                if (row.Costo) {
+                    row.Costo = Number(row.Costo).toFixed(2);
+                }
+                
+                worksheet.addRow(row);
+            });
+        }
+    
+        // Aplicar bordes a todas las celdas con datos
+        worksheet.eachRow((row, rowNumber) => {
+            row.eachCell((cell) => {
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+            });
+        });
+    
+        // Agregar filtros a los encabezados
+        worksheet.autoFilter = {
+            from: { row: 1, column: 1 },
+            to: { row: 1, column: worksheet.columns.length }
+        };
+    
+        // Congelar la primera fila
+        worksheet.views = [
+            { state: 'frozen', xSplit: 0, ySplit: 1 }
+        ];
+    
+        // Generar el nombre del archivo
+        const fechaGeneracion = new Date().toISOString().split('T')[0];
+        const fileName = `Reporte_Ingresos_${fechaInicio}_${fechaFin}_${fechaGeneracion}.xlsx`;
+    
+        // Guardar el archivo
+        await workbook.xlsx.writeBuffer().then(buffer => {
+            const blob = new Blob([buffer], { 
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+            });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        });
+    }
     
     async function consultarDatos(fechaInicio, fechaFin, razonSocial, upc) {
         let connection;
@@ -85,55 +231,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (connection) {
                 await connection.close();
             }
-        }
-    }
-
-    function mostrarResultados(datos) {
-        try {
-            // Limpiar tabla existente
-            inventarioTable.innerHTML = '';
-            
-            // Actualizar contador de registros
-            totalRegistrosSpan.textContent = datos.length;
-
-            if (datos.length === 0) {
-                // Mostrar mensaje cuando no hay resultados
-                const tr = document.createElement('tr');
-                tr.innerHTML = '<td colspan="17" class="text-center">No se encontraron registros</td>';
-                inventarioTable.appendChild(tr);
-                return;
-            }
-
-            datos.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${row.IdInventario || ''}</td>
-                    <td>${row.Upc || ''}</td>
-                    <td>${row.Descripcion || ''}</td>
-                    <td>${row.Cantidad || 0}</td>
-                    <td>${row.Bonificiacion || 0}</td>
-                    <td>${row.Costo}</td>
-                    <td>${formatDate(row.FechaFactura)}</td>
-                    <td>${formatDate(row.FechaRecepcion)}</td>
-                    <td>${row.Proveedor || ''}</td>
-                    <td>${row.Numero || ''}</td>
-                    <td>${row.Serie || ''}</td>
-                    <td>${row.RazonSocial || ''}</td>
-                    <td>${row.Sucursal || ''}</td>
-                    <td class="${row.EstadoOperacion === 'Activo' ? 'estado-activo' : 'estado-inactivo'}">
-                        ${row.EstadoOperacion || ''}
-                    </td>
-                `;
-                inventarioTable.appendChild(tr);
-            });
-        } catch (error) {
-            console.error('Error en mostrarResultados:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Error al mostrar resultados',
-                text: error.message,
-                confirmButtonText: 'Entendido'
-            });
         }
     }
     
@@ -288,64 +385,4 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-
-    // Manejo del formulario
-    form.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        try {
-            // Mostrar indicador de carga
-            Swal.fire({
-                title: 'Procesando...',
-                text: 'Por favor espere mientras se consultan los datos',
-                allowOutsideClick: false,
-                allowEscapeKey: false,
-                allowEnterKey: false,
-                showConfirmButton: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
-
-            const fechaInicioVal = fechaInicio.value;
-            const fechaFinVal = fechaFin.value;
-            const razonSocialVal = razonSocialSelect.value;
-            const upcVal = upcInput.value ? upcInput.value.padStart(13, '0') : '';
-
-            const datos = await consultarDatos(
-                fechaInicioVal,
-                fechaFinVal,
-                razonSocialVal,
-                upcVal
-            );
-
-            // Cerrar indicador de carga
-            Swal.close();
-
-            mostrarResultados(datos);
-
-            if (datos.length === 0) {
-                Swal.fire({
-                    icon: 'info',
-                    title: 'Sin resultados',
-                    text: 'No se encontraron registros con los criterios especificados',
-                    confirmButtonText: 'Entendido'
-                });
-            }
-
-        } catch (error) {
-            console.error('Error en submit:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Error en la consulta',
-                text: error.message,
-                confirmButtonText: 'Entendido'
-            });
-        }
-    });
-    function formatDate(date) {
-        if (!date) return '';
-        const d = new Date(date);
-        return d.toLocaleDateString('es-GT');
-    }
 });
