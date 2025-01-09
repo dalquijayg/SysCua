@@ -1,6 +1,6 @@
 {
   "name": "syscua-report",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Aplicación para cuadre y gestión",
   "main": "src/index.js",
   "scripts": {
@@ -38,13 +38,23 @@
     "productName": "SysCua-Report",
     "win": {
       "target": [
-        "nsis"
-      ],
-      "icon": "src/icono.ico"
+          {
+            "target": "nsis",
+            "arch": [
+              "x64",
+              "ia32"
+            ]
+          }
+        ],
+        "icon": "src/icono.ico"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+      "uninstallDisplayName": "${productName}",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   }
 }

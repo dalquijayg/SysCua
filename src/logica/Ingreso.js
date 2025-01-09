@@ -7,13 +7,32 @@ const ExcelJS = require('exceljs');
 
 document.addEventListener('DOMContentLoaded', function() {
     const upcInput = document.getElementById('upc');
+    const upcNCInput = document.getElementById('upcNC');
     const upcError = document.getElementById('upcError');
+    const upcNCError = document.getElementById('upcNCError');
     const form = document.getElementById('ingresoForm');
+    const creditNotesForm = document.getElementById('creditNotesForm');
     const fechaInicio = document.getElementById('fechaInicio');
     const fechaFin = document.getElementById('fechaFin');
     const razonSocialSelect = document.getElementById('razonSocial');
-    const descProductoSpan = document.getElementById('descProducto');
+    const descProductoSpan = document.createElement('span');
+    const descProductoNCSpan = document.createElement('span');
 
+    async function conectar() {
+        try {
+            const connection = await odbc.connect(conexiongestion);
+            await connection.query('SET NAMES utf8mb4');
+            return connection;
+        } catch (error) {
+            console.error('Error al conectar a la base de datos:', error);
+            throw error;
+        }
+    }
+    creditNotesForm.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+        }
+    });
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
         
@@ -123,7 +142,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 { header: 'Serie', key: 'Serie', width: 10, style: { numFmt: '@' } },
                 { header: 'Razón Social', key: 'RazonSocial', width: 30, style: { numFmt: '@' } },
                 { header: 'Sucursal', key: 'Sucursal', width: 20, style: { numFmt: '@' } },
-                { header: 'Estado Operación', key: 'EstadoOperacion', width: 15, style: { numFmt: '@' } }
+                { header: 'Estado Operación', key: 'EstadoOperacion', width: 15, style: { numFmt: '@' } },
+                { header: 'Estado', key: 'Estado', width: 15, style: { numFmt: '@' } }
             ];
     
             // Aplicar estilo a los encabezados
@@ -259,7 +279,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 'Serie',
                 'Razón Social',
                 'Sucursal',
-                'Estado Operación'
+                'Estado Operación',
+                'Estado'
             ];
     
             // Función para escapar campos CSV
@@ -312,7 +333,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         row.Serie,
                         row.RazonSocial,
                         row.Sucursal,
-                        row.EstadoOperacion
+                        row.EstadoOperacion,
+                        row.Estado
                     ].map(escaparCSV).join(',');
                 }).join('\n');
     
@@ -381,7 +403,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Las fechas son requeridas');
             }
 
-            connection = await odbc.connect(conexiongestion);
+            connection = await conectar();
             
             // Convertir fechas a formato ISO para la consulta
             const fechaInicioISO = new Date(fechaInicio).toISOString().split('T')[0];
@@ -389,22 +411,30 @@ document.addEventListener('DOMContentLoaded', function() {
             
             let query = `
                 SELECT
-                    reporteingresos.IdInventario, 
-                    reporteingresos.Upc, 
-                    reporteingresos.Descripcion, 
-                    reporteingresos.Cantidad, 
-                    reporteingresos.Bonificiacion, 
-                    reporteingresos.Costo, 
-                    reporteingresos.FechaFactura, 
-                    reporteingresos.FechaRecepcion, 
-                    reporteingresos.Proveedor, 
-                    reporteingresos.Numero, 
-                    reporteingresos.Serie, 
-                    reporteingresos.RazonSocial, 
-                    reporteingresos.Sucursal, 
-                    reporteingresos.EstadoOperacion
+                    Sinc_Gestion.reporteingresos.IdInventario, 
+                    Sinc_Gestion.reporteingresos.Upc, 
+                    Sinc_Gestion.reporteingresos.Descripcion, 
+                    Sinc_Gestion.reporteingresos.Cantidad, 
+                    Sinc_Gestion.reporteingresos.Bonificiacion, 
+                    Sinc_Gestion.reporteingresos.Costo, 
+                    Sinc_Gestion.reporteingresos.FechaFactura, 
+                    Sinc_Gestion.reporteingresos.FechaRecepcion, 
+                    Sinc_Gestion.reporteingresos.Proveedor, 
+                    Sinc_Gestion.reporteingresos.Numero, 
+                    Sinc_Gestion.reporteingresos.Serie, 
+                    Sinc_Gestion.reporteingresos.RazonSocial, 
+                    Sinc_Gestion.reporteingresos.Sucursal, 
+                    Sinc_Gestion.reporteingresos.EstadoOperacion, 
+                    facturas_compras.estado_facturas.Estado
                 FROM
-                    reporteingresos
+                    Sinc_Gestion.reporteingresos
+                INNER JOIN
+                    facturas_compras.facturas_compras
+                ON 
+                    Sinc_Gestion.reporteingresos.IdInventario = facturas_compras.facturas_compras.IdInventory AND
+                    Sinc_Gestion.reporteingresos.IdSucursal = facturas_compras.facturas_compras.IdSucursalCori
+                INNER JOIN
+                    facturas_compras.estado_facturas ON facturas_compras.facturas_compras.Estado = facturas_compras.estado_facturas.IdEstado
                 WHERE
                     CAST(reporteingresos.FechaFactura AS DATE) BETWEEN ? AND ?
             `;
@@ -447,13 +477,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     upcInput.parentNode.insertBefore(descProductoSpan, upcInput.nextSibling);
+    upcNCInput.parentNode.insertBefore(descProductoNCSpan, upcNCInput.nextSibling);
     descProductoSpan.className = 'descripcion-producto';
+    descProductoNCSpan.className = 'descripcion-producto';
 
     function padWithZeros(number, length) {
         return String(number).padStart(length, '0');
     }
 
-    async function buscarProducto(upc) {
+    async function buscarProducto(upc, descSpan) {
         let connection;
         try {
             connection = await odbc.connect(conexionbodegona);
@@ -469,11 +501,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const result = await connection.query(query, [upc]);
             
             if (result && result.length > 0) {
-                descProductoSpan.textContent = result[0].DescLarga;
-                descProductoSpan.style.color = '#4a5568'; // Color de texto normal
+                descSpan.textContent = result[0].DescLarga;
+                descSpan.style.color = '#4a5568';
             } else {
-                descProductoSpan.textContent = 'Producto no encontrado';
-                descProductoSpan.style.color = '#e53e3e'; // Color rojo para error
+                descSpan.textContent = 'Producto no encontrado';
+                descSpan.style.color = '#e53e3e';
                 Swal.fire({
                     icon: 'warning',
                     title: 'Producto no encontrado',
@@ -481,7 +513,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     confirmButtonText: 'Entendido'
                 });
             }
-
         } catch (error) {
             console.error('Error al buscar producto:', error);
             Swal.fire({
@@ -499,11 +530,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     upcInput.addEventListener('keydown', async function(e) {
         if (e.key === 'Enter') {
-            e.preventDefault(); // Prevenir el envío del formulario
-            
+            e.preventDefault();
             let value = this.value.trim();
-            
-            // Validar que solo contenga números
             if (!/^\d+$/.test(value)) {
                 Swal.fire({
                     icon: 'error',
@@ -513,13 +541,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 return;
             }
-
-            // Completar con ceros a la izquierda si es necesario
             value = padWithZeros(value, 13);
-            this.value = value; // Actualizar el valor en el input
-
-            // Buscar el producto
-            await buscarProducto(value);
+            this.value = value;
+            await buscarProducto(value, descProductoSpan);
+        }
+    });
+    upcNCInput.addEventListener('keydown', async function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            let value = this.value.trim();
+            if (!/^\d+$/.test(value)) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error en UPC',
+                    text: 'El UPC solo debe contener números',
+                    confirmButtonText: 'Entendido'
+                });
+                return;
+            }
+            value = padWithZeros(value, 13);
+            this.value = value;
+            await buscarProducto(value, descProductoNCSpan);
         }
     });
 
@@ -577,6 +619,20 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             upcInput.classList.remove('invalid');
             upcError.style.display = 'none';
+        }
+        if (value.length > 13) {
+            e.target.value = value.slice(0, 13);
+        }
+    });
+    upcNCInput.addEventListener('input', function(e) {
+        const value = e.target.value;
+        if (!/^\d*$/.test(value)) {
+            upcNCInput.classList.add('invalid');
+            upcNCError.style.display = 'block';
+            e.target.value = value.replace(/\D/g, '');
+        } else {
+            upcNCInput.classList.remove('invalid');
+            upcNCError.style.display = 'none';
         }
         if (value.length > 13) {
             e.target.value = value.slice(0, 13);

@@ -702,32 +702,8 @@ let copiedContent = "";
             return;
         }
     
-        const idInventario = document.getElementById('inventario-id').value;
-        const idSucursal = document.getElementById('sucursal-select').value;
-        const nombreSucursal = document.getElementById('sucursal-select').options[document.getElementById('sucursal-select').selectedIndex].text;
-    
         try {
-            const existeInventario = await verificarExistenciaInventario(idInventario, idSucursal);
-            
-            if (existeInventario) {
-                const result = await Swal.fire({
-                    icon: 'warning',
-                    title: 'Inventario existente',
-                    text: `Ya existe información guardada para el inventario ${idInventario} de la sucursal ${nombreSucursal}. ¿Está seguro de que desea guardar esta información?`,
-                    showCancelButton: true,
-                    confirmButtonText: 'Sí, guardar',
-                    cancelButtonText: 'No, cancelar'
-                });
-    
-                if (result.isConfirmed) {
-                    await realizarGuardado();
-                } else {
-                    limpiarFormulario();
-                    return;
-                }
-            } else {
-                await realizarGuardado();
-            }
+            await realizarGuardado();
         } catch (error) {
             console.error('Error en el proceso de guardado:', error);
             Swal.fire({
@@ -744,8 +720,18 @@ let copiedContent = "";
         return fechaLocal.toISOString().slice(0, 19).replace('T', ' ');
     }
     async function realizarGuardado() {
+        const idInventario = document.getElementById('inventario-id').value;
+        const idSucursal = document.getElementById('sucursal-select').value;
+        
+        // Verificar si el cuadre existe
+        const existeInventario = await verificarExistenciaInventario(idInventario, idSucursal);
+        
+        let mensajeInicial = existeInventario ? 
+            'Actualizando información del cuadre...' : 
+            'Guardando nuevo cuadre...';
+
         Swal.fire({
-            title: 'Guardando inventario',
+            title: mensajeInicial,
             text: 'Por favor espere...',
             allowOutsideClick: false,
             allowEscapeKey: false,
@@ -755,29 +741,33 @@ let copiedContent = "";
                 Swal.showLoading();
             }
         });
-    
+
         let connection;
         try {
             connection = await conectarfacturas();
             
             const sucursalSelect = document.getElementById('sucursal-select');
-            const idInventario = document.getElementById('inventario-id').value;
             const fechaFactura = formatearFechaParaMySQL(document.getElementById('fecha-factura')?.innerText);
             const numero = document.getElementById('numero')?.innerText;
             const serie = document.getElementById('serie')?.innerText;
-            const idSucursal = sucursalSelect?.value;
             const nombreSucursal = sucursalSelect?.options[sucursalSelect.selectedIndex]?.text;
             const fechaCuadre = obtenerFechaLocal();
             const usuario = localStorage.getItem('userName');
             const idUsuario = localStorage.getItem('userId');
-    
+
             const idProveedores = document.getElementById('proveedor')?.dataset?.idProveedor || null;
             const idDepartamentos = document.getElementById('departamento')?.dataset?.idDepartamento || null;
             const idRazon = document.getElementById('razon-social')?.dataset?.idRazon || null;
-    
+
             const rows = document.querySelectorAll('#detalle-inventario tbody tr');
-            let insertedRows = 0;
-    
+            let processedRows = 0;
+
+            if (existeInventario) {
+                // Primero eliminamos los registros existentes
+                await connection.query('DELETE FROM cuadrecostos WHERE IdCuadre = ? AND IdSucursal = ?', 
+                    [idInventario, idSucursal]);
+            }
+
             for (const row of rows) {
                 const upc = row.querySelector('.upc-input')?.value || '';
                 const descripcion = row.querySelector('td:nth-child(2)')?.textContent || '';
@@ -788,13 +778,13 @@ let copiedContent = "";
                 const costoFacturado = parseFloat(row.querySelector('.costo-facturado-cell')?.textContent) || 0;
                 const costoFiscal = costoFacturado / 1.12;
                 const iva = costoFiscal * 0.12;
-    
+
                 const rowData = [
                     idInventario, upc, descripcion, idProveedores, idDepartamentos, fechaFactura, 
                     numero, serie, costo, costoFacturado, diferencia, idSucursal, nombreSucursal, 
                     fechaCuadre, usuario, cantidad, idRazon, bonificacion, costoFiscal, iva, idUsuario
                 ];
-    
+
                 const query = `
                     INSERT INTO cuadrecostos (
                         IdCuadre, Upc, Descripcion, Proveedor, Departamento, FechaFactura, 
@@ -803,37 +793,33 @@ let copiedContent = "";
                         IdRazonSocial, BonificacionIngresada, Costofiscal, Iva, IdUsuario
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `;
-    
+
                 await connection.query(query, rowData);
-                insertedRows++;
+                processedRows++;
             }
-    
+            let mensajeExito = existeInventario ?
+                'Cuadre actualizado exitosamente' :
+                'Nuevo cuadre guardado exitosamente';
+
             Swal.fire({
                 icon: 'success',
-                title: 'Guardado exitoso',
-                text: `Se han guardado ${insertedRows} filas correctamente.`
+                title: mensajeExito,
+                text: `Se han ${existeInventario ? 'actualizado' : 'guardado'} ${processedRows} filas correctamente.`
             }).then((result) => {
                 if (result.isConfirmed) {
                     limpiarFormulario();
                 }
             });
+
         } catch (error) {
             console.error('Error detallado al guardar el cuadre:', error);
             let errorMessage = 'Ocurrió un error al guardar el cuadre. Detalles:\n\n';
             
-            if (error.message) {
-                errorMessage += `Mensaje: ${error.message}\n`;
-            }
-            if (error.sqlState) {
-                errorMessage += `Estado SQL: ${error.sqlState}\n`;
-            }
-            if (error.code) {
-                errorMessage += `Código: ${error.code}\n`;
-            }
-            if (error.stack) {
-                errorMessage += `Stack: ${error.stack}\n`;
-            }
-    
+            if (error.message) errorMessage += `Mensaje: ${error.message}\n`;
+            if (error.sqlState) errorMessage += `Estado SQL: ${error.sqlState}\n`;
+            if (error.code) errorMessage += `Código: ${error.code}\n`;
+            if (error.stack) errorMessage += `Stack: ${error.stack}\n`;
+
             Swal.fire({
                 icon: 'error',
                 title: 'Error al guardar',
@@ -912,16 +898,50 @@ let copiedContent = "";
         guardarBtn.addEventListener('click', guardarCuadre);
         buscarBtn.addEventListener('click', async () => {
             const idInventario = inventarioIdInput.value;
-            const sucursalData = sucursalSelect.selectedOptions[0].dataset;
+            const sucursalData = sucursalSelect.selectedOptions[0]?.dataset;
+            const idSucursal = sucursalSelect.value;
+            const nombreSucursal = sucursalSelect.selectedOptions[0]?.text;
     
-            if (idInventario && sucursalData) {
-                const inventario = await obtenerInventario(sucursalData, idInventario);
-                mostrarInventario(inventario);
-            } else {
+            if (!idInventario || !sucursalData) {
                 Swal.fire({
                     icon: 'warning',
                     title: 'Advertencia',
                     text: 'Debe seleccionar una sucursal e ingresar un ID de inventario.'
+                });
+                return;
+            }
+    
+            try {
+                // Primero verificamos si el cuadre ya existe
+                const existeInventario = await verificarExistenciaInventario(idInventario, idSucursal);
+                
+                if (existeInventario) {
+                    const result = await Swal.fire({
+                        icon: 'warning',
+                        title: 'Cuadre Existente',
+                        text: `Ya existe información guardada para el inventario ${idInventario} de la sucursal ${nombreSucursal}. ¿Desea continuar y sobrescribir?`,
+                        showCancelButton: true,
+                        confirmButtonText: 'Sí, continuar',
+                        cancelButtonText: 'No, cancelar'
+                    });
+    
+                    if (!result.isConfirmed) {
+                        limpiarFormulario();
+                        return;
+                    }
+                }
+    
+                // Si el usuario confirma o no existe el cuadre, procedemos con la búsqueda
+                const inventario = await obtenerInventario(sucursalData, idInventario);
+                if (inventario) {
+                    mostrarInventario(inventario);
+                }
+            } catch (error) {
+                console.error('Error al buscar el inventario:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Ocurrió un error al buscar el inventario.'
                 });
             }
         });

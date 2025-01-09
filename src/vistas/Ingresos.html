@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ingresos</title>
+    <title>Ingresos y Notas de Crédito</title>
     <link rel="stylesheet" href="../disenos/Ingreso.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        <!-- Sección de Búsqueda -->
+        <!-- Sección de Búsqueda Ingresos -->
         <div class="search-section">
             <h2>Búsqueda de Ingresos</h2>
             <form id="ingresoForm">
@@ -39,6 +39,32 @@
                 </div>
 
                 <button type="submit" class="search-button">Exportar</button>
+            </form>
+        </div>
+
+        <!-- Nueva Sección de Notas de Crédito -->
+        <div class="search-section">
+            <h2>Búsqueda Notas de Crédito Megared</h2>
+            <form id="creditNotesForm">
+                <div class="form-group date-container">
+                    <div>
+                        <label for="fechaInicioNC">Fecha de Inicio</label>
+                        <input type="date" id="fechaInicioNC" required>
+                    </div>
+                    <div>
+                        <label for="fechaFinNC">Fecha de Fin</label>
+                        <input type="date" id="fechaFinNC" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="upcNC">UPC</label>
+                    <input type="text" id="upcNC" placeholder="Ingrese el UPC">
+                    <span class="error-message" id="upcNCError">Por favor ingrese solo números</span>
+                    <span class="descripcion-producto" id="descProducto"></span>
+                </div>
+
+                <button type="submit" class="search-button">Exportar Notas</button>
             </form>
         </div>
     </div>

@@ -1,15 +1,11 @@
 :root {
     --primary-color: #1a56db;
     --primary-hover: #1e40af;
-    --secondary-color: #64748b;
-    --background-color: #f8fafc;
-    --surface-color: #ffffff;
     --text-primary: #0f172a;
     --text-secondary: #475569;
     --border-color: #e2e8f0;
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-    --accent-color: #3b82f6;
+    --background-color: #f8fafc;
+    --surface-color: #ffffff;
 }
 
 body {
@@ -22,171 +18,106 @@ body {
 }
 
 .container {
-    max-width: none;
-    margin: 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    height: calc(100vh - 1rem);
+    gap: 1.5rem;
+    max-width: 900px;
+    margin: 1rem auto;
 }
 
-/* Sección de Búsqueda */
 .search-section {
     background: var(--surface-color);
-    padding: 1.5rem;
-    border-radius: 0.75rem;
-    box-shadow: var(--shadow-md);
-    border: 1px solid var(--border-color);
+    padding: 1.25rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
-
+.search-section + .search-section {
+    margin-top: 0;
+}
 .search-section h2 {
     color: var(--primary-color);
-    font-size: 1.5rem;
-    margin-bottom: 1.5rem;
-    font-weight: 600;
-    text-align: left;
+    font-size: 1.25rem;
+    margin: 0 0 1.25rem 0;
     padding-left: 0.5rem;
-    border-left: 4px solid var(--primary-color);
+    border-left: 3px solid var(--primary-color);
 }
 
 #ingresoForm {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1.5rem;
-    align-items: flex-end;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
 }
 
 .form-group {
-    flex: 1;
-    min-width: 200px;
     margin: 0;
 }
 
 .date-container {
-    display: flex;
-    gap: 1rem;
-    flex: 2;
-    min-width: 300px;
-}
-
-.date-container > div {
-    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    grid-column: span 2;
 }
 
 label {
-    font-weight: 500;
-    margin-bottom: 0.5rem;
-    display: block;
+    font-size: 0.813rem;
     color: var(--text-secondary);
-    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+    display: block;
 }
 
 input[type="date"],
 select,
 input[type="text"] {
     width: 100%;
-    padding: 0.625rem;
+    padding: 0.5rem;
     border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
+    border-radius: 0.375rem;
     font-size: 0.875rem;
-    color: var(--text-primary);
     background-color: var(--surface-color);
-    transition: all 0.2s ease;
-}
-
-input:focus,
-select:focus {
-    outline: none;
-    border-color: var(--accent-color);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .search-button {
     background-color: var(--primary-color);
     color: white;
-    padding: 0.625rem 1.25rem;
+    padding: 0.5rem 1rem;
     border: none;
-    border-radius: 0.5rem;
+    border-radius: 0.375rem;
     font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
-    min-width: 120px;
-    height: 38px;
+    transition: background-color 0.2s;
+    grid-column: span 2;
+    height: 2.5rem;
 }
 
 .search-button:hover {
     background-color: var(--primary-hover);
 }
 
-/* Sección de Resultados */
-.results-section {
-    background: var(--surface-color);
-    border-radius: 0.75rem;
-    box-shadow: var(--shadow-md);
-    border: 1px solid var(--border-color);
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.results-section h2 {
-    color: var(--primary-color);
-    font-size: 1.25rem;
-    margin: 0;
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
-/* Estados */
-.estado-activo {
-    color: #059669;
-    font-weight: 500;
-}
-
-.estado-inactivo {
-    color: #dc2626;
-    font-weight: 500;
-}
-
-/* Mensajes de error */
 .error-message {
     color: #dc2626;
     font-size: 0.75rem;
     margin-top: 0.25rem;
-    display: none;
 }
 
 .descripcion-producto {
-    margin-top: 0.5rem;
+    font-size: 0.813rem;
     color: var(--text-secondary);
-    font-size: 0.875rem;
+    margin-top: 0.375rem;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    body {
-        padding: 0.5rem;
-    }
-    
-    .container {
-        gap: 0.5rem;
-    }
-    
-    .search-section {
-        padding: 1rem;
+@media (max-width: 640px) {
+    #ingresoForm {
+        grid-template-columns: 1fr;
     }
     
     .date-container {
-        flex-direction: column;
-    }
-    
-    .form-group {
-        min-width: 100%;
+        grid-template-columns: 1fr;
+        grid-column: span 1;
     }
     
     .search-button {
-        width: 100%;
+        grid-column: span 1;
     }
 }
