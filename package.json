@@ -38,23 +38,13 @@
     "productName": "SysCua-Report",
     "win": {
       "target": [
-          {
-            "target": "nsis",
-            "arch": [
-              "x64",
-              "ia32"
-            ]
-          }
-        ],
-        "icon": "src/icono.ico"
+        "nsis"
+      ],
+      "icon": "src/icono.ico"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
-      "uninstallDisplayName": "${productName}",
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "allowToChangeInstallationDirectory": true
     }
   }
 }
