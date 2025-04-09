@@ -5,95 +5,145 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cuadre de Inventario</title>
     <link rel="stylesheet" href="../disenos/Cuadre.css">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="header">
+    <header class="app-header">
         <h1>Cuadre de Facturas "COSTOS"</h1>
-    </div>
+    </header>
 
-    <div class="main-container">
-        <div class="search-container">
-            <div class="form-group">
-                <label for="sucursal-select">Seleccione Sucursal:</label>
-                <select id="sucursal-select" class="custom-select">
-                    <!-- Opciones se llenarán dinámicamente -->
-                </select>
+    <div class="dashboard-container">
+        <!-- Panel lateral con controles -->
+        <aside class="side-panel">
+            <div class="search-controls">
+                <div class="control-group">
+                    <label for="sucursal-select">Seleccione Sucursal:</label>
+                    <div class="select-wrapper">
+                        <select id="sucursal-select" class="styled-select">
+                            <!-- Opciones se llenarán dinámicamente -->
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <label for="inventario-id">ID Inventario:</label>
+                    <div class="input-group">
+                        <input type="text" id="inventario-id" placeholder="Ingrese ID" class="styled-input">
+                        <button id="buscar-btn" class="primary-btn">Buscar</button>
+                    </div>
+                </div>
+                
+                <div class="info-card criterio-card">
+                    <h3>Criterio de Cuadre</h3>
+                    <p id="criterio-cuadre" class="criterio-text">No se encontró criterio de cuadre para este proveedor.</p>
+                </div>
+                
+                <div class="info-card total-card">
+                    <h3>Total Factura</h3>
+                    <p class="total-amount"><span id="total-factura">0.00</span></p>
+                </div>
+                
+                <button id="guardar-btn" class="save-btn">Guardar Cuadre</button>
             </div>
-            <div class="form-group">
-                <label for="inventario-id">ID Inventario:</label>
-                <input type="text" id="inventario-id" placeholder="ID Inventario" class="custom-input">
-            </div>
-            <button id="buscar-btn" class="custom-button">Buscar</button>
-            <div id="criterio-cuadre-container" class="criterio-cuadre-box">
-                <strong>Criterio de Cuadre:</strong> <span id="criterio-cuadre"></span>
-            </div>
-            <div id="total-factura-container" class="total-factura-box">
-                <strong>Total Factura:</strong> <span id="total-factura">0.00</span>
-            </div>
-        </div>
+        </aside>
         
-        <div class="info-container">
-            <div class="accordion">
-                <div class="accordion-item">
-                    <h2 class="accordion-header" id="inventarioHeader">
-                        <button class="accordion-button" type="button" aria-expanded="true" aria-controls="inventarioContent">
-                            Información del Inventario
-                        </button>
-                    </h2>
-                    <div id="inventarioContent" class="accordion-collapse collapse show" aria-labelledby="inventarioHeader">
-                        <div class="accordion-body">
-                            <h2>Información del Inventario</h2>
-                            <div class="info-grid">
-                                <p><strong>Fecha:</strong> <span id="fecha"></span></p>
-                                <p><strong>Serie:</strong> <span id="serie"></span></p>
-                                <p><strong>Número:</strong> <span id="numero"></span></p>
-                                <p><strong>Fecha Factura:</strong> <span id="fecha-factura"></span></p>
-                                <p><strong>Departamento:</strong> <span id="departamento"></span></p>
-                                <p><strong>Proveedor:</strong> <span id="proveedor"></span></p>
-                                <p><strong>Razón Social:</strong> <span id="razon-social"></span></p>
-                                <p><strong>Observaciones:</strong> <span id="observaciones"></span></p>
-                            </div>
-                            <button id="guardar-btn" class="custom-button guardar-btn">Guardar Cuadre</button>
+        <!-- Contenido principal -->
+        <main class="main-content">
+            <!-- Panel colapsable para información de inventario -->
+            <div class="collapsible-panel">
+                <button class="collapsible-header" id="info-header">
+                    <span>Información del Inventario</span>
+                    <span class="toggle-icon">▼</span>
+                </button>
+                <div class="collapsible-content" id="info-content">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>Fecha:</label>
+                            <span id="fecha" class="info-value"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Serie:</label>
+                            <span id="serie" class="info-value"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Número:</label>
+                            <span id="numero" class="info-value"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Fecha Factura:</label>
+                            <span id="fecha-factura" class="info-value"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Departamento:</label>
+                            <span id="departamento" class="info-value"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Proveedor:</label>
+                            <span id="proveedor" class="info-value"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Razón Social:</label>
+                            <span id="razon-social" class="info-value"></span>
+                        </div>
+                        <div class="info-item">
+                            <label>Observaciones:</label>
+                            <span id="observaciones" class="info-value"></span>
                         </div>
                     </div>
                 </div>
             </div>
+            
+            <!-- Tabla de detalle de inventario -->
+            <section class="inventory-detail-section">
+                <h2 class="section-title">Detalle del Inventario</h2>
+                <div class="table-container" id="detalle-inventario">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th class="upc-column">UPC</th>
+                                <th class="descripcion-column">Descripción</th>
+                                <th class="cantidad-column">Cantidad</th>
+                                <th class="costo-column">Costo</th>
+                                <th class="costo-alterno-column">Costo Alterno</th>
+                                <th class="bonificacion-column">Bonificación</th>
+                                <th class="precio-column">Precio Facturado</th>
+                                <th class="descuento-column">Descuento</th>
+                                <th class="costo-facturado-column">Costo Facturado</th>
+                                <th class="diferencia-column">Diferencia</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Se llenará dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="actions-bar">
+                    <button id="descuento-btn" class="discount-btn">Aplicar Descuento</button>
+                    <div class="table-controls">
+                        <button class="action-btn add-row">+ Fila</button>
+                        <button class="action-btn search-table">🔍 Buscar</button>
+                        <button id="export-excel-btn" class="action-btn export-btn">📋 Copiar</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <!-- Ventana emergente para búsqueda -->
+    <div id="searchWindow" class="modal-window">
+        <div class="modal-content">
+            <span id="closeSearch" class="close-modal">&times;</span>
+            <h3>Buscar en Inventario</h3>
+            <div class="search-group">
+                <input type="text" id="searchInput" placeholder="Buscar por descripción...">
+                <button id="searchButton" class="primary-btn">Buscar</button>
+            </div>
+            <div class="search-help">
+                <span>Tip: Use Ctrl+B para abrir rápidamente la búsqueda</span>
+            </div>
         </div>
     </div>
-        
-    </div>
-    <div id="detalle-inventario" class="table-section">
-        <h2>Detalle del Inventario</h2>
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th class="upc-column">UPC</th>
-                        <th class="descripcion-column">Descripción</th>
-                        <th class="cantidad-column">Cantidad</th>
-                        <th class="costo-column">Costo</th>
-                        <th class="costo-alterno-column" style="display: none;">Costo Alterno</th>
-                        <th class="bonificacion-column">Bonificación</th>
-                        <th class="precio-column">Precio Facturado</th>
-                        <th class="descuento-column">Descuento</th>
-                        <th class="costo-facturado-column">Costo Facturado</th>
-                        <th class="diferencia-column">Diferencia</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- Se llenará dinámicamente -->
-                </tbody>
-            </table>
-        </div>
-        <button id="descuento-btn" class="custom-button">Aplicar Descuento</button>
-    </div>
-    <div id="searchWindow" class="search-window" style="display: none;">
-        <div class="search-content">
-            <input type="text" id="searchInput" placeholder="Buscar descripción...">
-            <button id="searchButton">Buscar</button>
-        </div>
-    </div>
+
     <script src="../logica/Cuadre.js"></script>
 </body>
 </html>
