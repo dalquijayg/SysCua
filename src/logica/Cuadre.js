@@ -483,8 +483,9 @@ async function verificarExistenciaInventario(idInventario, idSucursal) {
 }
 
 // Mostrar información del inventario en la interfaz
+// Función corregida para mostrar el inventario con coherencia en el cálculo de descuentos
 function mostrarInventario(inventario) {
-    // Actualizar información general
+    // Mostrar la información general del inventario
     document.getElementById('fecha').textContent = formatearFecha(inventario.info.Fecha);
     document.getElementById('serie').textContent = inventario.info.Serie;
     document.getElementById('numero').textContent = inventario.info.Numero;
@@ -505,7 +506,7 @@ function mostrarInventario(inventario) {
     document.getElementById('observaciones').textContent = inventario.info.Observaciones;
     document.getElementById('criterio-cuadre').textContent = inventario.criterioCuadre;
     
-    // Mostrar los detalles del inventario en la tabla
+    // Mostrar los detalles del inventario
     const tbody = document.querySelector('.data-table tbody');
     tbody.innerHTML = ''; // Limpiar la tabla antes de agregar nuevas filas
     
@@ -527,10 +528,13 @@ function mostrarInventario(inventario) {
                 <td class="descripcion-column">${detalle.DescLarga || ''}</td>
                 <td class="cantidad-column"><input type="number" value="${detalle.Cantidad || ''}" class="cantidad-input"></td>
                 <td class="costo-column"><input type="number" value="${detalle.Costo || ''}" class="costo-input"></td>
-                ${tipoSucursal === '2' ? `<td class="costo-alterno-column"><input type="number" value="${detalle.CostoAlterno || ''}" class="costo-alterno-input" readonly></td>` : ''}
+                ${tipoSucursal === '2' ? 
+                  `<td class="costo-alterno-column"><input type="number" value="${detalle.CostoAlterno || ''}" class="costo-alterno-input" readonly></td>` : 
+                  `<td class="costo-alterno-column" style="display: none;"><input type="number" value="${detalle.CostoAlterno || ''}" class="costo-alterno-input" readonly></td>`
+                }
                 <td class="bonificacion-column"><input type="number" value="${detalle.Bonificacion}" class="bonificacion-input"></td>
                 <td class="precio-column"><input type="text" value="${detalle.PrecioFacturado || ''}" class="precio-facturado-input"></td>
-                <td class="descuento-column"><input type="number" value="${detalle.Descuento || ''}" class="descuento-input"></td>
+                <td class="descuento-column"><input type="number" value="${detalle.Descuento || '0'}" class="descuento-input"></td>
                 <td class="costo-facturado-column costo-facturado-cell"></td>
                 <td class="diferencia-column diferencia-cell"></td>
             `;
@@ -542,45 +546,11 @@ function mostrarInventario(inventario) {
             const bonificacionInput = tr.querySelector('.bonificacion-input');
             const costoInput = tr.querySelector('.costo-input');
             const descuentoInput = tr.querySelector('.descuento-input');
-            const costoFacturadoCell = tr.querySelector('.costo-facturado-cell');
-            const diferenciaCell = tr.querySelector('.diferencia-cell');
             
             // Aplicar calculadora para el precio facturado
             calcularPrecioFacturado(precioFacturadoInput);
             
-            // Función para calcular y actualizar Costo Facturado y Diferencia
-            const actualizarCostos = () => {
-                const cantidadTotal = parseFloat(cantidadInput.value) + parseFloat(bonificacionInput.value);
-                let precioFacturado = parseFloat(precioFacturadoInput.dataset.originalValue || precioFacturadoInput.value);
-
-                if (cantidadTotal > 0 && !isNaN(precioFacturado)) {
-                    const descuento = parseFloat(descuentoInput.value) || 0;
-                    precioFacturado -= (precioFacturado * (descuento / 100));
-
-                    const costoFacturado = precioFacturado / cantidadTotal;
-                    const diferencia = costoFacturado - parseFloat(costoInput.value);
-
-                    costoFacturadoCell.textContent = costoFacturado.toFixed(2);
-                    diferenciaCell.textContent = diferencia.toFixed(2);
-                    
-                    // Aplicar colores según la diferencia
-                    if (diferencia > 0) {
-                        diferenciaCell.classList.add('diferencia-positiva');
-                        diferenciaCell.classList.remove('diferencia-negativa');
-                    } else if (diferencia < 0) {
-                        diferenciaCell.classList.add('diferencia-negativa');
-                        diferenciaCell.classList.remove('diferencia-positiva');
-                    } else {
-                        diferenciaCell.classList.remove('diferencia-positiva', 'diferencia-negativa');
-                    }
-                } else {
-                    costoFacturadoCell.textContent = '';
-                    diferenciaCell.textContent = '';
-                    diferenciaCell.classList.remove('diferencia-positiva', 'diferencia-negativa');
-                }
-            };
-            
-            // Asignar eventos a los inputs
+            // Asignar función de actualizar costos a todos los inputs
             const inputs = tr.querySelectorAll('input');
             inputs.forEach(input => {
                 input.addEventListener('input', actualizarCostos);
@@ -589,19 +559,21 @@ function mostrarInventario(inventario) {
             // Guardar el valor original del Precio Facturado
             precioFacturadoInput.dataset.originalValue = detalle.PrecioFacturado;
 
-            // Eventos para recalcular cuando se cambia Precio Facturado, Cantidad, Bonificación o Descuento
+            // Eventos específicos para cada campo
             precioFacturadoInput.addEventListener('input', () => {
                 precioFacturadoInput.dataset.originalValue = precioFacturadoInput.value;
-                actualizarCostos();
                 actualizarTotalFactura();
             });
 
-            cantidadInput.addEventListener('input', actualizarCostos);
-            bonificacionInput.addEventListener('input', actualizarCostos);
-            descuentoInput.addEventListener('input', actualizarCostos);
+            // Inicializar eventos UPC
+            const upcInput = tr.querySelector('.upc-input');
+            upcInput.addEventListener('blur', manejarUpc);
+            upcInput.addEventListener('keydown', manejarUpckeydown);
             
-            // Ejecutar cálculo inicial
-            actualizarCostos();
+            // Ejecutar cálculo inicial para mostrar los valores correctos
+            if (cantidadInput) {
+                cantidadInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
         });
     } else {
         const tr = document.createElement('tr');
@@ -962,119 +934,165 @@ function ActualizarUpcdinamicamente() {
 }
 
 // Aplicar descuento a todas las filas
+// Función corregida para aplicar el descuento manteniendo el valor original del campo
 function aplicarDescuentoGlobal() {
-    // Primero preguntar al usuario por el descuento a aplicar
-    Swal.fire({
-        title: 'Aplicar Descuento',
-        text: 'Ingrese el porcentaje de descuento:',
-        input: 'number',
-        inputAttributes: {
-            min: 0,
-            max: 100,
-            step: 1
-        },
-        showCancelButton: true,
-        confirmButtonText: 'Aplicar',
-        cancelButtonText: 'Cancelar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            const descuentoPorcentaje = parseFloat(result.value);
+    const rows = document.querySelectorAll('.data-table tbody tr');
+    let filasActualizadas = 0;
+    
+    // Verificar si hay filas para procesar
+    if (rows.length === 0) {
+        mostrarError('Sin datos', 'No hay filas de productos para aplicar descuento.');
+        return;
+    }
+    
+    // Mostrar indicador de carga
+    mostrarCargando('Aplicando descuentos...');
+    
+    // Procesar cada fila
+    rows.forEach(row => {
+        const descuentoInput = row.querySelector('.descuento-input');
+        const precioFacturadoInput = row.querySelector('.precio-facturado-input');
+        const cantidadInput = row.querySelector('.cantidad-input');
+        const bonificacionInput = row.querySelector('.bonificacion-input');
+        const costoInput = row.querySelector('.costo-input');
+        const costoFacturadoCell = row.querySelector('.costo-facturado-cell');
+        const diferenciaCell = row.querySelector('.diferencia-cell');
+        
+        // Verificar que existan los elementos necesarios y que tengan valores
+        if (descuentoInput && precioFacturadoInput && cantidadInput && 
+            bonificacionInput && costoInput && costoFacturadoCell && diferenciaCell) {
             
-            if (!isNaN(descuentoPorcentaje) && descuentoPorcentaje > 0 && descuentoPorcentaje <= 100) {
-                const rows = document.querySelectorAll('.data-table tbody tr');
+            const descuentoPorcentaje = parseFloat(descuentoInput.value) || 0;
+            const precioFacturado = parseFloat(precioFacturadoInput.value) || 0;
+            const cantidad = parseFloat(cantidadInput.value) || 0;
+            const bonificacion = parseFloat(bonificacionInput.value) || 0;
+            const costo = parseFloat(costoInput.value) || 0;
+            const cantidadTotal = cantidad + bonificacion;
+            
+            if (descuentoPorcentaje > 0 && precioFacturado > 0 && cantidadTotal > 0) {
+                // Calcular el monto de descuento basado en el porcentaje
+                const montoDescuento = precioFacturado * (descuentoPorcentaje / 100);
                 
-                rows.forEach(row => {
-                    aplicarDescuentoAFila(row, descuentoPorcentaje);
-                });
+                // Calcular el precio con descuento y el costo facturado
+                const precioConDescuento = Math.max(0, precioFacturado - montoDescuento);
+                const costoFacturado = precioConDescuento / cantidadTotal;
+                const diferencia = costoFacturado - costo;
                 
-                // Actualizar el total
-                actualizarTotalFactura();
+                // Actualizar las celdas calculadas (NO el campo de descuento)
+                costoFacturadoCell.textContent = costoFacturado.toFixed(2);
+                diferenciaCell.textContent = diferencia.toFixed(2);
                 
-                mostrarExito('Descuento aplicado', `Se ha aplicado un descuento del ${descuentoPorcentaje}% a todos los productos.`);
-            } else {
-                mostrarError('Error', 'Por favor ingrese un porcentaje válido entre 0 y 100.');
+                // IMPORTANTE: Marcar este descuento como porcentual para el guardado
+                descuentoInput.setAttribute('data-porcentual', 'true');
+                
+                // Aplicar clases según diferencia
+                if (diferencia > 0) {
+                    diferenciaCell.classList.add('diferencia-positiva');
+                    diferenciaCell.classList.remove('diferencia-negativa');
+                } else if (diferencia < 0) {
+                    diferenciaCell.classList.add('diferencia-negativa');
+                    diferenciaCell.classList.remove('diferencia-positiva');
+                } else {
+                    diferenciaCell.classList.remove('diferencia-positiva', 'diferencia-negativa');
+                }
+                
+                // Añadir efectos visuales para indicar actualización
+                costoFacturadoCell.classList.add('cell-updated');
+                diferenciaCell.classList.add('cell-updated');
+                descuentoInput.classList.add('descuento-porcentual'); // Clase visual opcional
+                setTimeout(() => {
+                    costoFacturadoCell.classList.remove('cell-updated');
+                    diferenciaCell.classList.remove('cell-updated');
+                }, 1000);
+                
+                filasActualizadas++;
             }
         }
     });
+    
+    // Cerrar indicador de carga
+    Swal.close();
+    
+    // Actualizar el total general
+    actualizarTotalFactura();
+    
+    // Mostrar mensaje de éxito
+    if (filasActualizadas > 0) {
+        
+    } else {
+        mostrarInfo(
+            'Sin cambios', 
+            'No se aplicaron descuentos. Verifique que los productos tengan valores en los campos de precio y descuento.'
+        );
+    }
 }
-
-// Aplicar descuento a una fila individual
-function aplicarDescuentoAFila(row, descuentoPorcentaje) {
-    const precioFacturadoInput = row.querySelector('.precio-facturado-input');
-    const descuentoInput = row.querySelector('.descuento-input');
-    const costoFacturadoCell = row.querySelector('.costo-facturado-cell');
-    const diferenciaCell = row.querySelector('.diferencia-cell');
-    const cantidadInput = row.querySelector('.cantidad-input');
-    const bonificacionInput = row.querySelector('.bonificacion-input');
-    const costoInput = row.querySelector('.costo-input');
-
-    let precioFacturadoOriginal = parseFloat(precioFacturadoInput.dataset.originalValue || precioFacturadoInput.value);
-
-    if (!isNaN(descuentoPorcentaje) && !isNaN(precioFacturadoOriginal) && descuentoPorcentaje > 0) {
-        // Actualizar el input de descuento
-        descuentoInput.value = descuentoPorcentaje;
-        
-        // Aplicar el descuento en porcentaje
-        let nuevoPrecioFacturado = precioFacturadoOriginal - (precioFacturadoOriginal * (descuentoPorcentaje / 100));
-        precioFacturadoInput.value = nuevoPrecioFacturado.toFixed(2);
-
-        // Recalcular Costo Facturado y Diferencia
-        const cantidadTotal = parseFloat(cantidadInput.value) + parseFloat(bonificacionInput.value);
-        if (cantidadTotal > 0) {
-            const costoFacturado = nuevoPrecioFacturado / cantidadTotal;
-            const diferencia = costoFacturado - parseFloat(costoInput.value);
-
-            costoFacturadoCell.textContent = costoFacturado.toFixed(2);
-            diferenciaCell.textContent = diferencia.toFixed(2);
-            
-            // Aplicar clases según diferencia
-            if (diferencia > 0) {
-                diferenciaCell.classList.add('diferencia-positiva');
-                diferenciaCell.classList.remove('diferencia-negativa');
-            } else if (diferencia < 0) {
-                diferenciaCell.classList.add('diferencia-negativa');
-                diferenciaCell.classList.remove('diferencia-positiva');
-            } else {
-                diferenciaCell.classList.remove('diferencia-positiva', 'diferencia-negativa');
-            }
-        } else {
-            costoFacturadoCell.textContent = '';
-            diferenciaCell.textContent = '';
-            diferenciaCell.classList.remove('diferencia-positiva', 'diferencia-negativa');
+function agregarEstiloDescuentoPorcentual() {
+    const estilo = document.createElement('style');
+    estilo.textContent = `
+        .descuento-porcentual {
+            background-color: rgba(107, 213, 225, 0.2) !important;
+            color: var(--primary-dark) !important;
+            font-weight: 600 !important;
         }
-        
-        // Añadir animación para indicar cambio
-        precioFacturadoInput.classList.add('cell-updated');
-        setTimeout(() => {
-            precioFacturadoInput.classList.remove('cell-updated');
-        }, 1000);
+        .descuento-porcentual::after {
+            content: "%";
+            position: relative;
+            display: inline;
+            margin-left: 2px;
+            color: var(--accent-color);
+        }
+    `;
+    document.head.appendChild(estilo);
+}
+// Función adicional para mostrar mensajes informativos si no existe
+if (typeof mostrarInfo !== 'function') {
+    function mostrarInfo(titulo, mensaje) {
+        Swal.fire({
+            icon: 'info',
+            title: titulo,
+            text: mensaje,
+            confirmButtonText: 'Entendido'
+        });
     }
 }
 
 // Agregar nueva fila a la tabla
 function agregarfila() {
     const tbody = document.querySelector('.data-table tbody');
+    const sucursalSelect = document.getElementById('sucursal-select');
+    const tipoSucursal = sucursalSelect?.selectedOptions[0]?.dataset?.tipoSucursal || '';
+    
+    // Crear nueva fila
     const newRow = document.createElement('tr');
+    
+    // Configurar HTML de la fila asegurando que todas las columnas estén presentes
+    // y con las clases correctas para mantener la estructura de la tabla
     newRow.innerHTML = `
         <td class="upc-column"><input type="text" class="upc-input"></td>
         <td class="descripcion-column"></td>
-        <td class="cantidad-column"><input type="number" class="cantidad-input"></td>
-        <td class="costo-column"><input type="number" class="costo-input"></td>
-        <td class="costo-alterno-column"><input type="number" class="costo-alterno-input" readonly></td>
-        <td class="bonificacion-column"><input type="number" class="bonificacion-input"></td>
-        <td class="precio-column"><input type="text" class="precio-facturado-input"></td>
-        <td class="descuento-column"><input type="number" class="descuento-input"></td>
-        <td class="costo-facturado-column costo-facturado-cell"></td>
-        <td class="diferencia-column diferencia-cell"></td>
+        <td class="cantidad-column"><input type="number" class="cantidad-input" value="0"></td>
+        <td class="costo-column"><input type="number" class="costo-input" value="0"></td>
+        ${tipoSucursal === '2' ? 
+            `<td class="costo-alterno-column"><input type="number" class="costo-alterno-input" readonly></td>` : 
+            `<td class="costo-alterno-column" style="display: none;"><input type="number" class="costo-alterno-input" readonly></td>`
+        }
+        <td class="bonificacion-column"><input type="number" class="bonificacion-input" value="0"></td>
+        <td class="precio-column"><input type="text" class="precio-facturado-input" value="0"></td>
+        <td class="descuento-column"><input type="number" class="descuento-input" value="0"></td>
+        <td class="costo-facturado-column costo-facturado-cell">0.00</td>
+        <td class="diferencia-column diferencia-cell">0.00</td>
     `;
+    
     tbody.appendChild(newRow);
 
     // Aplicar los mismos estilos y eventos a los nuevos inputs
     const inputs = newRow.querySelectorAll('input');
     const upcInput = newRow.querySelector('.upc-input');
+    
     inputs.forEach(input => {
         input.addEventListener('input', actualizarCostos);
     });
+    
     upcInput.addEventListener('blur', manejarUpc);
     upcInput.addEventListener('keydown', manejarUpckeydown);
 
@@ -1086,6 +1104,18 @@ function agregarfila() {
     setTimeout(() => {
         newRow.classList.remove('row-new');
     }, 1000);
+    
+    // Verificar si la columna costo-alterno debe estar visible
+    const costoAlternoCell = newRow.querySelector('.costo-alterno-column');
+    if (costoAlternoCell) {
+        costoAlternoCell.style.display = tipoSucursal === '2' ? '' : 'none';
+    }
+    
+    // Ejecutar el cálculo inicial de costos para la nueva fila
+    const cantidadInput = newRow.querySelector('.cantidad-input');
+    if (cantidadInput) {
+        cantidadInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
     
     // Enfocar el nuevo campo UPC
     upcInput.focus();
@@ -1099,6 +1129,8 @@ function agregarfila() {
 // Actualizar costos dentro de una fila
 function actualizarCostos() {
     const row = this.closest('tr');
+    if (!row) return; // Evitar errores si no encuentra la fila
+    
     const cantidadInput = row.querySelector('.cantidad-input');
     const bonificacionInput = row.querySelector('.bonificacion-input');
     const precioFacturadoInput = row.querySelector('.precio-facturado-input');
@@ -1107,17 +1139,29 @@ function actualizarCostos() {
     const diferenciaCell = row.querySelector('.diferencia-cell');
     const descuentoInput = row.querySelector('.descuento-input');
 
-    const cantidadTotal = parseFloat(cantidadInput.value) + parseFloat(bonificacionInput.value);
-    let precioFacturado = parseFloat(precioFacturadoInput.value);
-    const costo = parseFloat(costoInput.value);
+    // Verificar que se encontraron todos los elementos necesarios
+    if (!cantidadInput || !bonificacionInput || !precioFacturadoInput || 
+        !costoInput || !costoFacturadoCell || !diferenciaCell) {
+        console.error('Error: No se encontraron todos los elementos necesarios en la fila');
+        return;
+    }
 
-    if (cantidadTotal > 0 && !isNaN(precioFacturado) && !isNaN(costo)) {
-        const descuento = parseFloat(descuentoInput.value) || 0;
-        precioFacturado -= (precioFacturado * (descuento / 100));
+    const cantidad = parseFloat(cantidadInput.value) || 0;
+    const bonificacion = parseFloat(bonificacionInput.value) || 0;
+    const cantidadTotal = cantidad + bonificacion;
+    const precioFacturado = parseFloat(precioFacturadoInput.value) || 0;
+    const costo = parseFloat(costoInput.value) || 0;
+    const descuento = parseFloat(descuentoInput.value) || 0;
 
-        const costoFacturado = precioFacturado / cantidadTotal;
+    if (cantidadTotal > 0 && !isNaN(precioFacturado)) {
+        // Aplicar descuento como valor ABSOLUTO (no como porcentaje)
+        const precioConDescuento = Math.max(0, precioFacturado - descuento);
+        
+        // Dividir el precio con descuento entre la cantidad total
+        const costoFacturado = precioConDescuento / cantidadTotal;
         const diferencia = costoFacturado - costo;
 
+        // Formatear a 2 decimales para mostrar
         costoFacturadoCell.textContent = costoFacturado.toFixed(2);
         diferenciaCell.textContent = diferencia.toFixed(2);
         
@@ -1132,11 +1176,13 @@ function actualizarCostos() {
             diferenciaCell.classList.remove('diferencia-positiva', 'diferencia-negativa');
         }
     } else {
-        costoFacturadoCell.textContent = '';
-        diferenciaCell.textContent = '';
+        // Valores predeterminados si no hay cantidades válidas
+        costoFacturadoCell.textContent = '0.00';
+        diferenciaCell.textContent = '0.00';
         diferenciaCell.classList.remove('diferencia-positiva', 'diferencia-negativa');
     }
     
+    // Actualizar el total general
     actualizarTotalFactura();
 }
 
@@ -1321,13 +1367,31 @@ async function realizarGuardado() {
             const costoFiscal = costoFacturado / 1.12;
             const iva = costoFiscal * 0.12;
             
+            // Obtener el valor original del descuento
+            const descuentoInput = row.querySelector('.descuento-input');
+            let descuentoValor = parseFloat(descuentoInput?.value) || 0;
+            
+            // Determinar si es un descuento porcentual o monetario
+            // Si la fila ha sido procesada por el botón "Aplicar Descuento", usamos el flag
+            let descuentoFactura = '';
+            
+            // Verificar si este descuento está marcado como porcentual
+            if (descuentoInput && descuentoInput.hasAttribute('data-porcentual') && 
+                descuentoInput.getAttribute('data-porcentual') === 'true') {
+                // Es un descuento porcentual, guardar con %
+                descuentoFactura = descuentoValor + '%';
+            } else {
+                // Es un descuento monetario, guardar el valor tal cual
+                descuentoFactura = descuentoValor.toString();
+            }
+            
             // Evitar guardar filas vacías
             if (!upc) continue;
 
             const rowData = [
                 idInventario, upc, descripcion, idProveedores, idDepartamentos, fechaFactura, 
                 numero, serie, costo, costoFacturado, diferencia, idSucursal, nombreSucursal, 
-                fechaCuadre, usuario, cantidad, idRazon, bonificacion, costoFiscal, iva, idUsuario
+                fechaCuadre, usuario, cantidad, idRazon, bonificacion, costoFiscal, iva, idUsuario, descuentoFactura
             ];
 
             const query = `
@@ -1335,8 +1399,8 @@ async function realizarGuardado() {
                     IdCuadre, Upc, Descripcion, Proveedor, Departamento, FechaFactura, 
                     NoFactura, Serie, costosistema, costofacturado, diferencia, 
                     IdSucursal, sucursal, fechacuadre, Usuario, CantidadIngresada, 
-                    IdRazonSocial, BonificacionIngresada, Costofiscal, Iva, IdUsuario
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    IdRazonSocial, BonificacionIngresada, Costofiscal, Iva, IdUsuario, Descuentofactura
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             await connection.query(query, rowData);
@@ -1597,7 +1661,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inicializar eventos UPC
     InicializartodasfilasUpc();
     ActualizarUpcdinamicamente();
-    
+    agregarEstiloDescuentoPorcentual();
     // Asignar eventos de botones principales
     if (guardarBtn) {
         guardarBtn.addEventListener('click', guardarCuadre);
