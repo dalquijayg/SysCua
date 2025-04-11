@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Consulta de Inventarios</title>
+    <title>Sistema de Consulta de Notas de Crédito Antigua</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
-    <link rel="stylesheet" href="../disenos/Ingreso.css">
+    <link rel="stylesheet" href="../disenos/DetalleNotasBodegonaAntigua.css">
 </head>
 <body>
     <div class="container">
         <header>
             <div class="header-content">
-                <h1><i class="fas fa-warehouse"></i> Control de Inventarios</h1>
+                <h1><i class="fas fa-credit-note"></i> Control de Notas de Crédito Bodegona Antigua</h1>
                 <div class="theme-toggle">
                     <button id="themeToggle"><i class="fas fa-moon"></i></button>
                 </div>
@@ -49,20 +49,20 @@
                     </div>
                     <div class="status-item">
                         <div class="status-icon">
-                            <i class="fas fa-boxes"></i>
+                            <i class="fas fa-undo"></i>
                         </div>
                         <div class="status-info">
-                            <h3>Total Productos</h3>
-                            <p id="totalProductos">0</p>
+                            <h3>Total Devoluciones</h3>
+                            <p id="totalDevoluciones">0</p>
                         </div>
                     </div>
                     <div class="status-item">
                         <div class="status-icon">
-                            <i class="fas fa-truck"></i>
+                            <i class="fas fa-users"></i>
                         </div>
                         <div class="status-info">
-                            <h3>Proveedores</h3>
-                            <p id="totalProveedores">0</p>
+                            <h3>Clientes</h3>
+                            <p id="totalClientes">0</p>
                         </div>
                     </div>
                     <div class="status-item">
@@ -70,8 +70,8 @@
                             <i class="fas fa-file-invoice"></i>
                         </div>
                         <div class="status-info">
-                            <h3>Total Facturas</h3>
-                            <p id="totalFacturas">0</p>
+                            <h3>Total Notas</h3>
+                            <p id="totalNotas">0</p>
                         </div>
                     </div>
                 </div>
@@ -91,22 +91,18 @@
                         </select>
                     </div>
                     <div class="filter-group">
-                        <label for="filtroProveedor">Proveedor:</label>
-                        <select id="filtroProveedor">
-                            <option value="todos">Todos los proveedores</option>
+                        <label for="filtroCliente">Cliente:</label>
+                        <select id="filtroCliente">
+                            <option value="todos">Todos los clientes</option>
                         </select>
                     </div>
                     <div class="filter-group">
-                        <label for="filtroRazon">Razón Social:</label>
-                        <select id="filtroRazon">
-                            <option value="todas">Todas las razones</option>
-                        </select>
+                        <label for="filtroSerie">Serie:</label>
+                        <input type="text" id="filtroSerie" placeholder="Filtrar por serie...">
                     </div>
                     <div class="filter-group">
-                        <label for="filtroEstado">Estado:</label>
-                        <select id="filtroEstado">
-                            <option value="todos">Todos los estados</option>
-                        </select>
+                        <label for="filtroProducto">Producto:</label>
+                        <input type="text" id="filtroProducto" placeholder="Filtrar por producto...">
                     </div>
                 </div>
 
@@ -118,25 +114,24 @@
                     
                     <div id="tablaDatos" class="tab-content active">
                         <div class="table-responsive">
-                            <table id="tablaInventarios">
+                            <table id="tablaNotas">
                                 <thead>
                                     <tr>
                                         <th>Sucursal</th>
                                         <th>UPC</th>
                                         <th>Descripción</th>
                                         <th>Cantidad</th>
-                                        <th>Bonificación</th>
                                         <th>Costo</th>
-                                        <th>Fecha Factura</th>
-                                        <th>Proveedor</th>
-                                        <th>Número</th>
+                                        <th>Precio</th>
+                                        <th>Fecha</th>
+                                        <th>NIT</th>
+                                        <th>Cliente</th>
+                                        <th>No. Documento</th>
                                         <th>Serie</th>
-                                        <th>Razón Social</th>
-                                        <th>Estado</th>
-                                        <th>ReFacturar</th>
+                                        <th>UUID</th>
                                     </tr>
                                 </thead>
-                                <tbody id="datosInventarios">
+                                <tbody id="datosNotas">
                                     <!-- Aquí se cargarán los datos dinámicamente -->
                                 </tbody>
                             </table>
@@ -151,15 +146,15 @@
                     <div id="resumenes" class="tab-content">
                         <div class="summary-cards">
                             <div class="summary-card">
-                                <h3>Top 5 Productos</h3>
+                                <h3>Top 5 Productos Devueltos</h3>
                                 <canvas id="chartProductos"></canvas>
                             </div>
                             <div class="summary-card">
-                                <h3>Distribución por Proveedor</h3>
-                                <canvas id="chartProveedores"></canvas>
+                                <h3>Distribución por Cliente</h3>
+                                <canvas id="chartClientes"></canvas>
                             </div>
                             <div class="summary-card">
-                                <h3>Inventario por Sucursal</h3>
+                                <h3>Devoluciones por Sucursal</h3>
                                 <canvas id="chartSucursales"></canvas>
                             </div>
                         </div>
@@ -193,22 +188,22 @@
     </div>
 
     <!-- Templates para Sweet Alert -->
-    <template id="detalleProductoTemplate">
-        <div class="detalle-producto">
-            <h2>Detalles del Producto</h2>
+    <template id="detalleNotaTemplate">
+        <div class="detalle-nota">
+            <h2>Detalles de la Nota de Crédito</h2>
             <div class="info-grupo">
                 <p><strong>UPC:</strong> <span id="detalleUpc"></span></p>
                 <p><strong>Descripción:</strong> <span id="detalleDescripcion"></span></p>
             </div>
             <div class="info-grupo">
                 <p><strong>Cantidad:</strong> <span id="detalleCantidad"></span></p>
-                <p><strong>Bonificación:</strong> <span id="detalleBonificacion"></span></p>
                 <p><strong>Costo:</strong> <span id="detalleCosto"></span></p>
+                <p><strong>Precio:</strong> <span id="detallePrecio"></span></p>
             </div>
             <div class="info-grupo">
-                <p><strong>Proveedor:</strong> <span id="detalleProveedor"></span></p>
-                <p><strong>Factura:</strong> <span id="detalleFactura"></span></p>
-                <p><strong>Estado:</strong> <span id="detalleEstado"></span></p>
+                <p><strong>Cliente:</strong> <span id="detalleCliente"></span></p>
+                <p><strong>NIT:</strong> <span id="detalleNIT"></span></p>
+                <p><strong>Nota de Crédito:</strong> <span id="detalleDocumento"></span></p>
             </div>
         </div>
     </template>
@@ -221,8 +216,8 @@
                 <p><strong>Nombre:</strong> <span id="detalleSucursalNombre"></span></p>
             </div>
             <div class="info-grupo">
-                <p><strong>Productos:</strong> <span id="detalleSucursalProductos"></span></p>
-                <p><strong>Facturas:</strong> <span id="detalleSucursalFacturas"></span></p>
+                <p><strong>Devoluciones:</strong> <span id="detalleSucursalDevoluciones"></span></p>
+                <p><strong>Notas:</strong> <span id="detalleSucursalNotas"></span></p>
             </div>
             <div class="info-grupo">
                 <p><strong>Estado:</strong> <span id="detalleSucursalEstado"></span></p>
@@ -233,6 +228,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chart.js/3.9.1/chart.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.7.1/sweetalert2.all.min.js"></script>
-    <script src="../logica/Ingreso.js"></script>
+    <script src="../logica/DetalleNotasBodegonaAntigua.js"></script>
 </body>
 </html>

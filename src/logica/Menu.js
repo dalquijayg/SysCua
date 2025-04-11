@@ -121,6 +121,34 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         ipcRenderer.send('open-ingresos-window');
     });
+    document.getElementById('VMegared').addEventListener('click', (e) => {
+        e.preventDefault();
+        ipcRenderer.send('open-VMegared-window');
+    });
+    document.getElementById('VSurti').addEventListener('click', (e) => {
+        e.preventDefault();
+        ipcRenderer.send('open-VSurti-window');
+    });
+    document.getElementById('NSurti').addEventListener('click', (e) => {
+        e.preventDefault();
+        ipcRenderer.send('open-NSurti-window');
+    });
+    document.getElementById('NMegared').addEventListener('click', (e) => {
+        e.preventDefault();
+        ipcRenderer.send('open-NMegared-window');
+    });
+    document.getElementById('FBonificaciones').addEventListener('click', (e) => {
+        e.preventDefault();
+        ipcRenderer.send('open-FBonificaciones-window');
+    });
+    document.getElementById('VBodegonaAntigua').addEventListener('click', (e) => {
+        e.preventDefault();
+        ipcRenderer.send('open-VBodegonaAntigua-window');
+    });
+    document.getElementById('NBodegonaAntigua').addEventListener('click', (e) => {
+        e.preventDefault();
+        ipcRenderer.send('open-VBodegonaAntigua-window');
+    });
     // Función para obtener el saludo e icono según la hora del día
     function getGreetingAndIcon() {
         const hour = new Date().getHours();

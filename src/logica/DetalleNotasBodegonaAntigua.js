@@ -1,4 +1,4 @@
-// Importaciones (mantenemos las que indicaste y agregamos mysql2)
+// Importaciones (mantenemos las mismas dependencias)
 const Swal = require('sweetalert2');
 const odbc = require('odbc');
 const conexiondbsucursal = 'DSN=DBsucursal';
@@ -7,47 +7,38 @@ const mysql = require('mysql2/promise'); // Para conexiones a MySQL
 const Chart = require('chart.js/auto');
 
 // Variables globales
-let allData = []; // Almacena todos los datos de inventario
+let allData = []; // Almacena todos los datos de notas de crédito
 let currentPage = 1;
 const itemsPerPage = 100;
 let sucursales = []; // Almacena información de las sucursales
 let filteredData = []; // Datos filtrados actualmente visibles
 let charts = {}; // Almacena las referencias a los gráficos
 
-// Nuevas variables globales para el panel de sucursales
+// Variables para el panel de sucursales
 let sucursalesEstado = {}; // Almacena el estado de cada sucursal: 'pendiente', 'cargando', 'completo', 'error'
-let sucursalStats = {}; // Estadísticas por sucursal: {productos, facturas}
+let sucursalStats = {}; // Estadísticas por sucursal: {devoluciones, notas}
 let procesandoSucursal = false; // Control para evitar múltiples reintento simultáneos
 
-// Objeto para mantener estadísticas (modificado)
+// Objeto para mantener estadísticas
 const stats = {
-    totalProductos: 0,
-    totalProveedores: new Set(),
+    totalDevoluciones: 0,
+    totalClientes: new Set(),
     totalSucursales: 0,
-    totalFacturas: new Set() // Nuevo contador para facturas
+    totalNotas: new Set()
 };
-async function conectar() {
-    try {
-        const connection = await odbc.connect(conexiondbsucursal);
-        await connection.query('SET NAMES utf8mb4');
-        return connection;
-    } catch (error) {
-        console.error('Error al conectar a la base de datos:', error);
-        throw error;
-    }
-}
+
 // Inicializar la aplicación cuando el DOM esté cargado
 document.addEventListener('DOMContentLoaded', () => {
     initializeDatePickers();
     setupEventListeners();
     loadTheme();
     
-    // Establecer fechas predeterminadas (actual y 7 días atrás)
+    // Establecer fechas predeterminadas (actual y 30 días atrás)
     const today = new Date();
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(today.getDate() - 7);
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setDate(today.getDate() - 30);
     
-    document.getElementById('fechaInicio').value = formatDate(oneWeekAgo);
+    document.getElementById('fechaInicio').value = formatDate(oneMonthAgo);
     document.getElementById('fechaFin').value = formatDate(today);
 
     // Cargar las sucursales al iniciar
@@ -157,18 +148,18 @@ function setupEventListeners() {
     
     // Filtros
     document.getElementById('filtraSucursal').addEventListener('change', aplicarFiltros);
-    document.getElementById('filtroProveedor').addEventListener('change', aplicarFiltros);
-    document.getElementById('filtroRazon').addEventListener('change', aplicarFiltros);
-    document.getElementById('filtroEstado').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtroCliente').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtroSerie').addEventListener('input', debounce(aplicarFiltros, 300)); // Con debounce para el campo de texto
+    document.getElementById('filtroProducto').addEventListener('input', debounce(aplicarFiltros, 300));
     
     // Detectar clic en una fila para mostrar detalles
-    document.getElementById('datosInventarios').addEventListener('click', (e) => {
+    document.getElementById('datosNotas').addEventListener('click', (e) => {
         // Encontrar la fila más cercana
         const row = e.target.closest('tr');
         if (row) {
             const index = row.getAttribute('data-index');
             if (index !== null) {
-                mostrarDetalleProducto(filteredData[parseInt(index)]);
+                mostrarDetalleNota(filteredData[parseInt(index)]);
             }
         }
     });
@@ -182,7 +173,7 @@ function mostrarSucursalesEnPanel() {
     sucursales.forEach(sucursal => {
         // Determinar el estado de la sucursal
         const estado = sucursalesEstado[sucursal.idSucursal] || 'pendiente';
-        const stats = sucursalStats[sucursal.idSucursal] || { productos: 0, facturas: 0 };
+        const stats = sucursalStats[sucursal.idSucursal] || { devoluciones: 0, notas: 0 };
         
         const sucursalItem = document.createElement('div');
         sucursalItem.className = `sucursal-item ${estado}`;
@@ -215,8 +206,8 @@ function mostrarSucursalesEnPanel() {
                 <div class="sucursal-detalle">
                     <div class="sucursal-nombre">${sucursal.NombreSucursal}</div>
                     <div class="sucursal-stats">
-                        <span class="stat-productos" title="Productos"><i class="fas fa-boxes"></i> ${stats.productos}</span>
-                        <span class="stat-facturas" title="Facturas"><i class="fas fa-file-invoice"></i> ${stats.facturas}</span>
+                        <span class="stat-devoluciones" title="Devoluciones"><i class="fas fa-undo"></i> ${stats.devoluciones}</span>
+                        <span class="stat-notas" title="Notas"><i class="fas fa-file-invoice"></i> ${stats.notas}</span>
                     </div>
                 </div>
                 ${botonAccion}
@@ -247,7 +238,7 @@ function mostrarDetalleSucursal(sucursal) {
     const template = document.getElementById('detalleSucursalTemplate');
     const detalleHTML = template.innerHTML;
     
-    const stats = sucursalStats[sucursal.idSucursal] || { productos: 0, facturas: 0 };
+    const stats = sucursalStats[sucursal.idSucursal] || { devoluciones: 0, notas: 0 };
     const estado = sucursalesEstado[sucursal.idSucursal] || 'pendiente';
     
     let estadoTexto = '';
@@ -263,16 +254,16 @@ function mostrarDetalleSucursal(sucursal) {
         html: detalleHTML,
         width: 600,
         confirmButtonText: 'Cerrar',
-        confirmButtonColor: '#6a9ff5',
+        confirmButtonColor: '#7b1fa2',
         showCancelButton: estado === 'error',
         cancelButtonText: 'Reintentar',
-        cancelButtonColor: '#ff9a76',
+        cancelButtonColor: '#e74c3c',
         didOpen: () => {
             // Llenar los campos con la información de la sucursal
             document.getElementById('detalleSucursalId').textContent = sucursal.idSucursal;
             document.getElementById('detalleSucursalNombre').textContent = sucursal.NombreSucursal;
-            document.getElementById('detalleSucursalProductos').textContent = stats.productos;
-            document.getElementById('detalleSucursalFacturas').textContent = stats.facturas;
+            document.getElementById('detalleSucursalDevoluciones').textContent = stats.devoluciones;
+            document.getElementById('detalleSucursalNotas').textContent = stats.notas;
             document.getElementById('detalleSucursalEstado').textContent = estadoTexto;
             
             // Aplicar color según el estado
@@ -291,19 +282,45 @@ function mostrarDetalleSucursal(sucursal) {
         }
     });
 }
+
+// Mostrar detalle de una nota de crédito
+function mostrarDetalleNota(item) {
+    // Clonar el template
+    const template = document.getElementById('detalleNotaTemplate');
+    const detalleHTML = template.innerHTML;
+    
+    Swal.fire({
+        title: 'Detalle de la Nota de Crédito',
+        html: detalleHTML,
+        width: 800,
+        confirmButtonText: 'Cerrar',
+        confirmButtonColor: '#7b1fa2',
+        didOpen: () => {
+            // Llenar los campos con la información de la nota de crédito
+            document.getElementById('detalleUpc').textContent = item.Upc;
+            document.getElementById('detalleDescripcion').textContent = item.DescLarga || 'Sin descripción';
+            document.getElementById('detalleCantidad').textContent = item.Cantidad;
+            document.getElementById('detalleCosto').textContent = formatCurrency(item.CostoUnitario);
+            document.getElementById('detallePrecio').textContent = formatCurrency(item.PrecioUnitario);
+            document.getElementById('detalleCliente').textContent = item.NombreCliente || 'Sin cliente';
+            document.getElementById('detalleNIT').textContent = item.NIT || 'C/F';
+            document.getElementById('detalleDocumento').textContent = `${item.Serie}-${item.NoDocumento} (${formatDate(new Date(item.Fecha))})`;
+        }
+    });
+}
 // Obtener las sucursales de la base de datos principal
 async function obtenerSucursales() {
     mostrarCargando(true, 'Conectando a la base de datos principal...');
     
     try {
         // Conectar a la base de datos usando ODBC
-        const connection = await conectar();
+        const connection = await odbc.connect(conexiondbsucursal);
         
-        // Ejecutar la consulta para obtener las sucursales
+        // Ejecutar la consulta para obtener las sucursales Bodegona Antigua (RazonSocial = 1)
         const query = `
             SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd
             FROM sucursales
-            WHERE TipoSucursal IN (1, 2, 3) AND Activo = 1
+            WHERE RazonSocial = 1 AND Activo = 1
         `;
         
         const result = await connection.query(query);
@@ -318,7 +335,7 @@ async function obtenerSucursales() {
         // Inicializar el estado de cada sucursal
         sucursales.forEach(sucursal => {
             sucursalesEstado[sucursal.idSucursal] = 'pendiente';
-            sucursalStats[sucursal.idSucursal] = { productos: 0, facturas: 0 };
+            sucursalStats[sucursal.idSucursal] = { devoluciones: 0, notas: 0 };
         });
         
         actualizarContadores();
@@ -342,7 +359,7 @@ async function obtenerSucursales() {
             icon: 'success',
             title: 'Conexión exitosa',
             text: `Se han encontrado ${sucursales.length} sucursales disponibles`,
-            confirmButtonColor: '#6a9ff5'
+            confirmButtonColor: '#7b1fa2'
         });
         
     } catch (error) {
@@ -351,14 +368,14 @@ async function obtenerSucursales() {
             icon: 'error',
             title: 'Error de conexión',
             text: 'No se pudieron obtener las sucursales. ' + error.message,
-            confirmButtonColor: '#6a9ff5'
+            confirmButtonColor: '#7b1fa2'
         });
     } finally {
         mostrarCargando(false);
     }
 }
 
-// Iniciar la consulta de datos (modificada para trabajar con el panel de sucursales)
+// Iniciar la consulta de datos
 async function iniciarConsulta() {
     // Validar las fechas
     const fechaInicio = document.getElementById('fechaInicio').value;
@@ -369,7 +386,7 @@ async function iniciarConsulta() {
             icon: 'warning',
             title: 'Fechas requeridas',
             text: 'Por favor, seleccione un rango de fechas para la consulta',
-            confirmButtonColor: '#6a9ff5'
+            confirmButtonColor: '#7b1fa2'
         });
         return;
     }
@@ -380,7 +397,7 @@ async function iniciarConsulta() {
             icon: 'warning',
             title: 'No hay sucursales',
             text: 'No se encontraron sucursales disponibles para consultar',
-            confirmButtonColor: '#6a9ff5'
+            confirmButtonColor: '#7b1fa2'
         });
         return;
     }
@@ -388,16 +405,16 @@ async function iniciarConsulta() {
     // Reiniciar variables
     allData = [];
     filteredData = [];
-    stats.totalProductos = 0;
-    stats.totalProveedores = new Set();
-    stats.totalFacturas = new Set();
+    stats.totalDevoluciones = 0;
+    stats.totalClientes = new Set();
+    stats.totalNotas = new Set();
     
     // Reiniciar estadísticas de sucursales pero mantener las que están en error
     sucursales.forEach(sucursal => {
         if (sucursalesEstado[sucursal.idSucursal] !== 'error') {
             sucursalesEstado[sucursal.idSucursal] = 'pendiente';
         }
-        sucursalStats[sucursal.idSucursal] = { productos: 0, facturas: 0 };
+        sucursalStats[sucursal.idSucursal] = { devoluciones: 0, notas: 0 };
     });
     
     // Actualizar el panel de sucursales
@@ -410,7 +427,7 @@ async function iniciarConsulta() {
     progressInfo.textContent = 'Iniciando consulta...';
     
     // Mostrar el overlay de carga
-    mostrarCargando(true, 'Consultando datos de inventarios...');
+    mostrarCargando(true, 'Consultando notas de crédito...');
     
     try {
         // Para cada sucursal, hacer la consulta
@@ -431,53 +448,44 @@ async function iniciarConsulta() {
             
             try {
                 // Consultar los datos de esta sucursal
-                const sucursalData = await consultarInventarioSucursal(sucursal, fechaInicio, fechaFin);
+                const sucursalData = await consultarNotasCreditoSucursal(sucursal, fechaInicio, fechaFin);
+                
+                // Recopilar notas únicas de esta sucursal
+                const notasSet = new Set();
                 
                 // Agregar los datos al conjunto global
                 if (sucursalData && sucursalData.length > 0) {
-                    // Recopilar facturas únicas de esta sucursal
-                    const facturasSet = new Set();
-                    
                     // Añadir el ID y nombre de la sucursal a cada registro
                     sucursalData.forEach(item => {
                         item.idSucursal = sucursal.idSucursal;
                         item.NombreSucursal = sucursal.NombreSucursal;
                         
-                        // Asegurarnos de que los IDs sean números
-                        if (item.IdProveedores) {
-                            item.IdProveedores = parseInt(item.IdProveedores);
+                        // Registrar el cliente para estadísticas
+                        if (item.NombreCliente) {
+                            stats.totalClientes.add(item.NIT || item.NombreCliente);
                         }
                         
-                        if (item.IdRazon) {
-                            item.IdRazon = parseInt(item.IdRazon);
-                        }
-                        
-                        // Registrar el proveedor para estadísticas
-                        if (item.Proveedor) {
-                            stats.totalProveedores.add(item.Proveedor);
-                        }
-                        
-                        // Registrar la factura para estadísticas globales y por sucursal
-                        if (item.Serie && item.Numero) {
-                            const facturaId = `${item.Serie}-${item.Numero}`;
-                            stats.totalFacturas.add(facturaId);
-                            facturasSet.add(facturaId);
+                        // Registrar la nota de crédito para estadísticas globales y por sucursal
+                        if (item.Serie && item.NoDocumento) {
+                            const notaId = `${item.Serie}-${item.NoDocumento}`;
+                            stats.totalNotas.add(notaId);
+                            notasSet.add(notaId);
                         }
                     });
                     
                     allData = [...allData, ...sucursalData];
-                    stats.totalProductos += sucursalData.length;
+                    stats.totalDevoluciones += sucursalData.length;
                     
                     // Actualizar estadísticas de la sucursal
                     sucursalStats[sucursal.idSucursal] = {
-                        productos: sucursalData.length,
-                        facturas: facturasSet.size
+                        devoluciones: sucursalData.length,
+                        notas: notasSet.size
                     };
                 } else {
                     // No se encontraron datos, pero la consulta fue exitosa
                     sucursalStats[sucursal.idSucursal] = {
-                        productos: 0,
-                        facturas: 0
+                        devoluciones: 0,
+                        notas: 0
                     };
                 }
                 
@@ -522,14 +530,14 @@ async function iniciarConsulta() {
                 icon: 'success',
                 title: 'Consulta exitosa',
                 text: `Se encontraron ${allData.length} registros en ${sucursales.length} sucursales`,
-                confirmButtonColor: '#6a9ff5'
+                confirmButtonColor: '#7b1fa2'
             });
         } else {
             Swal.fire({
                 icon: 'info',
                 title: 'Sin resultados',
                 text: 'No se encontraron registros para el periodo seleccionado',
-                confirmButtonColor: '#6a9ff5'
+                confirmButtonColor: '#7b1fa2'
             });
         }
         
@@ -539,7 +547,7 @@ async function iniciarConsulta() {
             icon: 'error',
             title: 'Error en la consulta',
             text: 'Ocurrió un error durante la consulta. ' + error.message,
-            confirmButtonColor: '#6a9ff5'
+            confirmButtonColor: '#7b1fa2'
         });
     } finally {
         mostrarCargando(false);
@@ -554,7 +562,7 @@ async function reintentarConsultaSucursal(sucursal) {
             icon: 'warning',
             title: 'Procesando...',
             text: 'Ya hay una sucursal siendo procesada. Por favor, espere.',
-            confirmButtonColor: '#6a9ff5'
+            confirmButtonColor: '#7b1fa2'
         });
         return;
     }
@@ -569,7 +577,7 @@ async function reintentarConsultaSucursal(sucursal) {
             icon: 'warning',
             title: 'Fechas requeridas',
             text: 'Por favor, seleccione un rango de fechas para la consulta',
-            confirmButtonColor: '#6a9ff5'
+            confirmButtonColor: '#7b1fa2'
         });
         procesandoSucursal = false;
         return;
@@ -584,10 +592,10 @@ async function reintentarConsultaSucursal(sucursal) {
         mostrarCargando(true, `Reintentando consulta para: ${sucursal.NombreSucursal}`);
         
         // Consultar los datos de esta sucursal
-        const sucursalData = await consultarInventarioSucursal(sucursal, fechaInicio, fechaFin);
+        const sucursalData = await consultarNotasCreditoSucursal(sucursal, fechaInicio, fechaFin);
         
-        // Recopilar facturas únicas de esta sucursal
-        const facturasSet = new Set();
+        // Recopilar notas únicas de esta sucursal
+        const notasSet = new Set();
         
         // Remover datos previos de esta sucursal si existen
         allData = allData.filter(item => item.idSucursal !== sucursal.idSucursal);
@@ -598,25 +606,16 @@ async function reintentarConsultaSucursal(sucursal) {
                 item.idSucursal = sucursal.idSucursal;
                 item.NombreSucursal = sucursal.NombreSucursal;
                 
-                // Asegurarnos de que los IDs sean números
-                if (item.IdProveedores) {
-                    item.IdProveedores = parseInt(item.IdProveedores);
+                // Registrar el cliente para estadísticas
+                if (item.NombreCliente) {
+                    stats.totalClientes.add(item.NIT || item.NombreCliente);
                 }
                 
-                if (item.IdRazon) {
-                    item.IdRazon = parseInt(item.IdRazon);
-                }
-                
-                // Registrar el proveedor para estadísticas
-                if (item.Proveedor) {
-                    stats.totalProveedores.add(item.Proveedor);
-                }
-                
-                // Registrar la factura para estadísticas globales y por sucursal
-                if (item.Serie && item.Numero) {
-                    const facturaId = `${item.Serie}-${item.Numero}`;
-                    stats.totalFacturas.add(facturaId);
-                    facturasSet.add(facturaId);
+                // Registrar la nota de crédito para estadísticas globales y por sucursal
+                if (item.Serie && item.NoDocumento) {
+                    const notaId = `${item.Serie}-${item.NoDocumento}`;
+                    stats.totalNotas.add(notaId);
+                    notasSet.add(notaId);
                 }
             });
             
@@ -628,8 +627,8 @@ async function reintentarConsultaSucursal(sucursal) {
             
             // Actualizar estadísticas de la sucursal
             sucursalStats[sucursal.idSucursal] = {
-                productos: sucursalData.length,
-                facturas: facturasSet.size
+                devoluciones: sucursalData.length,
+                notas: notasSet.size
             };
             
             // Aplicar filtros actuales a los nuevos datos
@@ -650,13 +649,13 @@ async function reintentarConsultaSucursal(sucursal) {
                 icon: 'success',
                 title: 'Reintentar exitoso',
                 text: `Se encontraron ${sucursalData.length} registros en ${sucursal.NombreSucursal}`,
-                confirmButtonColor: '#6a9ff5'
+                confirmButtonColor: '#7b1fa2'
             });
         } else {
             // No se encontraron datos, pero la consulta fue exitosa
             sucursalStats[sucursal.idSucursal] = {
-                productos: 0,
-                facturas: 0
+                devoluciones: 0,
+                notas: 0
             };
             
             // Marcar la sucursal como completada
@@ -666,7 +665,7 @@ async function reintentarConsultaSucursal(sucursal) {
                 icon: 'info',
                 title: 'Sin resultados',
                 text: `No se encontraron registros en ${sucursal.NombreSucursal} para el periodo seleccionado`,
-                confirmButtonColor: '#6a9ff5'
+                confirmButtonColor: '#7b1fa2'
             });
         }
     } catch (error) {
@@ -678,7 +677,7 @@ async function reintentarConsultaSucursal(sucursal) {
             icon: 'error',
             title: 'Error al reintentar',
             text: `No se pudo consultar la sucursal ${sucursal.NombreSucursal}. ${error.message}`,
-            confirmButtonColor: '#6a9ff5'
+            confirmButtonColor: '#7b1fa2'
         });
     } finally {
         mostrarCargando(false);
@@ -689,19 +688,19 @@ async function reintentarConsultaSucursal(sucursal) {
 
 // Recalcular estadísticas totales
 function recalcularEstadisticasTotales() {
-    stats.totalProductos = 0;
-    stats.totalProveedores = new Set();
-    stats.totalFacturas = new Set();
+    stats.totalDevoluciones = 0;
+    stats.totalClientes = new Set();
+    stats.totalNotas = new Set();
     
     allData.forEach(item => {
-        stats.totalProductos++;
+        stats.totalDevoluciones++;
         
-        if (item.Proveedor) {
-            stats.totalProveedores.add(item.Proveedor);
+        if (item.NombreCliente) {
+            stats.totalClientes.add(item.NIT || item.NombreCliente);
         }
         
-        if (item.Serie && item.Numero) {
-            stats.totalFacturas.add(`${item.Serie}-${item.Numero}`);
+        if (item.Serie && item.NoDocumento) {
+            stats.totalNotas.add(`${item.Serie}-${item.NoDocumento}`);
         }
     });
     
@@ -709,8 +708,8 @@ function recalcularEstadisticasTotales() {
     actualizarContadores();
 }
 
-// Consultar inventario de una sucursal específica
-async function consultarInventarioSucursal(sucursal, fechaInicio, fechaFin) {
+// Consultar notas de crédito de una sucursal específica
+async function consultarNotasCreditoSucursal(sucursal, fechaInicio, fechaFin) {
     try {
         // Crear la conexión a MySQL para esta sucursal
         const connection = await mysql.createConnection({
@@ -720,44 +719,36 @@ async function consultarInventarioSucursal(sucursal, fechaInicio, fechaFin) {
             database: sucursal.databasee
         });
         
-        // Consulta SQL (la que proporcionaste)
+        // Consulta SQL para notas de crédito de Antigua
         const query = `
             SELECT
-                inventarios.idInventarios, 
-                detalleinventarios.Upc, 
-                COALESCE(productos.DescLarga, detalleinventarios.Descripcion) AS DescLarga,
-                detalleinventarios.Cantidad_Rechequeo, 
-                CASE 
-                  WHEN detalleinventarios.UnidadesFardo IS NULL OR detalleinventarios.UnidadesFardo = '' OR detalleinventarios.UnidadesFardo = 0 
-                  THEN detalleinventarios.Bonificacion_Rechequeo 
-                  ELSE detalleinventarios.Bonificacion_Rechequeo * detalleinventarios.UnidadesFardo 
-                END AS Bonificacion,
-                detalleinventarios.Costo, 
-                inventarios.FechaFactura, 
-                inventarios.Fecha,
-                inventarios.IdProveedores, 
-                proveedores_facturas.Nombre AS Proveedor, 
-                inventarios.Numero, 
-                inventarios.Serie,
-                inventarios.IdRazon,
-                razonessociales.NombreRazon,  
-                estado_operaciones.Estado,
-                CASE 
-                  WHEN inventarios.ReFacturarRS = 0 THEN 'Factura Sin problemas'
-                  WHEN inventarios.ReFacturarRS = 1 THEN 'Refacturación'
-                  ELSE 'Otro'
-                END AS ReFacturarRS
+                notascredito.Id,
+                notascredito.IdCajas, 
+                detallenotascredito.Upc, 
+                productos.DescLarga, 
+                detallenotascredito.CostoUnitario, 
+                detallenotascredito.PrecioUnitario, 
+                detallenotascredito.Cantidad, 
+                notascredito.Fecha, 
+                notascredito.NIT, 
+                notascredito.NombreCliente, 
+                notascredito.DireccionCliente, 
+                notascredito.Serie, 
+                notascredito.NoDocumento, 
+                notascredito.UUID
             FROM
-                detalleinventarios
-                INNER JOIN inventarios ON detalleinventarios.IdInventarios = inventarios.idInventarios
-                LEFT JOIN proveedores_facturas ON inventarios.IdProveedores = proveedores_facturas.Id
-                INNER JOIN razonessociales ON inventarios.IdRazon = razonessociales.Id
-                LEFT JOIN productos ON detalleinventarios.Upc = productos.Upc
-                INNER JOIN estado_operaciones ON inventarios.Estado = estado_operaciones.IdEstado
+                notascredito
+                INNER JOIN
+                detallenotascredito
+                ON 
+                    notascredito.Id = detallenotascredito.Idtransacciones
+                LEFT JOIN
+                productos
+                ON 
+                    detallenotascredito.Upc = productos.Upc
             WHERE
-                inventarios.IdProveedores > 0 AND
-                inventarios.Fecha BETWEEN ? AND ? AND
-                detalleinventarios.Detalle_Rechequeo = 0
+                notascredito.Fecha BETWEEN ? AND ? AND
+                notascredito.Estado = 1
         `;
         
         // Ejecutar la consulta
@@ -775,8 +766,13 @@ async function consultarInventarioSucursal(sucursal, fechaInicio, fechaFin) {
 }
 // Mostrar una página de datos
 function mostrarPagina() {
-    const tbody = document.getElementById('datosInventarios');
+    const tbody = document.getElementById('datosNotas');
     tbody.innerHTML = '';
+    
+    // Asegurarnos de que filteredData contiene los datos correctos
+    if (filteredData.length === 0 && allData.length > 0) {
+        filteredData = [...allData];
+    }
     
     const start = (currentPage - 1) * itemsPerPage;
     const end = Math.min(start + itemsPerPage, filteredData.length);
@@ -790,16 +786,15 @@ function mostrarPagina() {
             <td>${item.NombreSucursal}</td>
             <td>${item.Upc}</td>
             <td>${item.DescLarga || 'Sin descripción'}</td>
-            <td>${item.Cantidad_Rechequeo}</td>
-            <td>${item.Bonificacion}</td>
-            <td>${formatCurrency(item.Costo)}</td>
-            <td>${formatDate(new Date(item.FechaFactura))}</td>
-            <td>${item.Proveedor || 'Sin proveedor'}</td>
-            <td>${item.Numero}</td>
+            <td>${item.Cantidad}</td>
+            <td>${formatCurrency(item.CostoUnitario)}</td>
+            <td>${formatCurrency(item.PrecioUnitario)}</td>
+            <td>${formatDate(new Date(item.Fecha))}</td>
+            <td>${item.NIT || 'C/F'}</td>
+            <td>${item.NombreCliente || 'Sin nombre'}</td>
+            <td>${item.NoDocumento}</td>
             <td>${item.Serie}</td>
-            <td>${item.NombreRazon}</td>
-            <td>${item.Estado}</td>
-            <td>${item.ReFacturarRS}</td>
+            <td>${truncateText(item.UUID || '', 12)}</td>
         `;
         
         tbody.appendChild(tr);
@@ -807,84 +802,62 @@ function mostrarPagina() {
     
     // Actualizar la información de paginación
     const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-    document.getElementById('paginaActual').textContent = `Página ${currentPage} de ${totalPages || 1}`;
+    
+    // Asegurarse de que totalPages nunca sea cero
+    const displayTotalPages = totalPages || 1;
+    document.getElementById('paginaActual').textContent = `Página ${currentPage} de ${displayTotalPages}`;
     
     // Habilitar/deshabilitar botones de navegación
     document.getElementById('btnAnterior').disabled = currentPage <= 1;
-    document.getElementById('btnSiguiente').disabled = currentPage >= totalPages;
+    document.getElementById('btnSiguiente').disabled = currentPage >= totalPages || totalPages === 0;
+    
+    // Depuración para identificar problemas
+    console.log(`Mostrando página ${currentPage} de ${totalPages}`);
+    console.log(`Total registros: ${filteredData.length}, Items por página: ${itemsPerPage}`);
 }
 
 // Actualizar los contadores de estadísticas
 function actualizarContadores() {
     document.getElementById('totalSucursales').textContent = stats.totalSucursales;
-    document.getElementById('totalProductos').textContent = stats.totalProductos;
-    document.getElementById('totalProveedores').textContent = stats.totalProveedores.size;
-    document.getElementById('totalFacturas').textContent = stats.totalFacturas.size; // Mostrar el total de facturas
+    document.getElementById('totalDevoluciones').textContent = stats.totalDevoluciones;
+    document.getElementById('totalClientes').textContent = stats.totalClientes.size;
+    document.getElementById('totalNotas').textContent = stats.totalNotas.size;
 }
 
 // Actualizar los filtros basados en los datos disponibles
 function actualizarFiltros() {
     // Obtener elementos select
-    const filtroProveedor = document.getElementById('filtroProveedor');
-    const filtroRazon = document.getElementById('filtroRazon');
-    const filtroEstado = document.getElementById('filtroEstado');
+    const filtroCliente = document.getElementById('filtroCliente');
     
     // Limpiar opciones existentes (excepto la primera)
-    filtroProveedor.innerHTML = '<option value="todos">Todos los proveedores</option>';
-    filtroRazon.innerHTML = '<option value="todas">Todas las razones</option>';
-    filtroEstado.innerHTML = '<option value="todos">Todos los estados</option>';
+    filtroCliente.innerHTML = '<option value="todos">Todos los clientes</option>';
     
-    // Conjuntos para evitar duplicados - usamos Map para mantener ID y nombre
-    const proveedores = new Map(); // Map<ID, Nombre>
-    const razones = new Map();     // Map<ID, Nombre>
-    const estados = new Set();
+    // Conjuntos para evitar duplicados
+    const clientes = new Map(); // Map<NIT/Nombre, NombreCliente>
     
     // Recopilar valores únicos
     allData.forEach(item => {
-        if (item.Proveedor && item.IdProveedores) {
-            proveedores.set(item.IdProveedores, item.Proveedor);
-        }
-        
-        if (item.NombreRazon && item.IdRazon) {
-            razones.set(item.IdRazon, item.NombreRazon);
-        }
-        
-        if (item.Estado) {
-            estados.add(item.Estado);
+        if (item.NombreCliente) {
+            const key = item.NIT || item.NombreCliente;
+            clientes.set(key, item.NombreCliente);
         }
     });
     
-    // Agregar opciones para proveedores - usando el ID como valor
-    proveedores.forEach((nombre, id) => {
+    // Agregar opciones para clientes
+    clientes.forEach((nombre, id) => {
         const option = document.createElement('option');
-        option.value = id;  // Usamos el ID como valor
+        option.value = id;
         option.textContent = nombre;
-        filtroProveedor.appendChild(option);
-    });
-    
-    // Agregar opciones para razones sociales - usando el ID como valor
-    razones.forEach((nombre, id) => {
-        const option = document.createElement('option');
-        option.value = id;  // Usamos el ID como valor
-        option.textContent = nombre;
-        filtroRazon.appendChild(option);
-    });
-    
-    // Agregar opciones para estados
-    estados.forEach(estado => {
-        const option = document.createElement('option');
-        option.value = estado;
-        option.textContent = estado;
-        filtroEstado.appendChild(option);
+        filtroCliente.appendChild(option);
     });
 }
 
 // Aplicar filtros a los datos
 function aplicarFiltros() {
     const sucursalSeleccionada = document.getElementById('filtraSucursal').value;
-    const proveedorSeleccionado = document.getElementById('filtroProveedor').value;
-    const razonSeleccionada = document.getElementById('filtroRazon').value;
-    const estadoSeleccionado = document.getElementById('filtroEstado').value;
+    const clienteSeleccionado = document.getElementById('filtroCliente').value;
+    const serieFiltro = document.getElementById('filtroSerie').value.toLowerCase();
+    const productoFiltro = document.getElementById('filtroProducto').value.toLowerCase();
     
     filteredData = allData.filter(item => {
         // Filtrar por sucursal
@@ -892,21 +865,27 @@ function aplicarFiltros() {
             return false;
         }
         
-        // Filtrar por proveedor (usando ID)
-        if (proveedorSeleccionado !== 'todos' && 
-            item.IdProveedores != proveedorSeleccionado) {
+        // Filtrar por cliente
+        if (clienteSeleccionado !== 'todos') {
+            const clienteKey = item.NIT || item.NombreCliente;
+            if (clienteKey !== clienteSeleccionado) {
+                return false;
+            }
+        }
+        
+        // Filtrar por serie (texto ingresado)
+        if (serieFiltro && !item.Serie.toLowerCase().includes(serieFiltro)) {
             return false;
         }
         
-        // Filtrar por razón social (usando ID)
-        if (razonSeleccionada !== 'todas' && 
-            item.IdRazon != razonSeleccionada) {
-            return false;
-        }
-        
-        // Filtrar por estado
-        if (estadoSeleccionado !== 'todos' && item.Estado !== estadoSeleccionado) {
-            return false;
+        // Filtrar por producto (UPC o descripción)
+        if (productoFiltro) {
+            const upc = (item.Upc || '').toLowerCase();
+            const descripcion = (item.DescLarga || '').toLowerCase();
+            
+            if (!upc.includes(productoFiltro) && !descripcion.includes(productoFiltro)) {
+                return false;
+            }
         }
         
         return true;
@@ -946,7 +925,7 @@ function inicializarGraficos() {
                     datasets: [{
                         label: 'Cantidad',
                         data: [],
-                        backgroundColor: '#6a9ff5'
+                        backgroundColor: '#7b1fa2'
                     }]
                 },
                 options: {
@@ -957,24 +936,24 @@ function inicializarGraficos() {
                         },
                         title: {
                             display: true,
-                            text: 'Top 5 Productos por Cantidad'
+                            text: 'Top 5 Productos Devueltos'
                         }
                     }
                 }
             });
         }
         
-        const ctxProveedores = document.getElementById('chartProveedores');
-        if (ctxProveedores) {
-            charts.proveedores = new Chart(ctxProveedores, {
+        const ctxClientes = document.getElementById('chartClientes');
+        if (ctxClientes) {
+            charts.clientes = new Chart(ctxClientes, {
                 type: 'doughnut',
                 data: {
                     labels: [],
                     datasets: [{
                         data: [],
                         backgroundColor: [
-                            '#6a9ff5', '#ff9a76', '#ffd166', '#52c41a', '#f5222d',
-                            '#a785e9', '#4b7bec', '#45aaf2', '#26de81', '#fd9644'
+                            '#7b1fa2', '#fb8c00', '#26a69a', '#673ab7', '#f44336',
+                            '#9c27b0', '#ff9800', '#009688', '#8e24aa', '#e57373'
                         ]
                     }]
                 },
@@ -986,7 +965,7 @@ function inicializarGraficos() {
                         },
                         title: {
                             display: true,
-                            text: 'Distribución por Proveedor'
+                            text: 'Distribución por Cliente'
                         }
                     }
                 }
@@ -1000,9 +979,9 @@ function inicializarGraficos() {
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'Productos',
+                        label: 'Devoluciones',
                         data: [],
-                        backgroundColor: '#ff9a76'
+                        backgroundColor: '#fb8c00'
                     }]
                 },
                 options: {
@@ -1010,7 +989,7 @@ function inicializarGraficos() {
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Cantidad de Productos por Sucursal'
+                            text: 'Devoluciones por Sucursal'
                         }
                     }
                 }
@@ -1029,11 +1008,11 @@ function inicializarGraficos() {
 function actualizarGraficos() {
     if (filteredData.length === 0) return;
     
-    // Gráfico de top 5 productos
+    // Gráfico de top 5 productos devueltos
     const productosCount = {};
     filteredData.forEach(item => {
         const producto = item.DescLarga || `UPC: ${item.Upc}`;
-        productosCount[producto] = (productosCount[producto] || 0) + item.Cantidad_Rechequeo;
+        productosCount[producto] = (productosCount[producto] || 0) + item.Cantidad;
     });
     
     // Ordenar y obtener top 5
@@ -1049,24 +1028,24 @@ function actualizarGraficos() {
     charts.productos.data.datasets[0].data = topProductos.map(p => p[1]);
     charts.productos.update();
     
-    // Gráfico de distribución por proveedor
-    const proveedoresCount = {};
+    // Gráfico de distribución por cliente
+    const clientesCount = {};
     filteredData.forEach(item => {
-        const proveedor = item.Proveedor || 'Sin proveedor';
-        proveedoresCount[proveedor] = (proveedoresCount[proveedor] || 0) + 1;
+        const cliente = item.NombreCliente || 'Cliente Final';
+        clientesCount[cliente] = (clientesCount[cliente] || 0) + 1;
     });
     
     // Ordenar y obtener top 10
-    const topProveedores = Object.entries(proveedoresCount)
+    const topClientes = Object.entries(clientesCount)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10);
     
-    charts.proveedores.data.labels = topProveedores.map(p => {
-        const nombre = p[0];
+    charts.clientes.data.labels = topClientes.map(c => {
+        const nombre = c[0];
         return nombre.length > 15 ? nombre.substring(0, 15) + '...' : nombre;
     });
-    charts.proveedores.data.datasets[0].data = topProveedores.map(p => p[1]);
-    charts.proveedores.update();
+    charts.clientes.data.datasets[0].data = topClientes.map(c => c[1]);
+    charts.clientes.update();
     
     // Gráfico por sucursal
     const sucursalesCount = {};
@@ -1088,7 +1067,7 @@ async function exportarExcel() {
             icon: 'warning',
             title: 'Sin datos',
             text: 'No hay datos para exportar. Realice una consulta primero.',
-            confirmButtonColor: '#6a9ff5'
+            confirmButtonColor: '#7b1fa2'
         });
         return;
     }
@@ -1098,13 +1077,13 @@ async function exportarExcel() {
     try {
         // Crear un nuevo libro de Excel
         const workbook = new ExcelJS.Workbook();
-        workbook.creator = 'Sistema de Inventarios';
+        workbook.creator = 'Sistema de Notas de Crédito Bodegona Antigua';
         workbook.lastModifiedBy = 'Usuario';
         workbook.created = new Date();
         workbook.modified = new Date();
         
         // Crear una hoja de datos general
-        const worksheetGeneral = workbook.addWorksheet('Inventarios');
+        const worksheetGeneral = workbook.addWorksheet('Notas de Crédito');
         
         // Definir encabezados
         worksheetGeneral.columns = [
@@ -1112,15 +1091,15 @@ async function exportarExcel() {
             { header: 'UPC', key: 'upc', width: 15 },
             { header: 'Descripción', key: 'descripcion', width: 30 },
             { header: 'Cantidad', key: 'cantidad', width: 10 },
-            { header: 'Bonificación', key: 'bonificacion', width: 12 },
             { header: 'Costo', key: 'costo', width: 12 },
-            { header: 'Fecha Factura', key: 'fechaFactura', width: 15 },
-            { header: 'Proveedor', key: 'proveedor', width: 20 },
-            { header: 'Número', key: 'numero', width: 10 },
+            { header: 'Precio', key: 'precio', width: 12 },
+            { header: 'Fecha', key: 'fecha', width: 15 },
+            { header: 'NIT', key: 'nit', width: 15 },
+            { header: 'Cliente', key: 'cliente', width: 25 },
+            { header: 'Documento', key: 'documento', width: 12 },
             { header: 'Serie', key: 'serie', width: 10 },
-            { header: 'Razón Social', key: 'razon', width: 20 },
-            { header: 'Estado', key: 'estado', width: 15 },
-            { header: 'ReFacturar', key: 'refacturar', width: 15 }
+            { header: 'UUID', key: 'uuid', width: 40 },
+            { header: 'ID Caja', key: 'idcaja', width: 10 }
         ];
         
         // Dar formato a la fila de encabezados
@@ -1128,7 +1107,7 @@ async function exportarExcel() {
         worksheetGeneral.getRow(1).fill = {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: '6a9ff5' }
+            fgColor: { argb: '7B1FA2' }
         };
         
         // Agregar los datos
@@ -1137,22 +1116,23 @@ async function exportarExcel() {
                 sucursal: item.NombreSucursal,
                 upc: item.Upc,
                 descripcion: item.DescLarga || 'Sin descripción',
-                cantidad: item.Cantidad_Rechequeo,
-                bonificacion: item.Bonificacion,
-                costo: item.Costo,
-                fechaFactura: new Date(item.FechaFactura),
-                proveedor: item.Proveedor || 'Sin proveedor',
-                numero: item.Numero,
+                cantidad: item.Cantidad,
+                costo: item.CostoUnitario,
+                precio: item.PrecioUnitario,
+                fecha: new Date(item.Fecha),
+                nit: item.NIT || 'C/F',
+                cliente: item.NombreCliente || 'Sin nombre',
+                documento: item.NoDocumento,
                 serie: item.Serie,
-                razon: item.NombreRazon,
-                estado: item.Estado,
-                refacturar: item.ReFacturarRS
+                uuid: item.UUID,
+                idcaja: item.IdCajas
             });
         });
         
         // Formato para los números
         worksheetGeneral.getColumn('costo').numFmt = '"Q"#,##0.00';
-        worksheetGeneral.getColumn('fechaFactura').numFmt = 'dd/mm/yyyy';
+        worksheetGeneral.getColumn('precio').numFmt = '"Q"#,##0.00';
+        worksheetGeneral.getColumn('fecha').numFmt = 'dd/mm/yyyy';
         
         // Crear una hoja de resumen por sucursales
         const worksheetResumen = workbook.addWorksheet('Resumen por Sucursal');
@@ -1160,8 +1140,8 @@ async function exportarExcel() {
         // Definir encabezados del resumen
         worksheetResumen.columns = [
             { header: 'Sucursal', key: 'sucursal', width: 20 },
-            { header: 'Total Productos', key: 'productos', width: 15 },
-            { header: 'Total Facturas', key: 'facturas', width: 15 },
+            { header: 'Total Devoluciones', key: 'devoluciones', width: 18 },
+            { header: 'Total Notas', key: 'notas', width: 15 },
             { header: 'Estado', key: 'estado', width: 15 }
         ];
         
@@ -1170,12 +1150,12 @@ async function exportarExcel() {
         worksheetResumen.getRow(1).fill = {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: '6a9ff5' }
+            fgColor: { argb: '7B1FA2' }
         };
         
         // Agregar datos de resumen por sucursal
         sucursales.forEach(sucursal => {
-            const stats = sucursalStats[sucursal.idSucursal] || { productos: 0, facturas: 0 };
+            const stats = sucursalStats[sucursal.idSucursal] || { devoluciones: 0, notas: 0 };
             const estado = sucursalesEstado[sucursal.idSucursal] || 'pendiente';
             
             let estadoTexto = '';
@@ -1188,8 +1168,8 @@ async function exportarExcel() {
             
             worksheetResumen.addRow({
                 sucursal: sucursal.NombreSucursal,
-                productos: stats.productos,
-                facturas: stats.facturas,
+                devoluciones: stats.devoluciones,
+                notas: stats.notas,
                 estado: estadoTexto
             });
             
@@ -1201,13 +1181,13 @@ async function exportarExcel() {
                 estadoCell.fill = {
                     type: 'pattern',
                     pattern: 'solid',
-                    fgColor: { argb: '52c41a' } // Verde
+                    fgColor: { argb: '2ECC71' } // Verde
                 };
             } else if (estado === 'error') {
                 estadoCell.fill = {
                     type: 'pattern',
                     pattern: 'solid',
-                    fgColor: { argb: 'f5222d' } // Rojo
+                    fgColor: { argb: 'E74C3C' } // Rojo
                 };
             }
         });
@@ -1224,7 +1204,7 @@ async function exportarExcel() {
         
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Inventarios_${fechaInicio}_a_${fechaFin}.xlsx`;
+        a.download = `NotasCreditoBodegonaAntigua_${fechaInicio}_a_${fechaFin}.xlsx`;
         document.body.appendChild(a);
         a.click();
         
@@ -1236,7 +1216,7 @@ async function exportarExcel() {
             icon: 'success',
             title: 'Exportación exitosa',
             text: 'El archivo Excel ha sido generado correctamente',
-            confirmButtonColor: '#6a9ff5'
+            confirmButtonColor: '#7b1fa2'
         });
         
     } catch (error) {
@@ -1245,37 +1225,11 @@ async function exportarExcel() {
             icon: 'error',
             title: 'Error de exportación',
             text: 'No se pudo generar el archivo Excel. ' + error.message,
-            confirmButtonColor: '#6a9ff5'
+            confirmButtonColor: '#7b1fa2'
         });
     } finally {
         mostrarCargando(false);
     }
-}
-
-// Mostrar detalle de un producto
-function mostrarDetalleProducto(item) {
-    // Clonar el template
-    const template = document.getElementById('detalleProductoTemplate');
-    const detalleHTML = template.innerHTML;
-    
-    Swal.fire({
-        title: 'Detalle del Producto',
-        html: detalleHTML,
-        width: 800,
-        confirmButtonText: 'Cerrar',
-        confirmButtonColor: '#6a9ff5',
-        didOpen: () => {
-            // Llenar los campos con la información del producto
-            document.getElementById('detalleUpc').textContent = item.Upc;
-            document.getElementById('detalleDescripcion').textContent = item.DescLarga || 'Sin descripción';
-            document.getElementById('detalleCantidad').textContent = item.Cantidad_Rechequeo;
-            document.getElementById('detalleBonificacion').textContent = item.Bonificacion;
-            document.getElementById('detalleCosto').textContent = formatCurrency(item.Costo);
-            document.getElementById('detalleProveedor').textContent = item.Proveedor || 'Sin proveedor';
-            document.getElementById('detalleFactura').textContent = `${item.Serie}-${item.Numero} (${formatDate(new Date(item.FechaFactura))})`;
-            document.getElementById('detalleEstado').textContent = item.Estado;
-        }
-    });
 }
 
 // Mostrar u ocultar el overlay de carga
@@ -1337,44 +1291,6 @@ function formatDate(date) {
     return `${year}-${month}-${day}`;
 }
 
-// Procesar los datos por lotes para mejorar el rendimiento
-function procesarPorLotes(items, batchSize, processFn, completeFn) {
-    let index = 0;
-    
-    function procesarLote() {
-        const start = index;
-        const end = Math.min(index + batchSize, items.length);
-        
-        for (let i = start; i < end; i++) {
-            processFn(items[i], i);
-        }
-        
-        index = end;
-        
-        if (index < items.length) {
-            // Procesar el siguiente lote en el próximo ciclo del event loop
-            setTimeout(procesarLote, 0);
-        } else {
-            // Completar el procesamiento
-            if (completeFn) completeFn();
-        }
-    }
-    
-    // Iniciar procesamiento
-    procesarLote();
-}
-
-// Función para buscar coincidencias en una cadena, ignorando mayúsculas y acentos
-function coincide(texto, busqueda) {
-    if (!busqueda || busqueda.trim() === '') return true;
-    
-    // Normalizar ambos textos (eliminar acentos)
-    const textoNormalizado = texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    const busquedaNormalizada = busqueda.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    
-    return textoNormalizado.includes(busquedaNormalizada);
-}
-
 // Función para debounce (retrasar la ejecución de una función)
 function debounce(func, wait) {
     let timeout;
@@ -1389,7 +1305,7 @@ function debounce(func, wait) {
 function truncateText(text, maxLength) {
     if (!text) return '';
     if (text.length <= maxLength) return text;
-    return text.substr(0, maxLength) + '...';
+    return text.substring(0, maxLength) + '...';
 }
 
 // Función para manejar errores de conexión
@@ -1416,7 +1332,7 @@ function manejarErrorConexion(error, contexto) {
         icon: 'error',
         title: 'Error',
         text: mensaje,
-        confirmButtonColor: '#6a9ff5'
+        confirmButtonColor: '#7b1fa2'
     });
 }
 
