@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('NBodegonaAntigua').addEventListener('click', (e) => {
         e.preventDefault();
-        ipcRenderer.send('open-VBodegonaAntigua-window');
+        ipcRenderer.send('open-NBodegonaAntigua-window');
     });
     // Función para obtener el saludo e icono según la hora del día
     function getGreetingAndIcon() {
