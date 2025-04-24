@@ -305,7 +305,7 @@ async function obtenerInventario(sucursalData, idInventario) {
                 detalles.push({
                     Upc: row.Upc,
                     DescLarga: row.DescLarga,
-                    Cantidad: row.Cantidad,
+                    Cantidad: row.Cantidad_Rechequeo,
                     Costo: row.Costo,
                     CostoAlterno: costoAlterno[0] ? costoAlterno[0].Costo : null,
                     Bonificacion: row.Bonificacion,
@@ -331,7 +331,7 @@ async function obtenerInventario(sucursalData, idInventario) {
                     detalles.push({
                         Upc: row.Upc,
                         DescLarga: row.DescLarga,
-                        Cantidad: row.Cantidad,
+                        Cantidad: row.Cantidad_Rechequeo,
                         Costo: row.Costo,
                         Bonificacion: row.Bonificacion,
                         Nivel1: row.Nivel1,
@@ -343,7 +343,7 @@ async function obtenerInventario(sucursalData, idInventario) {
             detalles = rows.map(row => ({
                 Upc: row.Upc,
                 DescLarga: row.DescLarga,
-                Cantidad: row.Cantidad,
+                Cantidad: row.Cantidad_Rechequeo,
                 Costo: row.Costo,
                 Bonificacion: row.Bonificacion,
                 Nivel1: row.Nivel1,
@@ -426,13 +426,11 @@ async function buscarProductoEspecial(upc) {
 // Buscar producto normal
 async function buscarProducto(upc, sucursalData) {
     let connection;
+    let alternoConnection;
     try {
-        if (sucursalData.tipoSucursal === '3') {
-            const productoEspecial = await buscarProductoEspecial(upc);
-            if (productoEspecial) {
-                return productoEspecial;
-            }
-        } else {
+        // Si es sucursal tipo 2, buscar en ambas bases de datos
+        if (sucursalData.tipoSucursal === '2') {
+            // Primero buscar en la base principal
             connection = await mysql.createConnection({
                 host: sucursalData.serverr,
                 user: sucursalData.uid,
@@ -444,18 +442,77 @@ async function buscarProducto(upc, sucursalData) {
                 'SELECT DescLarga, Costo, Nivel1 FROM productos WHERE Upc = ?',
                 [upc]
             );
-
+            
+            // Si encontramos el producto, ahora buscar el costo alterno
+            if (rows.length > 0) {
+                const producto = rows[0];
+                
+                // Conectar a la base de datos alterna
+                alternoConnection = await conexionsurtialterno();
+                const [costoAlterno] = await alternoConnection.execute(
+                    'SELECT Costo FROM productos WHERE Upc = ?',
+                    [upc]
+                );
+                
+                // Añadir el costo alterno al objeto producto
+                producto.CostoAlterno = costoAlterno[0] ? costoAlterno[0].Costo : null;
+                
+                return producto;
+            }
+            
+            return null;
+        } else if (sucursalData.tipoSucursal === '3') {
+            // Buscar primero en la base especial
+            const productoEspecial = await buscarProductoEspecial(upc);
+            if (productoEspecial) {
+                return productoEspecial;
+            }
+            
+            // Si no se encuentra, buscar en la base normal
+            connection = await mysql.createConnection({
+                host: sucursalData.serverr,
+                user: sucursalData.uid,
+                database: sucursalData.databasee,
+                password: sucursalData.pwd
+            });
+            
+            const [rows] = await connection.execute(
+                'SELECT DescLarga, Costo, Nivel1 FROM productos WHERE Upc = ?',
+                [upc]
+            );
+            
+            if (rows.length > 0) {
+                return rows[0];
+            }
+        } else {
+            // Para sucursales tipo 1 o cualquier otro tipo
+            connection = await mysql.createConnection({
+                host: sucursalData.serverr,
+                user: sucursalData.uid,
+                database: sucursalData.databasee,
+                password: sucursalData.pwd
+            });
+            
+            const [rows] = await connection.execute(
+                'SELECT DescLarga, Costo, Nivel1 FROM productos WHERE Upc = ?',
+                [upc]
+            );
+            
             if (rows.length > 0) {
                 return rows[0];
             }
         }
+        
         return null;
     } catch (error) {
-        console.error('Error al buscar el producto:', error);
+        console.error('Error detallado al buscar el producto:', error);
         throw error;
     } finally {
         if (connection) {
             await connection.end();
+        }
+        if (alternoConnection) {
+            await alternoConnection.end();
         }
     }
 }
@@ -842,14 +899,38 @@ async function manejarUpckeydown(event) {
         if (upc) {
             const sucursalSelect = document.getElementById('sucursal-select');
             const sucursalData = sucursalSelect.selectedOptions[0].dataset;
-
+            
             try {
                 mostrarCargando('Buscando producto...');
                 const producto = await buscarProducto(upc, sucursalData);
+                
+                // Verificar si es sucursal tipo 2 para buscar costo alterno
+                if (sucursalData.tipoSucursal === '2') {
+                    try {
+                        // Conectar a la base de datos alterna para obtener el costo alterno
+                        const alternoConnection = await conexionsurtialterno();
+                        const [costoAlterno] = await alternoConnection.execute(
+                            'SELECT Costo FROM productos WHERE Upc = ?',
+                            [upc]
+                        );
+                        
+                        // Añadir el costo alterno al objeto producto
+                        if (producto) {
+                            producto.CostoAlterno = costoAlterno[0] ? costoAlterno[0].Costo : null;
+                        }
+                        
+                        // Cerrar la conexión alterna
+                        await alternoConnection.end();
+                    } catch (errorAlterno) {
+                        console.error('Error al obtener costo alterno:', errorAlterno);
+                        // Si hay error, continuar sin el costo alterno
+                    }
+                }
+                
                 Swal.close();
                 
                 if (producto) {
-                    actualizarFilaConProducto(input, producto);
+                    actualizarFilaConProducto(input, producto, sucursalData.tipoSucursal);
                 } else {
                     mostrarError('Producto no encontrado', 'No se encontró un producto con el UPC proporcionado.');
                 }
@@ -862,10 +943,11 @@ async function manejarUpckeydown(event) {
     }
 }
 
-function actualizarFilaConProducto(input, producto) {
+function actualizarFilaConProducto(input, producto, tipoSucursal) {
     const row = input.closest('tr');
     const descripcionCell = row.querySelector('td:nth-child(2)');
     const costoInput = row.querySelector('.costo-input');
+    const costoAlternoInput = row.querySelector('.costo-alterno-input');
 
     if (descripcionCell) {
         descripcionCell.textContent = producto.DescLarga || 'Descripción no disponible';
@@ -875,6 +957,7 @@ function actualizarFilaConProducto(input, producto) {
             descripcionCell.classList.remove('cell-updated');
         }, 1000);
     }
+    
     if (costoInput) {
         costoInput.value = producto.Costo || '';
         costoInput.classList.add('cell-updated');
@@ -882,6 +965,16 @@ function actualizarFilaConProducto(input, producto) {
             costoInput.classList.remove('cell-updated');
         }, 1000);
     }
+    
+    // Actualizar el campo de Costo Alterno si aplica
+    if (tipoSucursal === '2' && costoAlternoInput && producto.CostoAlterno !== undefined) {
+        costoAlternoInput.value = producto.CostoAlterno || '';
+        costoAlternoInput.classList.add('cell-updated');
+        setTimeout(() => {
+            costoAlternoInput.classList.remove('cell-updated');
+        }, 1000);
+    }
+    
     if (producto.Nivel1 > 0) {
         row.classList.add('nivel1-destacado');
     } else {
