@@ -264,8 +264,8 @@ async function obtenerInventario(sucursalData, idInventario) {
                 productos.Nivel1,
                 CASE 
                     WHEN detalleinventarios.UnidadesFardo IS NULL OR detalleinventarios.UnidadesFardo = '' OR detalleinventarios.UnidadesFardo = 0 
-                    THEN detalleinventarios.CantidadBonificada 
-                    ELSE detalleinventarios.CantidadBonificada * detalleinventarios.UnidadesFardo 
+                    THEN detalleinventarios.Bonificacion_Rechequeo 
+                    ELSE detalleinventarios.Bonificacion_Rechequeo * detalleinventarios.UnidadesFardo 
                 END AS Bonificacion
             FROM
                 detalleinventarios
