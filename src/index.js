@@ -22,6 +22,8 @@ let NotasSurti = null;
 let FacturasBoni = null;
 let VentasBodegonaAntigua = null;
 let NotasBodegonaAntigua = null;
+let UpdateFacturas = null;
+let ReporteNCT = null;
 
 app.on('ready',  createWindow)
 
@@ -354,6 +356,58 @@ ipcMain.on('open-NBodegonaAntigua-window', () => {
       // Manejar el evento de cierre de la ventana
       NotasBodegonaAntigua.on('closed', () => {
         NotasBodegonaAntigua = null; // Limpiar la referencia cuando se cierre la ventana
+      });
+  }
+});
+ipcMain.on('open-actualizarFacturasLink-window', () => {
+  if (UpdateFacturas) {
+      // Si la ventana ya está abierta, enfócala
+      UpdateFacturas.focus();
+  } else {
+      // Si no está abierta, crea una nueva ventana
+      UpdateFacturas = new BrowserWindow({
+          webPreferences: {
+              nodeIntegration: true,
+              contextIsolation: false,
+              webSecurity: false,
+              enableRemoteModule: true
+          },
+          icon: path.join(__dirname, 'ingresos.ico'),  // Asegúrate de tener este ícono
+          autoHideMenuBar: true
+      });
+      
+      UpdateFacturas.maximize();
+      UpdateFacturas.loadFile(path.join(__dirname, 'vistas/FacturasCompras.html'));
+
+      // Manejar el evento de cierre de la ventana
+      UpdateFacturas.on('closed', () => {
+        UpdateFacturas = null; // Limpiar la referencia cuando se cierre la ventana
+      });
+  }
+});
+ipcMain.on('open-reporteNCT-window', () => {
+  if (ReporteNCT) {
+      // Si la ventana ya está abierta, enfócala
+      ReporteNCT.focus();
+  } else {
+      // Si no está abierta, crea una nueva ventana
+      ReporteNCT = new BrowserWindow({
+          webPreferences: {
+              nodeIntegration: true,
+              contextIsolation: false,
+              webSecurity: false,
+              enableRemoteModule: true
+          },
+          icon: path.join(__dirname, 'ingresos.ico'),  // Asegúrate de tener este ícono
+          autoHideMenuBar: true
+      });
+      
+      ReporteNCT.maximize();
+      ReporteNCT.loadFile(path.join(__dirname, 'vistas/ReporteNCTProveedor.html'));
+
+      // Manejar el evento de cierre de la ventana
+      ReporteNCT.on('closed', () => {
+        ReporteNCT = null; // Limpiar la referencia cuando se cierre la ventana
       });
   }
 });

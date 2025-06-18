@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Inventarios - Reporte Notas de Crédito Proveedores</title>
+    <link rel="stylesheet" href="../disenos/ReporteNCTProveedor.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <div class="background">
+        <div class="shape shape1"></div>
+        <div class="shape shape2"></div>
+        <div class="shape shape3"></div>
+        <div class="shape shape4"></div>
+    </div>
+    
+    <!-- Header de navegación -->
+    <header class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <button class="back-button" onclick="history.back()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <div class="header-title">
+                    <i class="fas fa-file-invoice"></i>
+                    <h1>Reporte Notas de Crédito Proveedores</h1>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="user-info" id="userInfo">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="userName">Usuario</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenedor principal -->
+    <div class="main-container">
+        <!-- Panel de filtros y búsqueda -->
+        <div class="search-panel">
+            <div class="panel-header">
+                <div class="panel-icon">
+                    <i class="fas fa-filter"></i>
+                </div>
+                <div class="panel-title">
+                    <h2>Búsqueda de Notas de Crédito</h2>
+                    <p>Seleccione el tipo de búsqueda y complete los campos correspondientes</p>
+                </div>
+            </div>
+            
+            <form id="searchForm" class="search-form">
+                <!-- Tipo de búsqueda -->
+                <div class="search-type-section">
+                    <h3><i class="fas fa-search"></i> Tipo de Búsqueda</h3>
+                    <div class="search-type-buttons">
+                        <button type="button" class="search-type-btn active" data-type="all" id="searchAll">
+                            <div class="type-icon">
+                                <i class="fas fa-list"></i>
+                            </div>
+                            <div class="type-text">
+                                <span class="type-title">Mostrar Todas</span>
+                                <span class="type-desc">Ver todas las notas de crédito</span>
+                            </div>
+                        </button>
+                        
+                        <button type="button" class="search-type-btn" data-type="invoice" id="searchByInvoice">
+                            <div class="type-icon">
+                                <i class="fas fa-file-invoice-dollar"></i>
+                            </div>
+                            <div class="type-text">
+                                <span class="type-title">Por Factura</span>
+                                <span class="type-desc">Serie/Número de factura</span>
+                            </div>
+                        </button>
+                        
+                        <button type="button" class="search-type-btn" data-type="credit-note" id="searchByCreditNote">
+                            <div class="type-icon">
+                                <i class="fas fa-receipt"></i>
+                            </div>
+                            <div class="type-text">
+                                <span class="type-title">Por Nota de Crédito</span>
+                                <span class="type-desc">Serie/Número de nota</span>
+                            </div>
+                        </button>
+                        
+                        <button type="button" class="search-type-btn" data-type="product" id="searchByProduct">
+                            <div class="type-icon">
+                                <i class="fas fa-barcode"></i>
+                            </div>
+                            <div class="type-text">
+                                <span class="type-title">Por Producto</span>
+                                <span class="type-desc">UPC/Descripción</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Campos de búsqueda dinámicos -->
+                <div class="search-fields" id="searchFields">
+                    <!-- Los campos se cargarán dinámicamente según el tipo seleccionado -->
+                </div>
+                
+                <div class="search-actions">
+                    <button type="submit" class="search-button">
+                        <span class="button-text">Buscar Notas de Crédito</span>
+                        <span class="button-icon">
+                            <i class="fas fa-search"></i>
+                        </span>
+                    </button>
+                    <button type="button" class="clear-button" id="clearFilters">
+                        <span class="button-text">Limpiar Filtros</span>
+                        <span class="button-icon">
+                            <i class="fas fa-eraser"></i>
+                        </span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Panel de resultados -->
+        <div class="results-panel" id="resultsPanel" style="display: none;">
+            <div class="panel-header">
+                <div class="panel-icon success">
+                    <i class="fas fa-list-alt"></i>
+                </div>
+                <div class="panel-title">
+                    <h2>Notas de Crédito Encontradas</h2>
+                    <p id="resultsCount">0 registros encontrados</p>
+                </div>
+                <div class="results-actions">
+                    <button class="action-btn export-btn" id="exportBtn">
+                        <i class="fas fa-file-excel"></i>
+                        Exportar Excel
+                    </button>
+                    <button class="action-btn print-btn" id="printBtn">
+                        <i class="fas fa-print"></i>
+                        Imprimir
+                    </button>
+                </div>
+            </div>
+            
+            <div class="results-content">
+                <div class="results-summary" id="resultsSummary">
+                    <!-- Resumen de resultados -->
+                </div>
+                
+                <div class="credit-notes-container" id="creditNotesContainer">
+                    <!-- Las notas de crédito se cargarán aquí -->
+                </div>
+                
+                <div class="pagination-container" id="paginationContainer">
+                    <!-- Paginación -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel de sin resultados -->
+        <div class="no-results-panel" id="noResultsPanel" style="display: none;">
+            <div class="panel-header">
+                <div class="panel-icon warning">
+                    <i class="fas fa-search-minus"></i>
+                </div>
+                <div class="panel-title">
+                    <h2>Sin Resultados</h2>
+                    <p>No se encontraron notas de crédito con los criterios especificados</p>
+                </div>
+            </div>
+            
+            <div class="no-results-content">
+                <div class="no-results-icon">
+                    <i class="fas fa-inbox"></i>
+                </div>
+                <p>Intente ajustar los criterios de búsqueda para obtener resultados.</p>
+                
+                <button class="action-button secondary" id="adjustFiltersBtn">
+                    <i class="fas fa-search"></i>
+                    Nueva Búsqueda
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Detalle de Nota de Crédito -->
+    <div class="modal-overlay" id="creditNoteDetailModal" style="display: none;">
+        <div class="modal-container detail-modal">
+            <div class="modal-header">
+                <div class="modal-icon">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                <div class="modal-title">
+                    <h2>Detalle de Nota de Crédito</h2>
+                    <p id="modalCreditNoteInfo">Información detallada</p>
+                </div>
+                <button class="modal-close" id="closeDetailModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-content">
+                <div id="creditNoteDetailContent">
+                    <!-- El contenido del detalle se cargará aquí -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../logica/ReporteNCTProveedor.js"></script>
+</body>
+</html>

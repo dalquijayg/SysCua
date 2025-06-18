@@ -149,6 +149,14 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         ipcRenderer.send('open-NBodegonaAntigua-window');
     });
+    document.getElementById('actualizarFacturasLink').addEventListener('click', (e) => {
+        e.preventDefault();
+        ipcRenderer.send('open-actualizarFacturasLink-window');
+    });
+    document.getElementById('reporteFacturasComprasLink').addEventListener('click', (e) => {
+        e.preventDefault();
+        ipcRenderer.send('open-reporteNCT-window');
+    });
     // Función para obtener el saludo e icono según la hora del día
     function getGreetingAndIcon() {
         const hour = new Date().getHours();
