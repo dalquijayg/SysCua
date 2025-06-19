@@ -9,6 +9,10 @@ let creditNoteModal, closeCreditNoteModal, cancelCreditNote, creditNoteForm;
 let merchandiseBtn, otherConceptsBtn;
 let merchandiseModal, closeMerchandiseModal, productSearchInput, productsContainer;
 
+// Variables para edición inline
+let isEditing = false;
+let currentEditingElement = null;
+
 document.addEventListener('DOMContentLoaded', () => {
     // Inicializar elementos del DOM
     searchForm = document.getElementById('searchForm');
@@ -191,7 +195,8 @@ async function searchInvoice(connection, serie, numero) {
                 facturas_compras.FechaFactura, 
                 facturas_compras.IdInventory, 
                 facturas_compras.IdSucursalCori,
-                facturas_compras.NIT
+                facturas_compras.NIT,
+                facturas_compras.IdRazon
             FROM
                 facturas_compras
                 INNER JOIN proveedores_facturas
@@ -289,6 +294,9 @@ function displayInvoiceResults(invoice) {
     // Llenar los datos
     populateInvoiceData(invoice);
     
+    // Configurar campos editables
+    setupEditableFields();
+    
     // Mostrar el panel de resultados con animación después de ocultar la búsqueda
     setTimeout(() => {
         resultsPanel.style.display = 'block';
@@ -330,6 +338,870 @@ function populateInvoiceData(invoice) {
     // Guardar datos de la factura para uso posterior
     window.currentInvoice = invoice;
 }
+
+// Configurar campos editables
+function setupEditableFields() {
+    const editableFields = [
+        { id: 'invoiceSerie', type: 'text', fieldName: 'Serie', tipoCambio: 1 },
+        { id: 'invoiceNumber', type: 'text', fieldName: 'Numero', tipoCambio: 2 },
+        { id: 'socialReason', type: 'select', fieldName: 'IdRazon', tipoCambio: 3 },
+        { id: 'invoiceAmount', type: 'number', fieldName: 'MontoFactura', tipoCambio: 4 },
+        { id: 'invoiceDate', type: 'date', fieldName: 'FechaFactura', tipoCambio: 5 }
+    ];
+
+    editableFields.forEach(field => {
+        const element = document.getElementById(field.id);
+        if (element) {
+            // Agregar clase para indicar que es editable
+            element.classList.add('editable-field');
+            
+            // Agregar evento de doble clic
+            element.addEventListener('dblclick', () => enableInlineEdit(element, field));
+            
+            // Agregar indicador visual
+            element.title = 'Doble clic para editar';
+        }
+    });
+}
+function logUpdateSummary(fieldConfig, newValue) {
+    const tablesUpdated = [];
+    
+    // Central
+    tablesUpdated.push('✅ facturas_compras (Central)');
+    tablesUpdated.push('✅ CambiosFacturasHistorial (Central)');
+    
+    // Sucursal - inventarios
+    const inventoryMapping = {
+        'Serie': true,
+        'Numero': true, 
+        'FechaFactura': true,
+        'IdRazon': true,
+        'MontoFactura': false
+    };
+    
+    if (inventoryMapping[fieldConfig.fieldName]) {
+        tablesUpdated.push('✅ inventarios (Sucursal)');
+    } else {
+        tablesUpdated.push('⏭️ inventarios (Campo no aplicable)');
+    }
+    
+    // Sucursal - facturas_compras
+    tablesUpdated.push('✅ facturas_compras (Sucursal)');
+    
+    // Sucursal - ordenescompra_factura
+    tablesUpdated.push('✅ ordenescompra_factura (Sucursal)');
+    
+    console.log(`📊 RESUMEN ACTUALIZACIÓN - Campo: ${getFieldDisplayName(fieldConfig.tipoCambio)}`);
+    console.log(`🎯 Nuevo valor: ${newValue}`);
+    console.log(`📋 Tablas actualizadas:`, tablesUpdated);
+    console.log('🔄 Sincronización completa exitosa');
+}
+// Habilitar edición inline
+async function enableInlineEdit(element, fieldConfig) {
+    if (isEditing) {
+        showWarningToast('Ya hay un campo en edición. Complete la edición actual primero.');
+        return;
+    }
+
+    isEditing = true;
+    currentEditingElement = element;
+    
+    const originalValue = getOriginalValue(element, fieldConfig);
+    const currentDisplayValue = element.textContent.trim();
+    
+    // Crear el elemento de edición
+    let editElement;
+    
+    if (fieldConfig.type === 'select' && fieldConfig.fieldName === 'IdRazon') {
+        editElement = await createSocialReasonSelect(window.currentInvoice.IdRazon);
+    } else {
+        editElement = createInputElement(fieldConfig.type, originalValue);
+    }
+    
+    // Reemplazar el contenido del span con el elemento de edición
+    const originalHTML = element.innerHTML;
+    element.innerHTML = '';
+    element.appendChild(editElement);
+    
+    // Agregar botones de acción
+    const actionButtons = createActionButtons();
+    element.appendChild(actionButtons);
+    
+    // Enfocar el elemento
+    if (editElement.focus) {
+        editElement.focus();
+        if (fieldConfig.type === 'text' || fieldConfig.type === 'number') {
+            editElement.select();
+        }
+    }
+    
+    // Manejar eventos
+    const handleSave = async () => {
+        let newValue;
+        let newDisplayValue;
+        
+        if (fieldConfig.type === 'select') {
+            const selectedOption = editElement.options[editElement.selectedIndex];
+            newValue = editElement.value;
+            newDisplayValue = selectedOption ? selectedOption.text : '';
+            
+            // *** VALIDACIÓN ADICIONAL PARA RAZÓN SOCIAL ***
+            if (fieldConfig.fieldName === 'IdRazon' && !newValue) {
+                showErrorToast('Debe seleccionar una razón social válida');
+                return;
+            }
+            
+        } else if (fieldConfig.type === 'number') {
+            newValue = parseFloat(editElement.value);
+            newDisplayValue = formatCurrency(newValue);
+        } else if (fieldConfig.type === 'date') {
+            newValue = editElement.value;
+            newDisplayValue = formatDate(newValue);
+        } else {
+            newValue = editElement.value.trim();
+            newDisplayValue = newValue;
+        }
+        
+        // Validar que hay cambios
+        if (newValue.toString() === originalValue.toString()) {
+            cancelEdit();
+            showInfoToast('No se realizaron cambios');
+            return;
+        }
+        
+        // Validaciones específicas
+        if (!validateFieldValue(fieldConfig, newValue)) {
+            return;
+        }
+        
+        try {
+            // Confirmar cambio
+            const confirmed = await confirmChange(fieldConfig, currentDisplayValue, newDisplayValue);
+            if (!confirmed) {
+                return;
+            }
+            
+            // Mostrar loading durante la actualización
+            Swal.fire({
+                title: 'Actualizando Sistema Completo...',
+                html: `
+                    <div style="text-align: center; margin: 20px 0;">
+                        <div class="loading-spinner"></div>
+                        <p style="margin-top: 15px; font-weight: 600;">Sincronizando datos en:</p>
+                        <div style="text-align: left; margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 8px;">
+                            <p style="margin: 5px 0;"><strong>Sistema Central:</strong></p>
+                            <p style="margin: 2px 0; font-size: 14px;">• facturas_compras</p>
+                            <p style="margin: 2px 0; font-size: 14px;">• CambiosFacturasHistorial</p>
+                            <br>
+                            <p style="margin: 5px 0;"><strong>Sucursal:</strong></p>
+                            <p style="margin: 2px 0; font-size: 14px;">• inventarios</p>
+                            <p style="margin: 2px 0; font-size: 14px;">• facturas_compras</p>
+                            <p style="margin: 2px 0; font-size: 14px;">• ordenescompra_factura</p>
+                        </div>
+                        <p style="font-size: 14px; color: #6c757d;">Por favor espere...</p>
+                    </div>
+                `,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Guardar en base de datos (central y sucursal)
+            await saveFieldChange(fieldConfig, originalValue, newValue);
+            
+            // Log del resumen completo
+            logUpdateSummary(fieldConfig, newValue);
+            
+            // Cerrar loading
+            Swal.close();
+            
+            // Actualizar la interfaz
+            element.innerHTML = newDisplayValue;
+            element.classList.add('field-updated');
+            
+            // Actualizar el objeto currentInvoice
+            updateCurrentInvoiceObject(fieldConfig, newValue, newDisplayValue);
+            
+            // Resetear estado
+            isEditing = false;
+            currentEditingElement = null;
+            
+            // Mensaje de éxito más específico
+            showSuccessToast('🎉 Sistema sincronizado exitosamente (Central + Sucursal)');
+            
+            // Quitar resaltado después de un tiempo
+            setTimeout(() => {
+                element.classList.remove('field-updated');
+            }, 3000);
+            
+        } catch (error) {
+            // Cerrar loading si está abierto
+            Swal.close();
+            
+            console.error('Error guardando cambio:', error);
+            showErrorToast('❌ Error al sincronizar el sistema: ' + error.message);
+        }
+    };
+    
+    const cancelEdit = () => {
+        element.innerHTML = originalHTML;
+        isEditing = false;
+        currentEditingElement = null;
+    };
+    
+    // Event listeners para los botones
+    actionButtons.querySelector('.save-btn').addEventListener('click', handleSave);
+    actionButtons.querySelector('.cancel-btn').addEventListener('click', cancelEdit);
+    
+    // Event listener para Enter y Escape
+    editElement.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleSave();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelEdit();
+        }
+    });
+}
+// Obtener valor original del campo
+function getOriginalValue(element, fieldConfig) {
+    const invoice = window.currentInvoice;
+    
+    switch (fieldConfig.fieldName) {
+        case 'Serie':
+            return invoice.Serie || '';
+        case 'Numero':
+            return invoice.Numero || '';
+        case 'IdRazon':
+            return invoice.IdRazon || '';
+        case 'MontoFactura':
+            return invoice.MontoFactura || 0;
+        case 'FechaFactura':
+            // CORREGIDO: Extraer solo la fecha sin la parte de tiempo
+            if (invoice.FechaFactura) {
+                const dateOnly = invoice.FechaFactura.includes('T') 
+                    ? invoice.FechaFactura.split('T')[0] 
+                    : invoice.FechaFactura;
+                return dateOnly;
+            }
+            return '';
+        default:
+            return '';
+    }
+}
+function validateDate(dateString) {
+    if (!dateString) return false;
+    
+    try {
+        // Separar los componentes
+        const [year, month, day] = dateString.split('-').map(Number);
+        
+        // Crear fecha local sin zona horaria
+        const inputDate = new Date(year, month - 1, day);
+        const today = new Date();
+        
+        // Establecer las horas para comparar solo fechas
+        today.setHours(23, 59, 59, 999);
+        
+        return inputDate <= today;
+        
+    } catch (error) {
+        return false;
+    }
+}
+// Crear elemento de entrada
+function createInputElement(type, value) {
+    const input = document.createElement('input');
+    input.type = type;
+    input.className = 'inline-edit-input';
+    
+    if (type === 'number') {
+        input.step = '0.01';
+        input.min = '0.01';
+        input.value = value || '';
+    } else if (type === 'date') {
+        input.value = value || '';
+    } else {
+        input.value = value || '';
+    }
+    
+    return input;
+}
+
+// Crear select para razón social
+async function createSocialReasonSelect(currentIdRazon) {
+    const select = document.createElement('select');
+    select.className = 'inline-edit-select';
+    
+    try {
+        const connection = await odbc.connect('DSN=facturas;charset=utf8');
+        
+        const query = `
+            SELECT Id, NombreRazon 
+            FROM razonessociales 
+            ORDER BY NombreRazon
+        `;
+        
+        const result = await connection.query(query);
+        await connection.close();
+        
+        // Agregar opción por defecto
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Seleccione una razón social...';
+        select.appendChild(defaultOption);
+        
+        // Agregar opciones
+        result.forEach(razon => {
+            const option = document.createElement('option');
+            option.value = razon.Id;
+            option.textContent = razon.NombreRazon;
+            
+            if (razon.Id.toString() === currentIdRazon.toString()) {
+                option.selected = true;
+            }
+            
+            select.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('Error cargando razones sociales:', error);
+        showErrorToast('Error cargando razones sociales');
+    }
+    
+    return select;
+}
+
+// Crear botones de acción
+function createActionButtons() {
+    const container = document.createElement('div');
+    container.className = 'inline-edit-actions';
+    
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'save-btn';
+    saveBtn.innerHTML = '<i class="fas fa-check"></i>';
+    saveBtn.title = 'Guardar cambios';
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'cancel-btn';
+    cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
+    cancelBtn.title = 'Cancelar edición';
+    
+    container.appendChild(saveBtn);
+    container.appendChild(cancelBtn);
+    
+    return container;
+}
+
+// Validar valor del campo
+function validateFieldValue(fieldConfig, value) {
+    switch (fieldConfig.fieldName) {
+        case 'Serie':
+        case 'Numero':
+            if (!value || value.trim() === '') {
+                showErrorToast('El campo no puede estar vacío');
+                return false;
+            }
+            if (value.length > 50) {
+                showErrorToast('El valor es demasiado largo (máximo 50 caracteres)');
+                return false;
+            }
+            break;
+            
+        case 'MontoFactura':
+            if (!value || value <= 0) {
+                showErrorToast('El monto debe ser mayor a 0');
+                return false;
+            }
+            if (value > 999999999.99) {
+                showErrorToast('El monto es demasiado grande');
+                return false;
+            }
+            break;
+            
+        case 'IdRazon':
+            if (!value) {
+                showErrorToast('Debe seleccionar una razón social');
+                return false;
+            }
+            break;
+            
+        case 'FechaFactura':
+            if (!value) {
+                showErrorToast('Debe seleccionar una fecha');
+                return false;
+            }
+            
+            // VALIDACIÓN CORREGIDA para fechas
+            if (!validateDate(value)) {
+                showErrorToast('La fecha no puede ser futura');
+                return false;
+            }
+            break;
+    }
+    
+    return true;
+}
+
+// Confirmar cambio
+async function confirmChange(fieldConfig, oldDisplayValue, newDisplayValue) {
+    const result = await Swal.fire({
+        title: '¿Confirmar cambio?',
+        html: `
+            <div style="text-align: left; margin: 20px 0;">
+                <p><strong>Campo:</strong> ${getFieldDisplayName(fieldConfig.tipoCambio)}</p>
+                <p><strong>Valor anterior:</strong> ${oldDisplayValue}</p>
+                <p><strong>Valor nuevo:</strong> ${newDisplayValue}</p>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#4caf50',
+        cancelButtonColor: '#ff5e6d',
+        confirmButtonText: 'Sí, guardar cambio',
+        cancelButtonText: 'Cancelar'
+    });
+    
+    return result.isConfirmed;
+}
+
+// Obtener nombre del campo para mostrar
+function getFieldDisplayName(tipoCambio) {
+    const names = {
+        1: 'Serie',
+        2: 'Número',
+        3: 'Razón Social',
+        4: 'Monto Facturado',
+        5: 'Fecha Factura'
+    };
+    return names[tipoCambio] || 'Campo';
+}
+
+// Guardar cambio en base de datos
+async function saveFieldChange(fieldConfig, oldValue, newValue) {
+    let connection = null;
+    let branchConnection = null;
+    
+    try {
+        // 1. ACTUALIZAR EN LA BASE DE DATOS CENTRAL (DSN=facturas)
+        connection = await odbc.connect('DSN=facturas;charset=utf8');
+        
+        // Actualizar la factura en la base central
+        await updateInvoiceField(connection, fieldConfig, newValue);
+        
+        // Registrar el cambio en el historial
+        await logFieldChange(connection, fieldConfig, oldValue, newValue);
+        
+        await connection.close();
+        connection = null;
+        
+        // 2. ACTUALIZAR EN LA BASE DE DATOS DE LA SUCURSAL (MySQL)
+        await updateBranchInventory(fieldConfig, newValue);
+        
+    } catch (error) {
+        // Cerrar conexiones en caso de error
+        if (connection) {
+            try {
+                await connection.close();
+            } catch (closeError) {
+                console.error('Error cerrando conexión central:', closeError);
+            }
+        }
+        
+        throw error;
+    }
+}
+async function updateBranchInventory(fieldConfig, newValue) {
+    let branchConnection = null;
+    
+    try {
+        // Verificar que tenemos los datos de conexión de la sucursal
+        if (!window.branchConnectionData) {
+            console.warn('No hay datos de conexión de sucursal disponibles');
+            return; // No es un error crítico, solo advertencia
+        }
+        
+        // Verificar que tenemos el IdInventory
+        if (!window.currentInvoice.IdInventory) {
+            console.warn('No se encontró IdInventory para actualizar en sucursal');
+            return;
+        }
+        
+        // Crear conexión MySQL a la sucursal
+        branchConnection = await mysql.createConnection({
+            host: window.branchConnectionData.server,
+            database: window.branchConnectionData.database,
+            user: window.branchConnectionData.user,
+            password: window.branchConnectionData.password,
+            port: 3306,
+            connectTimeout: 10000,
+            acquireTimeout: 10000
+        });
+        
+        // Actualizar en las tres tablas de la sucursal
+        await updateInventoryField(branchConnection, fieldConfig, newValue);
+        await updateBranchFacturasCompras(branchConnection, fieldConfig, newValue);
+        await updateBranchOrdenesCompraFactura(branchConnection, fieldConfig, newValue);
+        
+        console.log('Todas las tablas de sucursal actualizadas exitosamente');
+        
+    } catch (error) {
+        console.error('Error actualizando datos en sucursal:', error);
+        // No lanzar error para que no afecte la actualización central
+        showWarningToast('Advertencia: No se pudo actualizar completamente la información en la sucursal');
+    } finally {
+        if (branchConnection) {
+            try {
+                await branchConnection.end();
+            } catch (closeError) {
+                console.error('Error cerrando conexión de sucursal:', closeError);
+            }
+        }
+    }
+}
+async function updateBranchOrdenesCompraFactura(branchConnection, fieldConfig, newValue) {
+    let updateQuery;
+    let queryParams;
+    
+    // Mapear los campos de facturas_compras central a ordenescompra_factura sucursal
+    const fieldMapping = {
+        'Serie': 'Serie_Factura',
+        'Numero': 'Numero_Factura', 
+        'MontoFactura': 'Monto_Factura',
+        'FechaFactura': 'Fecha_Factura',
+        'IdRazon': 'IdRazonSocial_Factura'
+    };
+    
+    const ordenField = fieldMapping[fieldConfig.fieldName];
+    
+    // Todos los campos se mapean a ordenescompra_factura en sucursal
+    if (!ordenField) {
+        console.log(`Campo ${fieldConfig.fieldName} no reconocido para ordenescompra_factura sucursal`);
+        return;
+    }
+    
+    if (fieldConfig.fieldName === 'IdRazon') {
+        // Para razón social, actualizar tanto IdRazonSocial_Factura como RazonSocial_Factura
+        // Obtener el nombre de la razón social desde la base central
+        const connection = await odbc.connect('DSN=facturas;charset=utf8');
+        
+        const razonQuery = `
+            SELECT NombreRazon 
+            FROM razonessociales 
+            WHERE Id = ?
+        `;
+        
+        const razonResult = await connection.query(razonQuery, [newValue]);
+        await connection.close();
+        
+        if (razonResult.length === 0) {
+            throw new Error('Razón social no encontrada para actualizar ordenescompra_factura sucursal');
+        }
+        
+        const nombreRazon = razonResult[0].NombreRazon;
+        
+        // Actualizar ambos campos en ordenescompra_factura sucursal
+        updateQuery = `
+            UPDATE ordenescompra_factura 
+            SET IdRazonSocial_Factura = ?, RazonSocial_Factura = ?
+            WHERE IdInventario = ?
+        `;
+        
+        queryParams = [newValue, nombreRazon, window.currentInvoice.IdInventory];
+        
+    } else {
+        // Para otros campos (Serie_Factura, Numero_Factura, Monto_Factura, Fecha_Factura)
+        updateQuery = `
+            UPDATE ordenescompra_factura 
+            SET ${ordenField} = ? 
+            WHERE IdInventario = ?
+        `;
+        
+        queryParams = [newValue, window.currentInvoice.IdInventory];
+    }
+    
+    // Ejecutar la actualización
+    const [result] = await branchConnection.execute(updateQuery, queryParams);
+    
+    // Verificar que se actualizó al menos un registro
+    if (result.affectedRows === 0) {
+        console.warn(`No se encontró ordenescompra_factura con IdInventario: ${window.currentInvoice.IdInventory} en la sucursal`);
+    } else {
+        console.log(`ordenescompra_factura actualizada en sucursal. Registros afectados: ${result.affectedRows}`);
+    }
+}
+async function updateBranchFacturasCompras(branchConnection, fieldConfig, newValue) {
+    let updateQuery;
+    let queryParams;
+    
+    // Mapear los campos de facturas_compras central a facturas_compras sucursal
+    const fieldMapping = {
+        'Serie': 'Serie',
+        'Numero': 'Numero', 
+        'MontoFactura': 'MontoFactura',
+        'FechaFactura': 'FechaFactura',
+        'IdRazon': 'IdRazon'
+    };
+    
+    const branchField = fieldMapping[fieldConfig.fieldName];
+    
+    // Todos los campos se mapean a facturas_compras en sucursal
+    if (!branchField) {
+        console.log(`Campo ${fieldConfig.fieldName} no reconocido para facturas_compras sucursal`);
+        return;
+    }
+    
+    if (fieldConfig.fieldName === 'IdRazon') {
+        // Para razón social, actualizar tanto IdRazon como NombreRazon
+        // Obtener el nombre de la razón social desde la base central
+        const connection = await odbc.connect('DSN=facturas;charset=utf8');
+        
+        const razonQuery = `
+            SELECT NombreRazon 
+            FROM razonessociales 
+            WHERE Id = ?
+        `;
+        
+        const razonResult = await connection.query(razonQuery, [newValue]);
+        await connection.close();
+        
+        if (razonResult.length === 0) {
+            throw new Error('Razón social no encontrada para actualizar facturas_compras sucursal');
+        }
+        
+        const nombreRazon = razonResult[0].NombreRazon;
+        
+        // Actualizar ambos campos en facturas_compras sucursal
+        updateQuery = `
+            UPDATE facturas_compras 
+            SET IdRazon = ?, NombreRazon = ?
+            WHERE IdInventarios = ?
+        `;
+        
+        queryParams = [newValue, nombreRazon, window.currentInvoice.IdInventory];
+        
+    } else {
+        // Para otros campos (Serie, Numero, MontoFactura, FechaFactura)
+        updateQuery = `
+            UPDATE facturas_compras 
+            SET ${branchField} = ? 
+            WHERE IdInventarios = ?
+        `;
+        
+        queryParams = [newValue, window.currentInvoice.IdInventory];
+    }
+    
+    // Ejecutar la actualización
+    const [result] = await branchConnection.execute(updateQuery, queryParams);
+    
+    // Verificar que se actualizó al menos un registro
+    if (result.affectedRows === 0) {
+        console.warn(`No se encontró facturas_compras con IdInventarios: ${window.currentInvoice.IdInventory} en la sucursal`);
+    } else {
+        console.log(`facturas_compras actualizada en sucursal. Registros afectados: ${result.affectedRows}`);
+    }
+}
+// Función para actualizar campo específico en tabla inventarios de sucursal
+async function updateInventoryField(branchConnection, fieldConfig, newValue) {
+    let updateQuery;
+    let queryParams;
+    
+    // Mapear los campos de facturas_compras a inventarios
+    const fieldMapping = {
+        'Serie': 'Serie',
+        'Numero': 'Numero', 
+        'FechaFactura': 'FechaFactura',
+        'IdRazon': 'IdRazon',
+        'MontoFactura': null // Este campo NO existe en inventarios
+    };
+    
+    const inventoryField = fieldMapping[fieldConfig.fieldName];
+    
+    // Si el campo no se mapea a inventarios, no hacer nada
+    if (inventoryField === null) {
+        console.log(`Campo ${fieldConfig.fieldName} no se actualiza en inventarios`);
+        return;
+    }
+    
+    if (fieldConfig.fieldName === 'IdRazon') {
+        // Para razón social, actualizar tanto IdRazon como NombreRazon
+        // Obtener el nombre de la razón social desde la base central
+        const connection = await odbc.connect('DSN=facturas;charset=utf8');
+        
+        const razonQuery = `
+            SELECT NombreRazon 
+            FROM razonessociales 
+            WHERE Id = ?
+        `;
+        
+        const razonResult = await connection.query(razonQuery, [newValue]);
+        await connection.close();
+        
+        if (razonResult.length === 0) {
+            throw new Error('Razón social no encontrada para actualizar inventarios sucursal');
+        }
+        
+        const nombreRazon = razonResult[0].NombreRazon;
+        
+        // Actualizar ambos campos en inventarios
+        updateQuery = `
+            UPDATE inventarios 
+            SET IdRazon = ?, NombreRazon = ?
+            WHERE IdInventarios = ?
+        `;
+        
+        queryParams = [newValue, nombreRazon, window.currentInvoice.IdInventory];
+        
+    } else {
+        // Para otros campos (Serie, Numero, FechaFactura)
+        updateQuery = `
+            UPDATE inventarios 
+            SET ${inventoryField} = ? 
+            WHERE IdInventarios = ?
+        `;
+        
+        queryParams = [newValue, window.currentInvoice.IdInventory];
+    }
+    
+    // Ejecutar la actualización
+    const [result] = await branchConnection.execute(updateQuery, queryParams);
+    
+    // Verificar que se actualizó al menos un registro
+    if (result.affectedRows === 0) {
+        console.warn(`No se encontró inventario con IdInventarios: ${window.currentInvoice.IdInventory} en la sucursal`);
+    } else {
+        console.log(`Inventario actualizado en sucursal. Registros afectados: ${result.affectedRows}`);
+    }
+}
+
+// Actualizar campo en la tabla facturas_compras
+async function updateInvoiceField(connection, fieldConfig, newValue) {
+    let updateQuery;
+    let queryParams;
+    
+    if (fieldConfig.fieldName === 'IdRazon') {
+        // Para razón social, necesitamos actualizar tanto IdRazon como NombreRazon
+        // Primero obtenemos el nombre de la razón social seleccionada
+        const razonQuery = `
+            SELECT NombreRazon 
+            FROM razonessociales 
+            WHERE Id = ?
+        `;
+        
+        const razonResult = await connection.query(razonQuery, [newValue]);
+        
+        if (razonResult.length === 0) {
+            throw new Error('Razón social no encontrada');
+        }
+        
+        const nombreRazon = razonResult[0].NombreRazon;
+        
+        // Actualizar ambos campos
+        updateQuery = `
+            UPDATE facturas_compras 
+            SET IdRazon = ?, NombreRazon = ?
+            WHERE Id = ?
+        `;
+        
+        queryParams = [newValue, nombreRazon, window.currentInvoice.Id];
+        
+    } else {
+        // Para otros campos, mantener el comportamiento original
+        updateQuery = `
+            UPDATE facturas_compras 
+            SET ${fieldConfig.fieldName} = ? 
+            WHERE Id = ?
+        `;
+        
+        queryParams = [newValue, window.currentInvoice.Id];
+    }
+    
+    await connection.query(updateQuery, queryParams);
+}
+
+
+// Registrar cambio en historial
+async function logFieldChange(connection, fieldConfig, oldValue, newValue) {
+    const userId = localStorage.getItem('userId') || '0';
+    const userName = localStorage.getItem('userName') || 'Usuario Desconocido';
+    
+    const insertQuery = `
+        INSERT INTO CambiosFacturasHistorial (
+            IdTipoCambio,
+            TipoCambio,
+            ValorAnterior,
+            ValorNuevo,
+            IdInventario,
+            IdSucursal,
+            Sucursal,
+            IdFacturasCompras,
+            IdUsuario,
+            NombreUsuario
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    await connection.query(insertQuery, [
+        fieldConfig.tipoCambio,
+        getFieldDisplayName(fieldConfig.tipoCambio),
+        oldValue.toString(),
+        newValue.toString(),
+        window.currentInvoice.IdInventory || '',
+        window.currentInvoice.IdSucursalCori || 0,
+        window.currentInvoice.NombreSucursal || '',
+        window.currentInvoice.Id,
+        parseInt(userId),
+        userName
+    ]);
+}
+
+// Actualizar objeto currentInvoice
+function updateCurrentInvoiceObject(fieldConfig, newValue, newDisplayValue) {
+    switch (fieldConfig.fieldName) {
+        case 'Serie':
+            window.currentInvoice.Serie = newValue;
+            break;
+        case 'Numero':
+            window.currentInvoice.Numero = newValue;
+            break;
+        case 'IdRazon':
+            window.currentInvoice.IdRazon = newValue;
+            window.currentInvoice.NombreRazon = newDisplayValue;
+            // *** NUEVO: También actualizar el campo NombreRazon en el objeto ***
+            break;
+        case 'MontoFactura':
+            window.currentInvoice.MontoFactura = newValue;
+            break;
+        case 'FechaFactura':
+            window.currentInvoice.FechaFactura = newValue;
+            break;
+    }
+}
+
+// Mostrar toast informativo
+function showInfoToast(message) {
+    Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 2500,
+        timerProgressBar: true,
+        customClass: {
+            popup: 'info-toast'
+        },
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer);
+            toast.addEventListener('mouseleave', Swal.resumeTimer);
+        }
+    }).fire({
+        icon: 'info',
+        title: message
+    });
+}
+
 // Mostrar panel de no encontrado
 function showNotFoundPanel() {
     resultsPanel.style.display = 'none';
@@ -377,6 +1249,8 @@ function resetSearch() {
     
     // Limpiar datos guardados
     window.currentInvoice = null;
+    isEditing = false;
+    currentEditingElement = null;
 }
 
 // Ocultar panel de búsqueda con animación
@@ -497,7 +1371,11 @@ function fillOriginalInvoiceInfo() {
 // Establecer fecha actual por defecto
 function setDefaultDate() {
     const today = new Date();
-    const formattedDate = today.toISOString().split('T')[0];
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const formattedDate = `${year}-${month}-${day}`;
+    
     document.getElementById('creditNoteDate').value = formattedDate;
 }
 
@@ -642,7 +1520,6 @@ function validateCreditNoteData(data) {
     
     return true;
 }
-
 // Confirmar creación de nota de crédito
 function confirmCreditNoteCreation(data) {
     const conceptText = data.conceptType === 'mercaderia' ? 'Mercadería' : 'Otros Conceptos';
@@ -1047,8 +1924,7 @@ async function loadInventoryProducts() {
             password: connectionData.password,
             port: 3306,
             connectTimeout: 10000,
-            acquireTimeout: 10000,
-            timeout: 10000
+            acquireTimeout: 10000
         });
         
         // Consultar productos
@@ -1085,6 +1961,7 @@ async function loadInventoryProducts() {
         }
     }
 }
+
 // Crear modal de mercadería
 function createMerchandiseModal() {
     // Verificar si ya existe el modal
@@ -1396,6 +2273,7 @@ function saveMerchandiseSelection() {
         });
     }, 350); // Esperar a que termine la animación de cierre del modal (300ms + margen)
 }
+
 function resetToInitialStateComplete() {
     // Limpiar variables globales
     window.currentInvoice = null;
@@ -1405,6 +2283,10 @@ function resetToInitialStateComplete() {
     window.inventoryProducts = null;
     window.filteredProducts = null;
     window.branchConnectionData = null;
+    
+    // Resetear variables de edición
+    isEditing = false;
+    currentEditingElement = null;
     
     // Limpiar formulario de búsqueda
     const serieElement = document.getElementById('searchSerie');
@@ -1424,6 +2306,7 @@ function resetToInitialStateComplete() {
         showSuccessToast('Puede realizar una nueva búsqueda de factura');
     }, 800);
 }
+
 function restoreMerchandiseSelection(selectedProducts) {
     // Esperar un poco para que el modal se haya creado completamente
     setTimeout(() => {
@@ -1435,6 +2318,7 @@ function restoreMerchandiseSelection(selectedProducts) {
         });
     }, 100);
 }
+
 // Manejar errores de nota de crédito
 function handleCreditNoteError(error) {
     console.error('Error en nota de crédito:', error);
@@ -1561,15 +2445,31 @@ function formatDate(dateString) {
     if (!dateString) return '-';
     
     try {
-        const date = new Date(dateString);
-        if (isNaN(date.getTime())) return dateString; // Si no es una fecha válida, devolver el string original
+        // Extraer solo la parte de la fecha si viene con tiempo
+        let dateOnly = dateString;
+        if (dateString.includes('T')) {
+            dateOnly = dateString.split('T')[0];
+        }
         
+        // Separar los componentes de la fecha
+        const [year, month, day] = dateOnly.split('-').map(Number);
+        
+        // Crear la fecha usando el constructor específico (evita problemas de zona horaria)
+        const date = new Date(year, month - 1, day); // month - 1 porque los meses en JS empiezan en 0
+        
+        // Verificar que la fecha es válida
+        if (isNaN(date.getTime())) {
+            console.warn('Fecha inválida:', dateString);
+            return dateString; // Devolver el string original si no es válida
+        }
+        
+        // Formatear usando Intl.DateTimeFormat sin zona horaria específica
         return new Intl.DateTimeFormat('es-GT', {
             year: 'numeric',
             month: 'long',
-            day: 'numeric',
-            timeZone: 'America/Guatemala'
+            day: 'numeric'
         }).format(date);
+        
     } catch (error) {
         console.error('Error formateando fecha:', error);
         return dateString;
@@ -1668,6 +2568,7 @@ function handleSearchError(error) {
     
     shakeSearchPanel();
 }
+
 // Guardar nota de crédito - Otros Conceptos
 async function saveOtherConceptsCreditNote(data, observation) {
     let connection = null;
@@ -1765,7 +2666,7 @@ async function saveMerchandiseCreditNote(data, selectedProducts) {
                 IdUsuario,
                 NombreUsuario,
                 IdConcepto
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         `;
         
         const result = await connection.query(insertQuery, [
@@ -1866,6 +2767,7 @@ async function prepareCreditNoteData(data, observaciones) {
         NombreUsuario: userName
     };
 }
+
 async function saveProductDetails(connection, idNTCProveedor, selectedProducts) {
     const insertDetailQuery = `
         INSERT INTO NCTProveedoresDetalle (
@@ -1886,6 +2788,7 @@ async function saveProductDetails(connection, idNTCProveedor, selectedProducts) 
         ]);
     }
 }
+
 function showSaveSuccessMessage(data, tipo, productCount = 0) {
     let detailMessage = '';
     
@@ -1913,6 +2816,7 @@ function showSaveSuccessMessage(data, tipo, productCount = 0) {
         timerProgressBar: true
     });
 }
+
 function showSaveErrorMessage(error) {
     let errorMessage = 'Error al guardar la nota de crédito. ';
     
@@ -1940,6 +2844,10 @@ function resetToInitialState() {
     window.currentCreditNote = null;
     window.selectedMerchandise = null;
     window.selectedConcept = null;
+    
+    // Resetear variables de edición
+    isEditing = false;
+    currentEditingElement = null;
     
     // Mostrar panel de búsqueda nuevamente
     showSearchPanel();

@@ -1026,13 +1026,56 @@ async function exportToExcel() {
             }
         }
         
-        // Generar archivo y descargar
-        const fileName = `reporte_notas_credito_${getCurrentDateForFilename()}.xlsx`;
-        XLSX.writeFile(workbook, fileName);
+        // Generar el archivo como ArrayBuffer en lugar de descargarlo directamente
+        const excelBuffer = XLSX.write(workbook, { 
+            bookType: 'xlsx', 
+            type: 'array' 
+        });
         
-        // Cerrar loading y mostrar éxito
+        // Cerrar el loading de generación
         Swal.close();
-        showSuccessToast('Archivo Excel descargado exitosamente');
+        
+        // Crear blob desde el buffer
+        const blob = new Blob([excelBuffer], { 
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+        });
+        
+        // Nombre sugerido para el archivo
+        const suggestedFileName = `reporte_notas_credito_${getCurrentDateForFilename()}.xlsx`;
+        
+        // Verificar si el navegador soporta File System Access API (Chrome, Edge modernos)
+        if ('showSaveFilePicker' in window) {
+            try {
+                // Usar la API moderna para mostrar el diálogo de guardado
+                const fileHandle = await window.showSaveFilePicker({
+                    suggestedName: suggestedFileName,
+                    types: [{
+                        description: 'Archivos Excel',
+                        accept: {
+                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
+                        }
+                    }]
+                });
+                
+                // Escribir el archivo en la ubicación seleccionada
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                
+                showSuccessToast('Archivo Excel guardado exitosamente');
+                
+            } catch (error) {
+                // Si el usuario cancela el diálogo o hay error, usar método de fallback
+                if (error.name !== 'AbortError') {
+                    console.warn('Error con showSaveFilePicker, usando fallback:', error);
+                    downloadFileWithFallback(blob, suggestedFileName);
+                }
+                // Si es AbortError, el usuario canceló, no mostrar error
+            }
+        } else {
+            // Fallback para navegadores que no soportan File System Access API
+            downloadFileWithFallback(blob, suggestedFileName);
+        }
         
     } catch (error) {
         console.error('Error exportando Excel:', error);
@@ -1040,7 +1083,32 @@ async function exportToExcel() {
         showErrorToast('Error al exportar los datos');
     }
 }
-
+function downloadFileWithFallback(blob, fileName) {
+    try {
+        // Crear URL del blob
+        const url = URL.createObjectURL(blob);
+        
+        // Crear elemento <a> temporal
+        const downloadLink = document.createElement('a');
+        downloadLink.href = url;
+        downloadLink.download = fileName;
+        downloadLink.style.display = 'none';
+        
+        // Agregar al DOM, hacer clic y remover
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        
+        // Limpiar URL del blob
+        URL.revokeObjectURL(url);
+        
+        showSuccessToast('Archivo Excel descargado exitosamente');
+        
+    } catch (error) {
+        console.error('Error en downloadFileWithFallback:', error);
+        showErrorToast('Error al descargar el archivo');
+    }
+}
 // Crear hoja de resumen
 function createSummarySheet() {
     const totalAmount = filteredCreditNotes.reduce((sum, note) => sum + parseFloat(note.Monto || 0), 0);

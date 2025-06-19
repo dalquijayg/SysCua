@@ -18,9 +18,69 @@ document.addEventListener('DOMContentLoaded', () => {
     const dateFrom = document.getElementById('dateFrom');
     const dateTo = document.getElementById('dateTo');
     const updateChartsButton = document.getElementById('updateCharts');
+    
+
     cargarDashboard();
     initializeDashboard();
     const chartInstances = {};
+
+    // Función para verificar permisos en tiempo real consultando la base de datos
+    async function verificarPermisoEnTiempoReal(nombrePermiso) {
+        const userId = localStorage.getItem('userId');
+        if (!userId) {
+            console.error('No se encontró ID de usuario');
+            return false;
+        }
+
+        let connection;
+        try {
+            connection = await odbc.connect(conexionfacturas);
+            
+            // Consultar permisos específicos del usuario
+            const consulta = `SELECT ${nombrePermiso} FROM permisos_sistema WHERE IdUsuario = ?`;
+            const resultado = await connection.query(consulta, [userId]);
+
+            if (resultado.length > 0) {
+                const permisoValor = resultado[0][nombrePermiso];
+                console.log(`Permiso ${nombrePermiso} para usuario ${userId}:`, permisoValor);
+                
+                // Verificar si el permiso es 1 (tiene acceso)
+                return Number(permisoValor) === 1;
+            } else {
+                console.warn(`No se encontraron permisos para el usuario ${userId}`);
+                return false;
+            }
+        } catch (error) {
+            console.error('Error al consultar permisos:', error);
+            throw error; // Re-lanzar el error para que sea manejado por el caller
+        } finally {
+            if (connection) {
+                await connection.close();
+            }
+        }
+    }
+
+    // Función para mostrar mensaje de acceso denegado mejorado
+    function mostrarAccesoDenegado(funcionalidad) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acceso Denegado',
+            html: `
+                <div style="text-align: center;">
+                    <p>No tienes permisos para acceder a:</p>
+                    <strong style="color: #e74c3c; font-size: 1.1em;">${funcionalidad}</strong>
+                    <hr style="margin: 15px 0;">
+                    <p style="font-size: 0.9em; color: #7f8c8d;">
+                        Si necesitas acceso a esta funcionalidad, contacta al administrador del sistema.
+                    </p>
+                </div>
+            `,
+            confirmButtonColor: '#6e78ff',
+            confirmButtonText: 'Entendido',
+            footer: '<i class="fas fa-shield-alt"></i> Sistema de Control de Acceso'
+        });
+    }
+
     function getCurrentDate() {
         const now = new Date();
         const year = now.getFullYear();
@@ -28,12 +88,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const day = String(now.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     }
+
     function initializeDashboard() {
         const currentDate = getCurrentDate();
         dateFrom.value = currentDate;
         dateTo.value = currentDate;
         cargarGraficos(currentDate, currentDate);
     }
+
     // Función para cambiar entre pestañas principales
     function switchTab(tabId) {
         mainNavButtons.forEach(button => {
@@ -59,6 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
         }
     }
+
     mainNavButtons.forEach(button => {
         button.addEventListener('click', () => {
             switchTab(button.dataset.tab);
@@ -67,14 +130,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Mostrar/ocultar el menú desplegable de Costos
     dropdownButton.addEventListener('click', (e) => {
-        e.stopPropagation(); // Evitar que el clic se propague
+        e.stopPropagation();
         dropdownContent.classList.toggle('show');
     });
 
     // Mostrar/ocultar submenús
     submenuButtons.forEach(button => {
         button.addEventListener('click', (e) => {
-            e.stopPropagation(); // Evitar que el clic se propague
+            e.stopPropagation();
             const submenuContent = button.nextElementSibling;
             submenuContent.classList.toggle('show');
         });
@@ -105,58 +168,165 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleSubmenu(item);
         });
     });
+
+    // Event listeners con verificación de permisos
     document.getElementById('cuadreFacturasLink').addEventListener('click', (e) => {
         e.preventDefault();
         ipcRenderer.send('open-cuadre-window');
     });
+
     document.getElementById('historialCuadresLink').addEventListener('click', (e) => {
         e.preventDefault();
         ipcRenderer.send('open-historial-window');
     });
+
     document.getElementById('criteriosCuadreLink').addEventListener('click', (e) => {
         e.preventDefault();
         ipcRenderer.send('open-criterio-window');
     });
+
     document.getElementById('ingresosLink').addEventListener('click', (e) => {
         e.preventDefault();
         ipcRenderer.send('open-ingresos-window');
     });
+
     document.getElementById('VMegared').addEventListener('click', (e) => {
         e.preventDefault();
         ipcRenderer.send('open-VMegared-window');
     });
+
     document.getElementById('VSurti').addEventListener('click', (e) => {
         e.preventDefault();
         ipcRenderer.send('open-VSurti-window');
     });
+
     document.getElementById('NSurti').addEventListener('click', (e) => {
         e.preventDefault();
         ipcRenderer.send('open-NSurti-window');
     });
+
     document.getElementById('NMegared').addEventListener('click', (e) => {
         e.preventDefault();
         ipcRenderer.send('open-NMegared-window');
     });
+
     document.getElementById('FBonificaciones').addEventListener('click', (e) => {
         e.preventDefault();
         ipcRenderer.send('open-FBonificaciones-window');
     });
+
     document.getElementById('VBodegonaAntigua').addEventListener('click', (e) => {
         e.preventDefault();
         ipcRenderer.send('open-VBodegonaAntigua-window');
     });
+
     document.getElementById('NBodegonaAntigua').addEventListener('click', (e) => {
         e.preventDefault();
         ipcRenderer.send('open-NBodegonaAntigua-window');
     });
-    document.getElementById('actualizarFacturasLink').addEventListener('click', (e) => {
+
+    // Event listener para "Actualizar Facturas" con verificación de permisos en tiempo real
+    document.getElementById('actualizarFacturasLink').addEventListener('click', async (e) => {
         e.preventDefault();
-        ipcRenderer.send('open-actualizarFacturasLink-window');
+        
+        // Mostrar indicador de carga mientras verifica permisos
+        const loadingAlert = Swal.fire({
+            title: 'Verificando permisos...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        try {
+            // Verificar permiso en tiempo real consultando la base de datos
+            const tienePermiso = await verificarPermisoEnTiempoReal('Actualizar_Facturas');
+            
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            if (tienePermiso) {
+                // Mostrar mensaje de acceso concedido
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Acceso Concedido',
+                    text: 'Abriendo módulo de Actualizar Facturas...',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => {
+                    ipcRenderer.send('open-actualizarFacturasLink-window');
+                });
+            } else {
+                mostrarAccesoDenegado('Actualizar Facturas');
+            }
+        } catch (error) {
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            // Manejar error de verificación
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Verificación',
+                text: 'No se pudo verificar los permisos. Inténtelo nuevamente.',
+                confirmButtonColor: '#6e78ff'
+            });
+            console.error('Error al verificar permisos:', error);
+        }
     });
-    document.getElementById('reporteFacturasComprasLink').addEventListener('click', (e) => {
+
+    // Event listener para "Reporte Facturas Compras" con verificación de permisos en tiempo real
+    document.getElementById('reporteFacturasComprasLink').addEventListener('click', async (e) => {
         e.preventDefault();
-        ipcRenderer.send('open-reporteNCT-window');
+        
+        // Mostrar indicador de carga mientras verifica permisos
+        const loadingAlert = Swal.fire({
+            title: 'Verificando permisos...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        try {
+            // Verificar permiso en tiempo real consultando la base de datos
+            const tienePermiso = await verificarPermisoEnTiempoReal('Reporte_NTC');
+            
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            if (tienePermiso) {
+                // Mostrar mensaje de acceso concedido
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Acceso Concedido',
+                    text: 'Abriendo módulo de Reporte de Facturas...',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => {
+                    ipcRenderer.send('open-reporteNCT-window');
+                });
+            } else {
+                mostrarAccesoDenegado('Notas de Credito');
+            }
+        } catch (error) {
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            // Manejar error de verificación
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Verificación',
+                text: 'No se pudo verificar los permisos. Inténtelo nuevamente.',
+                confirmButtonColor: '#6e78ff'
+            });
+            console.error('Error al verificar permisos:', error);
+        }
     });
+
     // Función para obtener el saludo e icono según la hora del día
     function getGreetingAndIcon() {
         const hour = new Date().getHours();
@@ -168,6 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return { greeting: "¡Buenas noches!", icon: "fa-moon" };
         }
     }
+
     function getRandomWelcomeMessage() {
         const messages = [
             "¡Que tengas una excelente jornada!",
@@ -179,9 +350,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
         return messages[Math.floor(Math.random() * messages.length)];
     }
+
     // Función para mostrar el mensaje de bienvenida
     function showWelcomeMessage() {
-        const userName = localStorage.getItem('userName'); // Asumimos que guardamos el nombre en localStorage
+        const userName = localStorage.getItem('userName');
         const { greeting, icon } = getGreetingAndIcon();
         
         greetingText.textContent = greeting;
@@ -189,12 +361,12 @@ document.addEventListener('DOMContentLoaded', () => {
         welcomeText.textContent = getRandomWelcomeMessage();
         welcomeIcon.className = `fas ${icon}`;
     }
+
     async function cargarDashboard() {
         let connection;
         try {
             connection = await odbc.connect(conexionfacturas);
     
-            // Ejecución de los procedimientos almacenados
             const consultas = [
                 { query: 'CALL TotalCuadrexdia()', name: 'TotalCuadrexdia' },
                 { query: 'CALL TotalCuadrexdiafactura()', name: 'TotalCuadrexdiafactura' },
@@ -209,7 +381,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (queryError) {
                     console.error(`Error ejecutando ${consulta.name}:`, queryError);
                     
-                    // Mostrar un mensaje detallado del error con SweetAlert2
                     Swal.fire({
                         icon: 'error',
                         title: `Error en ${consulta.name}`,
@@ -223,7 +394,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error al conectar a la base de datos:', error);
     
-            // Mostrar alerta si hay un problema general de conexión o ejecución
             Swal.fire({
                 icon: 'error',
                 title: 'Error al Conectar',
@@ -258,6 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn(`Resultado no manejado para ${name}`);
         }
     }
+
     updateChartsButton.addEventListener('click', () => {
         const fromDate = dateFrom.value;
         const toDate = dateTo.value;
@@ -267,17 +438,16 @@ document.addEventListener('DOMContentLoaded', () => {
             Swal.fire('Error', 'Por favor seleccione ambas fechas', 'error');
         }
     });
+
     async function cargarGraficos(fromDate, toDate) {
         let connection;
         try {
             connection = await odbc.connect(conexionfacturas);
 
-            // Cargar datos para el gráfico de Total Cuadres por Día
             const totalCuadresQuery = `CALL totalcuadrepordia('${fromDate}', '${toDate}')`;
             const totalCuadresResult = await connection.query(totalCuadresQuery);
             crearGraficoCircular('totalCuadresPorDiaChart', totalCuadresResult, 'Factura', 'Usuario');
 
-            // Cargar datos para el gráfico de Total SKUs Cuadrados
             const totalSkusQuery = `CALL totalcuadrepordiaskus('${fromDate}', '${toDate}')`;
             const totalSkusResult = await connection.query(totalSkusQuery);
             crearGraficoCircular('totalSkusCuadradosChart', totalSkusResult, 'SkusCuadrados', 'Usuario');
@@ -368,6 +538,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
     // Mostrar el mensaje de bienvenida al cargar la página
     showWelcomeMessage();
 
