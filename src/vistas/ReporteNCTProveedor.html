@@ -20,9 +20,6 @@
     <header class="header">
         <div class="header-content">
             <div class="header-left">
-                <button class="back-button" onclick="history.back()">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
                 <div class="header-title">
                     <i class="fas fa-file-invoice"></i>
                     <h1>Reporte Notas de Crédito Proveedores</h1>
@@ -47,63 +44,121 @@
                 </div>
                 <div class="panel-title">
                     <h2>Búsqueda de Notas de Crédito</h2>
-                    <p>Seleccione el tipo de búsqueda y complete los campos correspondientes</p>
+                    <p>Filtre y encuentre las notas que necesita</p>
                 </div>
+                <!-- El botón de toggle se agregará automáticamente via JavaScript -->
             </div>
             
             <form id="searchForm" class="search-form">
-                <!-- Tipo de búsqueda -->
-                <div class="search-type-section">
-                    <h3><i class="fas fa-search"></i> Tipo de Búsqueda</h3>
-                    <div class="search-type-buttons">
-                        <button type="button" class="search-type-btn active" data-type="all" id="searchAll">
-                            <div class="type-icon">
-                                <i class="fas fa-list"></i>
+                <!-- TODO EN UNA LÍNEA -->
+                <div class="search-main-row">
+                    <!-- Tipo de búsqueda COMPACTO -->
+                    <div class="search-type-section">
+                        <div class="search-type-buttons">
+                            <button type="button" class="search-type-btn active" data-type="all" id="searchAll">
+                                <div class="type-icon">
+                                    <i class="fas fa-calendar-alt"></i>
+                                </div>
+                                <div class="type-text">
+                                    <span class="type-title">Todas</span>
+                                    <span class="type-desc">Fechas</span>
+                                </div>
+                            </button>
+                            
+                            <button type="button" class="search-type-btn" data-type="invoice" id="searchByInvoice">
+                                <div class="type-icon">
+                                    <i class="fas fa-file-invoice-dollar"></i>
+                                </div>
+                                <div class="type-text">
+                                    <span class="type-title">Factura</span>
+                                    <span class="type-desc">Serie/No.</span>
+                                </div>
+                            </button>
+                            
+                            <button type="button" class="search-type-btn" data-type="credit-note" id="searchByCreditNote">
+                                <div class="type-icon">
+                                    <i class="fas fa-receipt"></i>
+                                </div>
+                                <div class="type-text">
+                                    <span class="type-title">Nota</span>
+                                    <span class="type-desc">Serie/No.</span>
+                                </div>
+                            </button>
+                            
+                            <button type="button" class="search-type-btn" data-type="product" id="searchByProduct">
+                                <div class="type-icon">
+                                    <i class="fas fa-barcode"></i>
+                                </div>
+                                <div class="type-text">
+                                    <span class="type-title">Producto</span>
+                                    <span class="type-desc">UPC/Desc.</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Campos de entrada EN LÍNEA -->
+                    <div class="search-fields-inline">
+                        <div class="search-inputs-inline">
+                            <!-- Campos para TODAS (fechas) -->
+                            <div class="date-fields-inline">
+                                <div class="input-group-inline date-input-group">
+                                    <label for="fechaInicioInline">Fecha Inicio</label>
+                                    <input type="date" id="fechaInicioInline" placeholder="Inicio">
+                                </div>
+                                <div class="input-group-inline date-input-group">
+                                    <label for="fechaFinInline">Fecha Fin</label>
+                                    <input type="date" id="fechaFinInline" placeholder="Fin">
+                                </div>
                             </div>
-                            <div class="type-text">
-                                <span class="type-title">Mostrar Todas</span>
-                                <span class="type-desc">Ver todas las notas de crédito</span>
+
+                            <!-- Campos para FACTURA/NOTA DE CRÉDITO -->
+                            <div class="input-group-inline serie-input" style="display: none;">
+                                <label for="serieInline">Serie</label>
+                                <input type="text" id="serieInline" placeholder="A001, NC001...">
                             </div>
+                            <div class="input-group-inline numero-input" style="display: none;">
+                                <label for="numeroInline">Número</label>
+                                <input type="text" id="numeroInline" placeholder="123456">
+                            </div>
+
+                            <!-- Campo para PRODUCTO -->
+                            <div class="input-group-inline product-input" style="display: none;">
+                                <label for="productSearchInline">UPC o Descripción</label>
+                                <input type="text" id="productSearchInline" placeholder="Buscar producto...">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Botones de acción EN LÍNEA -->
+                    <div class="search-actions-inline">
+                        <button type="submit" class="search-button-inline">
+                            <span class="button-text">Buscar</span>
+                            <span class="button-icon">
+                                <i class="fas fa-search"></i>
+                            </span>
                         </button>
-                        
-                        <button type="button" class="search-type-btn" data-type="invoice" id="searchByInvoice">
-                            <div class="type-icon">
-                                <i class="fas fa-file-invoice-dollar"></i>
-                            </div>
-                            <div class="type-text">
-                                <span class="type-title">Por Factura</span>
-                                <span class="type-desc">Serie/Número de factura</span>
-                            </div>
-                        </button>
-                        
-                        <button type="button" class="search-type-btn" data-type="credit-note" id="searchByCreditNote">
-                            <div class="type-icon">
-                                <i class="fas fa-receipt"></i>
-                            </div>
-                            <div class="type-text">
-                                <span class="type-title">Por Nota de Crédito</span>
-                                <span class="type-desc">Serie/Número de nota</span>
-                            </div>
-                        </button>
-                        
-                        <button type="button" class="search-type-btn" data-type="product" id="searchByProduct">
-                            <div class="type-icon">
-                                <i class="fas fa-barcode"></i>
-                            </div>
-                            <div class="type-text">
-                                <span class="type-title">Por Producto</span>
-                                <span class="type-desc">UPC/Descripción</span>
-                            </div>
+                        <button type="button" class="clear-button-inline" id="clearFiltersInline">
+                            <span class="button-text">Limpiar</span>
+                            <span class="button-icon">
+                                <i class="fas fa-eraser"></i>
+                            </span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Campos de búsqueda dinámicos -->
-                <div class="search-fields" id="searchFields">
+                <!-- Información contextual (oculta por defecto) -->
+                <div class="search-info-inline" id="searchInfoInline">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Seleccione fechas para filtrar o deje vacío para mostrar todas las notas.</span>
+                </div>
+
+                <!-- Mantener campos originales ocultos para compatibilidad -->
+                <div class="search-fields" id="searchFields" style="display: none;">
                     <!-- Los campos se cargarán dinámicamente según el tipo seleccionado -->
                 </div>
                 
-                <div class="search-actions">
+                <div class="search-actions" style="display: none;">
                     <button type="submit" class="search-button">
                         <span class="button-text">Buscar Notas de Crédito</span>
                         <span class="button-icon">

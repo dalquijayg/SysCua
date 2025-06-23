@@ -24,6 +24,7 @@ let VentasBodegonaAntigua = null;
 let NotasBodegonaAntigua = null;
 let UpdateFacturas = null;
 let ReporteNCT = null;
+let HitorialFacCompras = null;
 
 app.on('ready',  createWindow)
 
@@ -408,6 +409,32 @@ ipcMain.on('open-reporteNCT-window', () => {
       // Manejar el evento de cierre de la ventana
       ReporteNCT.on('closed', () => {
         ReporteNCT = null; // Limpiar la referencia cuando se cierre la ventana
+      });
+  }
+});
+ipcMain.on('open-HisotrialFC-window', () => {
+  if (HitorialFacCompras) {
+      // Si la ventana ya está abierta, enfócala
+      HitorialFacCompras.focus();
+  } else {
+      // Si no está abierta, crea una nueva ventana
+      HitorialFacCompras = new BrowserWindow({
+          webPreferences: {
+              nodeIntegration: true,
+              contextIsolation: false,
+              webSecurity: false,
+              enableRemoteModule: true
+          },
+          icon: path.join(__dirname, 'ingresos.ico'),  // Asegúrate de tener este ícono
+          autoHideMenuBar: true
+      });
+      
+      HitorialFacCompras.maximize();
+      HitorialFacCompras.loadFile(path.join(__dirname, 'vistas/HistorialFacturasCompras.html'));
+
+      // Manejar el evento de cierre de la ventana
+      HitorialFacCompras.on('closed', () => {
+        HitorialFacCompras = null; // Limpiar la referencia cuando se cierre la ventana
       });
   }
 });

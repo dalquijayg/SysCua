@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Inventarios - Historial de Cambios</title>
+    <link rel="stylesheet" href="../disenos/HistorialFacturasCompras.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <!-- Fondo animado -->
+    <div class="background">
+        <div class="shape shape1"></div>
+        <div class="shape shape2"></div>
+        <div class="shape shape3"></div>
+        <div class="shape shape4"></div>
+    </div>
+    
+    <!-- Header de navegación -->
+    <header class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="header-title">
+                    <i class="fas fa-history"></i>
+                    <h1>Historial de Cambios</h1>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="user-info" id="userInfo">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="userName">Usuario</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenedor principal -->
+    <div class="main-container">
+        <!-- Panel de filtros -->
+        <div class="filters-panel">
+            <div class="panel-header">
+                <div class="panel-icon">
+                    <i class="fas fa-filter"></i>
+                </div>
+                <div class="panel-title">
+                    <h2>Filtros de Búsqueda</h2>
+                    <p>Seleccione el rango de fechas para consultar</p>
+                </div>
+                <div class="stats-summary" id="statsSummary">
+                    <div class="stat-item">
+                        <span class="stat-label">Total cambios:</span>
+                        <span class="stat-value" id="totalChanges">0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <form id="filtersForm" class="filters-form">
+                <div class="filters-row">
+                    <!-- Fecha desde -->
+                    <div class="filter-group">
+                        <label for="fechaDesde">
+                            <i class="fas fa-calendar-alt"></i>
+                            Fecha Desde
+                        </label>
+                        <input type="date" id="fechaDesde" name="fechaDesde" required>
+                    </div>
+                    
+                    <!-- Fecha hasta -->
+                    <div class="filter-group">
+                        <label for="fechaHasta">
+                            <i class="fas fa-calendar-check"></i>
+                            Fecha Hasta
+                        </label>
+                        <input type="date" id="fechaHasta" name="fechaHasta" required>
+                    </div>
+                    
+                    <!-- Filtro opcional por tipo de cambio -->
+                    <div class="filter-group">
+                        <label for="tipoCambio">
+                            <i class="fas fa-tags"></i>
+                            Tipo de Cambio (Opcional)
+                        </label>
+                        <select id="tipoCambio" name="tipoCambio">
+                            <option value="">Todos los tipos</option>
+                            <option value="1">Serie</option>
+                            <option value="2">Número</option>
+                            <option value="3">Razón Social</option>
+                            <option value="4">Monto Facturado</option>
+                            <option value="5">Fecha Factura</option>
+                            <option value="6">Proveedor</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Filtro por usuario -->
+                    <div class="filter-group">
+                        <label for="usuarioFiltro">
+                            <i class="fas fa-user"></i>
+                            Usuario (Opcional)
+                        </label>
+                        <input type="text" id="usuarioFiltro" name="usuarioFiltro" placeholder="Nombre del usuario...">
+                    </div>
+                </div>
+                
+                <div class="filters-actions">
+                    <button type="button" class="btn-secondary" id="limpiarFiltros">
+                        <i class="fas fa-eraser"></i>
+                        Limpiar Filtros
+                    </button>
+                    <button type="submit" class="btn-primary search-button">
+                        <span class="button-text">Buscar Cambios</span>
+                        <span class="button-icon">
+                            <i class="fas fa-search"></i>
+                        </span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Panel de resultados -->
+        <div class="results-panel" id="resultsPanel" style="display: none;">
+            <div class="results-header">
+                <div class="results-info">
+                    <h3>
+                        <i class="fas fa-list-alt"></i>
+                        Resultados del Historial
+                    </h3>
+                    <div class="results-meta">
+                        <span class="results-count">
+                            <span id="resultsCount">0</span> cambios encontrados
+                        </span>
+                        <span class="results-period" id="resultsPeriod"></span>
+                    </div>
+                </div>
+                
+                <div class="results-actions">
+                    <button class="btn-action" id="nuevaBusqueda">
+                        <i class="fas fa-search-plus"></i>
+                        Nueva Búsqueda
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Tabla de resultados -->
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table class="changes-table" id="changesTable">
+                        <thead>
+                            <tr>
+                                <th class="col-tipo">
+                                    <div class="th-content">
+                                        <i class="fas fa-tag"></i>
+                                        <span>Tipo de Cambio</span>
+                                    </div>
+                                </th>
+                                <th class="col-anterior">
+                                    <div class="th-content">
+                                        <i class="fas fa-arrow-left"></i>
+                                        <span>Valor Anterior</span>
+                                    </div>
+                                </th>
+                                <th class="col-nuevo">
+                                    <div class="th-content">
+                                        <i class="fas fa-arrow-right"></i>
+                                        <span>Valor Nuevo</span>
+                                    </div>
+                                </th>
+                                <th class="col-inventario">
+                                    <div class="th-content">
+                                        <i class="fas fa-boxes"></i>
+                                        <span>ID Inventario</span>
+                                    </div>
+                                </th>
+                                <th class="col-sucursal">
+                                    <div class="th-content">
+                                        <i class="fas fa-building"></i>
+                                        <span>Sucursal</span>
+                                    </div>
+                                </th>
+                                <th class="col-usuario">
+                                    <div class="th-content">
+                                        <i class="fas fa-user"></i>
+                                        <span>Usuario</span>
+                                    </div>
+                                </th>
+                                <th class="col-fecha">
+                                    <div class="th-content">
+                                        <i class="fas fa-calendar"></i>
+                                        <span>Fecha y Hora</span>
+                                    </div>
+                                </th>
+                                <th class="col-acciones">
+                                    <div class="th-content">
+                                        <i class="fas fa-cog"></i>
+                                        <span>Acciones</span>
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="changesTableBody">
+                            <!-- Los datos se cargarán dinámicamente aquí -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Loading state -->
+                <div class="table-loading" id="tableLoading" style="display: none;">
+                    <div class="loading-content">
+                        <div class="loading-spinner"></div>
+                        <p>Cargando datos del historial...</p>
+                    </div>
+                </div>
+                
+                <!-- Empty state -->
+                <div class="table-empty" id="tableEmpty" style="display: none;">
+                    <div class="empty-content">
+                        <div class="empty-icon">
+                            <i class="fas fa-search-minus"></i>
+                        </div>
+                        <h3>No se encontraron cambios</h3>
+                        <p>No hay cambios registrados en el período seleccionado</p>
+                        <button class="btn-primary" onclick="document.getElementById('fechaDesde').focus()">
+                            <i class="fas fa-calendar-alt"></i>
+                            Cambiar Fechas
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Paginación -->
+            <div class="pagination-container" id="paginationContainer" style="display: none;">
+                <div class="pagination-info">
+                    <span>Mostrando <span id="showingFrom">1</span> - <span id="showingTo">10</span> de <span id="totalRecords">0</span> registros</span>
+                </div>
+                <div class="pagination-controls">
+                    <button class="pagination-btn" id="firstPage" disabled>
+                        <i class="fas fa-angle-double-left"></i>
+                    </button>
+                    <button class="pagination-btn" id="prevPage" disabled>
+                        <i class="fas fa-angle-left"></i>
+                        Anterior
+                    </button>
+                    <div class="pagination-pages" id="paginationPages">
+                        <!-- Se generarán dinámicamente -->
+                    </div>
+                    <button class="pagination-btn" id="nextPage">
+                        Siguiente
+                        <i class="fas fa-angle-right"></i>
+                    </button>
+                    <button class="pagination-btn" id="lastPage">
+                        <i class="fas fa-angle-double-right"></i>
+                    </button>
+                </div>
+                <div class="pagination-size">
+                    <label for="pageSize">Mostrar:</label>
+                    <select id="pageSize">
+                        <option value="10">10</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <span>por página</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modal de detalles del cambio -->
+    <div class="modal-overlay" id="changeDetailModal" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-icon">
+                    <i class="fas fa-info-circle"></i>
+                </div>
+                <div class="modal-title">
+                    <h2>Detalles del Cambio</h2>
+                    <p id="changeDetailSubtitle">Información detallada del registro</p>
+                </div>
+                <button class="modal-close" id="closeChangeDetailModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-content">
+                <div class="change-detail-content" id="changeDetailContent">
+                    <!-- El contenido se cargará dinámicamente -->
+                </div>
+            </div>
+            
+            <div class="modal-actions">
+                <button class="btn-secondary" id="closeDetailModal">
+                    <i class="fas fa-times"></i>
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../logica/HistorialFacturasCompras.js"></script>
+</body>
+</html>

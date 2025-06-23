@@ -22,7 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Verificar que los elementos críticos existen
     if (!searchForm || !searchSerie || !searchNumber || !searchButton) {
-        console.error('Error: No se encontraron algunos elementos críticos del DOM');
         return;
     }
     
@@ -142,7 +141,6 @@ async function handleSearch(e) {
     const numberElement = document.getElementById('searchNumber');
     
     if (!serieElement || !numberElement) {
-        console.error('No se encontraron los elementos de búsqueda');
         showErrorToast('Error: No se encontraron los campos de búsqueda');
         return;
     }
@@ -172,7 +170,6 @@ async function handleSearch(e) {
         }
         
     } catch (error) {
-        console.error('Error en la búsqueda:', error);
         handleSearchError(error);
     } finally {
         setLoadingState(false);
@@ -217,7 +214,6 @@ async function searchInvoice(connection, serie, numero) {
                     const branchName = await getBranchName(invoice.IdSucursalCori);
                     invoice.NombreSucursal = branchName;
                 } catch (branchError) {
-                    console.warn('Error obteniendo nombre de sucursal:', branchError);
                     invoice.NombreSucursal = 'No disponible';
                 }
             } else {
@@ -230,7 +226,6 @@ async function searchInvoice(connection, serie, numero) {
         return null;
         
     } catch (error) {
-        console.error('Error ejecutando la consulta:', error);
         throw error;
     }
 }
@@ -270,14 +265,12 @@ async function getBranchName(branchId) {
         }
         
     } catch (error) {
-        console.error('Error consultando sucursal:', error);
         throw error;
     } finally {
         if (branchConnection) {
             try {
                 await branchConnection.close();
             } catch (closeError) {
-                console.error('Error cerrando conexión de sucursal:', closeError);
             }
         }
     }
@@ -338,7 +331,6 @@ function populateInvoiceData(invoice) {
     // Guardar datos de la factura para uso posterior
     window.currentInvoice = invoice;
 }
-
 // Configurar campos editables
 function setupEditableFields() {
     const editableFields = [
@@ -346,7 +338,9 @@ function setupEditableFields() {
         { id: 'invoiceNumber', type: 'text', fieldName: 'Numero', tipoCambio: 2 },
         { id: 'socialReason', type: 'select', fieldName: 'IdRazon', tipoCambio: 3 },
         { id: 'invoiceAmount', type: 'number', fieldName: 'MontoFactura', tipoCambio: 4 },
-        { id: 'invoiceDate', type: 'date', fieldName: 'FechaFactura', tipoCambio: 5 }
+        { id: 'invoiceDate', type: 'date', fieldName: 'FechaFactura', tipoCambio: 5 },
+        // NUEVO: Agregar edición de proveedor por NIT
+        { id: 'providerNit', type: 'provider-nit', fieldName: 'NIT', tipoCambio: 6 }
     ];
 
     editableFields.forEach(field => {
@@ -363,7 +357,8 @@ function setupEditableFields() {
         }
     });
 }
-function logUpdateSummary(fieldConfig, newValue) {
+
+function logUpdateSummary(fieldConfig, newValue, selectedProvider = null) {
     const tablesUpdated = [];
     
     // Central
@@ -376,7 +371,8 @@ function logUpdateSummary(fieldConfig, newValue) {
         'Numero': true, 
         'FechaFactura': true,
         'IdRazon': true,
-        'MontoFactura': false
+        'MontoFactura': false,
+        'NIT': true // NUEVO: El proveedor sí se actualiza en inventarios
     };
     
     if (inventoryMapping[fieldConfig.fieldName]) {
@@ -391,10 +387,175 @@ function logUpdateSummary(fieldConfig, newValue) {
     // Sucursal - ordenescompra_factura
     tablesUpdated.push('✅ ordenescompra_factura (Sucursal)');
     
-    console.log(`📊 RESUMEN ACTUALIZACIÓN - Campo: ${getFieldDisplayName(fieldConfig.tipoCambio)}`);
-    console.log(`🎯 Nuevo valor: ${newValue}`);
-    console.log(`📋 Tablas actualizadas:`, tablesUpdated);
-    console.log('🔄 Sincronización completa exitosa');
+    let displayValue = newValue;
+    if (fieldConfig.fieldName === 'NIT' && selectedProvider) {
+        displayValue = `${selectedProvider.Nombre} (${formatNIT(selectedProvider.NIT)})`;
+    }
+}
+// Crear input especial para NIT de proveedor con búsqueda automática
+async function createProviderNitInput(currentNit) {
+    const container = document.createElement('div');
+    container.className = 'provider-nit-container';
+    
+    // Input para el NIT
+    const nitInput = document.createElement('input');
+    nitInput.type = 'text';
+    nitInput.className = 'inline-edit-input provider-nit-input';
+    nitInput.value = currentNit || '';
+    nitInput.placeholder = 'Ingrese el NIT del proveedor';
+    
+    // Contenedor de información del proveedor
+    const providerInfo = document.createElement('div');
+    providerInfo.className = 'provider-info-display';
+    providerInfo.style.marginTop = '8px';
+    
+    // Función para buscar proveedor por NIT
+    const searchProvider = async (nit) => {
+        if (!nit || nit.trim().length < 3) {
+            providerInfo.innerHTML = '';
+            return null;
+        }
+        
+        try {
+            providerInfo.innerHTML = `
+                <div class="provider-searching">
+                    <i class="fas fa-spinner fa-spin"></i> Buscando proveedor...
+                </div>
+            `;
+            
+            const connection = await odbc.connect('DSN=facturas;charset=utf8');
+            
+            const query = `
+                SELECT 
+                    Id,
+                    Nombre,
+                    NIT
+                FROM proveedores_facturas 
+                WHERE NIT = ? OR NIT LIKE ?
+                ORDER BY 
+                    CASE WHEN NIT = ? THEN 1 ELSE 2 END,
+                    Nombre
+                LIMIT 5
+            `;
+            
+            const searchPattern = `%${nit}%`;
+            const result = await connection.query(query, [nit, searchPattern, nit]);
+            await connection.close();
+            
+            if (result.length === 0) {
+                providerInfo.innerHTML = `
+                    <div class="provider-not-found">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>No se encontró proveedor con NIT: ${nit}</span>
+                    </div>
+                `;
+                return null;
+            }
+            
+            if (result.length === 1) {
+                const provider = result[0];
+                providerInfo.innerHTML = `
+                    <div class="provider-found">
+                        <i class="fas fa-check-circle"></i>
+                        <div class="provider-details">
+                            <strong>${provider.Nombre}</strong>
+                            <div class="provider-nit">NIT: ${formatNIT(provider.NIT)}</div>
+                        </div>
+                    </div>
+                `;
+                return provider;
+            }
+            
+            // Múltiples resultados - mostrar lista para selección
+            const optionsHtml = result.map((provider, index) => `
+                <div class="provider-option" data-provider-id="${provider.Id}" data-provider-nit="${provider.NIT}" data-provider-name="${provider.Nombre}">
+                    <i class="fas fa-building"></i>
+                    <div class="provider-option-details">
+                        <strong>${provider.Nombre}</strong>
+                        <div class="provider-option-nit">NIT: ${formatNIT(provider.NIT)}</div>
+                    </div>
+                    <button type="button" class="select-provider-btn" data-index="${index}">
+                        <i class="fas fa-check"></i>
+                    </button>
+                </div>
+            `).join('');
+            
+            providerInfo.innerHTML = `
+                <div class="provider-multiple">
+                    <div class="provider-multiple-header">
+                        <i class="fas fa-list"></i>
+                        <span>Se encontraron ${result.length} proveedores. Seleccione uno:</span>
+                    </div>
+                    <div class="provider-options">
+                        ${optionsHtml}
+                    </div>
+                </div>
+            `;
+            
+            // Agregar event listeners para selección
+            providerInfo.querySelectorAll('.select-provider-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.closest('.select-provider-btn').dataset.index);
+                    const selectedProvider = result[index];
+                    
+                    // Actualizar el input con el NIT seleccionado
+                    nitInput.value = selectedProvider.NIT;
+                    
+                    // Mostrar el proveedor seleccionado
+                    providerInfo.innerHTML = `
+                        <div class="provider-selected">
+                            <i class="fas fa-check-circle"></i>
+                            <div class="provider-details">
+                                <strong>${selectedProvider.Nombre}</strong>
+                                <div class="provider-nit">NIT: ${formatNIT(selectedProvider.NIT)}</div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Guardar proveedor seleccionado
+                    container.selectedProvider = selectedProvider;
+                });
+            });
+            
+            return null; // No hay selección automática
+            
+        } catch (error) {
+            providerInfo.innerHTML = `
+                <div class="provider-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Error al buscar proveedor: ${error.message}</span>
+                </div>
+            `;
+            return null;
+        }
+    };
+    
+    // Búsqueda con debounce
+    let searchTimeout;
+    nitInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        const nit = e.target.value.trim();
+        
+        searchTimeout = setTimeout(async () => {
+            const provider = await searchProvider(nit);
+            if (provider) {
+                container.selectedProvider = provider;
+            }
+        }, 500); // Debounce de 500ms
+    });
+    
+    // Búsqueda inicial si hay valor
+    if (currentNit) {
+        setTimeout(() => searchProvider(currentNit), 100);
+    }
+    
+    container.appendChild(nitInput);
+    container.appendChild(providerInfo);
+    
+    // Exponer el input principal para el manejo de eventos
+    container.mainInput = nitInput;
+    
+    return container;
 }
 // Habilitar edición inline
 async function enableInlineEdit(element, fieldConfig) {
@@ -414,6 +575,9 @@ async function enableInlineEdit(element, fieldConfig) {
     
     if (fieldConfig.type === 'select' && fieldConfig.fieldName === 'IdRazon') {
         editElement = await createSocialReasonSelect(window.currentInvoice.IdRazon);
+    } else if (fieldConfig.type === 'provider-nit') {
+        // NUEVO: Crear input especial para NIT de proveedor
+        editElement = await createProviderNitInput(originalValue);
     } else {
         editElement = createInputElement(fieldConfig.type, originalValue);
     }
@@ -439,17 +603,29 @@ async function enableInlineEdit(element, fieldConfig) {
     const handleSave = async () => {
         let newValue;
         let newDisplayValue;
+        let selectedProvider = null;
         
         if (fieldConfig.type === 'select') {
             const selectedOption = editElement.options[editElement.selectedIndex];
             newValue = editElement.value;
             newDisplayValue = selectedOption ? selectedOption.text : '';
             
-            // *** VALIDACIÓN ADICIONAL PARA RAZÓN SOCIAL ***
             if (fieldConfig.fieldName === 'IdRazon' && !newValue) {
                 showErrorToast('Debe seleccionar una razón social válida');
                 return;
             }
+            
+        } else if (fieldConfig.type === 'provider-nit') {
+            // NUEVO: Manejo especial para proveedor por NIT
+            newValue = editElement.mainInput.value.trim();
+            selectedProvider = editElement.selectedProvider;
+            
+            if (!selectedProvider) {
+                showErrorToast('Debe seleccionar un proveedor válido');
+                return;
+            }
+            
+            newDisplayValue = formatNIT(selectedProvider.NIT);
             
         } else if (fieldConfig.type === 'number') {
             newValue = parseFloat(editElement.value);
@@ -463,20 +639,29 @@ async function enableInlineEdit(element, fieldConfig) {
         }
         
         // Validar que hay cambios
-        if (newValue.toString() === originalValue.toString()) {
-            cancelEdit();
-            showInfoToast('No se realizaron cambios');
-            return;
+        if (fieldConfig.type === 'provider-nit') {
+            // Para proveedor, comparar por ID
+            if (selectedProvider && selectedProvider.NIT === originalValue) {
+                cancelEdit();
+                showInfoToast('No se realizaron cambios');
+                return;
+            }
+        } else {
+            if (newValue.toString() === originalValue.toString()) {
+                cancelEdit();
+                showInfoToast('No se realizaron cambios');
+                return;
+            }
         }
         
         // Validaciones específicas
-        if (!validateFieldValue(fieldConfig, newValue)) {
+        if (!validateFieldValue(fieldConfig, newValue, selectedProvider)) {
             return;
         }
         
         try {
             // Confirmar cambio
-            const confirmed = await confirmChange(fieldConfig, currentDisplayValue, newDisplayValue);
+            const confirmed = await confirmChange(fieldConfig, currentDisplayValue, newDisplayValue, selectedProvider);
             if (!confirmed) {
                 return;
             }
@@ -510,10 +695,10 @@ async function enableInlineEdit(element, fieldConfig) {
             });
             
             // Guardar en base de datos (central y sucursal)
-            await saveFieldChange(fieldConfig, originalValue, newValue);
+            await saveFieldChange(fieldConfig, originalValue, newValue, selectedProvider);
             
             // Log del resumen completo
-            logUpdateSummary(fieldConfig, newValue);
+            logUpdateSummary(fieldConfig, newValue, selectedProvider);
             
             // Cerrar loading
             Swal.close();
@@ -523,7 +708,7 @@ async function enableInlineEdit(element, fieldConfig) {
             element.classList.add('field-updated');
             
             // Actualizar el objeto currentInvoice
-            updateCurrentInvoiceObject(fieldConfig, newValue, newDisplayValue);
+            updateCurrentInvoiceObject(fieldConfig, newValue, newDisplayValue, selectedProvider);
             
             // Resetear estado
             isEditing = false;
@@ -540,8 +725,6 @@ async function enableInlineEdit(element, fieldConfig) {
         } catch (error) {
             // Cerrar loading si está abierto
             Swal.close();
-            
-            console.error('Error guardando cambio:', error);
             showErrorToast('❌ Error al sincronizar el sistema: ' + error.message);
         }
     };
@@ -567,6 +750,7 @@ async function enableInlineEdit(element, fieldConfig) {
         }
     });
 }
+
 // Obtener valor original del campo
 function getOriginalValue(element, fieldConfig) {
     const invoice = window.currentInvoice;
@@ -581,7 +765,6 @@ function getOriginalValue(element, fieldConfig) {
         case 'MontoFactura':
             return invoice.MontoFactura || 0;
         case 'FechaFactura':
-            // CORREGIDO: Extraer solo la fecha sin la parte de tiempo
             if (invoice.FechaFactura) {
                 const dateOnly = invoice.FechaFactura.includes('T') 
                     ? invoice.FechaFactura.split('T')[0] 
@@ -589,10 +772,13 @@ function getOriginalValue(element, fieldConfig) {
                 return dateOnly;
             }
             return '';
+        case 'NIT':
+            return invoice.NIT || '';
         default:
             return '';
     }
 }
+
 function validateDate(dateString) {
     if (!dateString) return false;
     
@@ -613,6 +799,7 @@ function validateDate(dateString) {
         return false;
     }
 }
+
 // Crear elemento de entrada
 function createInputElement(type, value) {
     const input = document.createElement('input');
@@ -669,7 +856,6 @@ async function createSocialReasonSelect(currentIdRazon) {
         });
         
     } catch (error) {
-        console.error('Error cargando razones sociales:', error);
         showErrorToast('Error cargando razones sociales');
     }
     
@@ -698,7 +884,7 @@ function createActionButtons() {
 }
 
 // Validar valor del campo
-function validateFieldValue(fieldConfig, value) {
+function validateFieldValue(fieldConfig, value, selectedProvider = null) {
     switch (fieldConfig.fieldName) {
         case 'Serie':
         case 'Numero':
@@ -735,10 +921,20 @@ function validateFieldValue(fieldConfig, value) {
                 showErrorToast('Debe seleccionar una fecha');
                 return false;
             }
-            
-            // VALIDACIÓN CORREGIDA para fechas
             if (!validateDate(value)) {
                 showErrorToast('La fecha no puede ser futura');
+                return false;
+            }
+            break;
+            
+        // NUEVO: Validar NIT y proveedor
+        case 'NIT':
+            if (!value || value.trim() === '') {
+                showErrorToast('Debe ingresar un NIT');
+                return false;
+            }
+            if (!selectedProvider) {
+                showErrorToast('Debe seleccionar un proveedor válido con el NIT ingresado');
                 return false;
             }
             break;
@@ -748,16 +944,32 @@ function validateFieldValue(fieldConfig, value) {
 }
 
 // Confirmar cambio
-async function confirmChange(fieldConfig, oldDisplayValue, newDisplayValue) {
+async function confirmChange(fieldConfig, oldDisplayValue, newDisplayValue, selectedProvider = null) {
+    let changeDetails = `
+        <div style="text-align: left; margin: 20px 0;">
+            <p><strong>Campo:</strong> ${getFieldDisplayName(fieldConfig.tipoCambio)}</p>
+            <p><strong>Valor anterior:</strong> ${oldDisplayValue}</p>
+            <p><strong>Valor nuevo:</strong> ${newDisplayValue}</p>
+    `;
+    
+    // NUEVO: Agregar detalles del proveedor si aplica
+    if (fieldConfig.fieldName === 'NIT' && selectedProvider) {
+        changeDetails += `
+            <hr style="margin: 15px 0;">
+            <p><strong>Proveedor seleccionado:</strong></p>
+            <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 5px 0;">
+                <p style="margin: 2px 0;"><strong>Nombre:</strong> ${selectedProvider.Nombre}</p>
+                <p style="margin: 2px 0;"><strong>NIT:</strong> ${formatNIT(selectedProvider.NIT)}</p>
+                <p style="margin: 2px 0;"><strong>ID:</strong> ${selectedProvider.Id}</p>
+            </div>
+        `;
+    }
+    
+    changeDetails += `</div>`;
+    
     const result = await Swal.fire({
         title: '¿Confirmar cambio?',
-        html: `
-            <div style="text-align: left; margin: 20px 0;">
-                <p><strong>Campo:</strong> ${getFieldDisplayName(fieldConfig.tipoCambio)}</p>
-                <p><strong>Valor anterior:</strong> ${oldDisplayValue}</p>
-                <p><strong>Valor nuevo:</strong> ${newDisplayValue}</p>
-            </div>
-        `,
+        html: changeDetails,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#4caf50',
@@ -776,31 +988,31 @@ function getFieldDisplayName(tipoCambio) {
         2: 'Número',
         3: 'Razón Social',
         4: 'Monto Facturado',
-        5: 'Fecha Factura'
+        5: 'Fecha Factura',
+        6: 'Proveedor'
     };
     return names[tipoCambio] || 'Campo';
 }
 
 // Guardar cambio en base de datos
-async function saveFieldChange(fieldConfig, oldValue, newValue) {
+async function saveFieldChange(fieldConfig, oldValue, newValue, selectedProvider = null) {
     let connection = null;
-    let branchConnection = null;
     
     try {
         // 1. ACTUALIZAR EN LA BASE DE DATOS CENTRAL (DSN=facturas)
         connection = await odbc.connect('DSN=facturas;charset=utf8');
         
         // Actualizar la factura en la base central
-        await updateInvoiceField(connection, fieldConfig, newValue);
+        await updateInvoiceField(connection, fieldConfig, newValue, selectedProvider);
         
         // Registrar el cambio en el historial
-        await logFieldChange(connection, fieldConfig, oldValue, newValue);
+        await logFieldChange(connection, fieldConfig, oldValue, newValue, selectedProvider);
         
         await connection.close();
         connection = null;
         
         // 2. ACTUALIZAR EN LA BASE DE DATOS DE LA SUCURSAL (MySQL)
-        await updateBranchInventory(fieldConfig, newValue);
+        await updateBranchInventory(fieldConfig, newValue, selectedProvider);
         
     } catch (error) {
         // Cerrar conexiones en caso de error
@@ -808,26 +1020,24 @@ async function saveFieldChange(fieldConfig, oldValue, newValue) {
             try {
                 await connection.close();
             } catch (closeError) {
-                console.error('Error cerrando conexión central:', closeError);
             }
         }
         
         throw error;
     }
 }
-async function updateBranchInventory(fieldConfig, newValue) {
+
+async function updateBranchInventory(fieldConfig, newValue, selectedProvider = null) {
     let branchConnection = null;
     
     try {
         // Verificar que tenemos los datos de conexión de la sucursal
         if (!window.branchConnectionData) {
-            console.warn('No hay datos de conexión de sucursal disponibles');
-            return; // No es un error crítico, solo advertencia
+            return;
         }
         
         // Verificar que tenemos el IdInventory
         if (!window.currentInvoice.IdInventory) {
-            console.warn('No se encontró IdInventory para actualizar en sucursal');
             return;
         }
         
@@ -838,63 +1048,48 @@ async function updateBranchInventory(fieldConfig, newValue) {
             user: window.branchConnectionData.user,
             password: window.branchConnectionData.password,
             port: 3306,
-            connectTimeout: 10000,
-            acquireTimeout: 10000
+            connectTimeout: 10000
         });
         
         // Actualizar en las tres tablas de la sucursal
-        await updateInventoryField(branchConnection, fieldConfig, newValue);
-        await updateBranchFacturasCompras(branchConnection, fieldConfig, newValue);
-        await updateBranchOrdenesCompraFactura(branchConnection, fieldConfig, newValue);
-        
-        console.log('Todas las tablas de sucursal actualizadas exitosamente');
+        await updateInventoryField(branchConnection, fieldConfig, newValue, selectedProvider);
+        await updateBranchFacturasCompras(branchConnection, fieldConfig, newValue, selectedProvider);
+        await updateBranchOrdenesCompraFactura(branchConnection, fieldConfig, newValue, selectedProvider);
         
     } catch (error) {
-        console.error('Error actualizando datos en sucursal:', error);
-        // No lanzar error para que no afecte la actualización central
         showWarningToast('Advertencia: No se pudo actualizar completamente la información en la sucursal');
     } finally {
         if (branchConnection) {
             try {
                 await branchConnection.end();
             } catch (closeError) {
-                console.error('Error cerrando conexión de sucursal:', closeError);
             }
         }
     }
 }
-async function updateBranchOrdenesCompraFactura(branchConnection, fieldConfig, newValue) {
+async function updateBranchOrdenesCompraFactura(branchConnection, fieldConfig, newValue, selectedProvider = null) {
     let updateQuery;
     let queryParams;
     
-    // Mapear los campos de facturas_compras central a ordenescompra_factura sucursal
     const fieldMapping = {
         'Serie': 'Serie_Factura',
         'Numero': 'Numero_Factura', 
         'MontoFactura': 'Monto_Factura',
         'FechaFactura': 'Fecha_Factura',
-        'IdRazon': 'IdRazonSocial_Factura'
+        'IdRazon': 'IdRazonSocial_Factura',
+        'NIT': 'IdProveedor_Factura' // NUEVO: Mapear NIT a IdProveedor_Factura
     };
     
     const ordenField = fieldMapping[fieldConfig.fieldName];
     
-    // Todos los campos se mapean a ordenescompra_factura en sucursal
     if (!ordenField) {
-        console.log(`Campo ${fieldConfig.fieldName} no reconocido para ordenescompra_factura sucursal`);
         return;
     }
     
     if (fieldConfig.fieldName === 'IdRazon') {
-        // Para razón social, actualizar tanto IdRazonSocial_Factura como RazonSocial_Factura
-        // Obtener el nombre de la razón social desde la base central
+        // Código existente para razón social
         const connection = await odbc.connect('DSN=facturas;charset=utf8');
-        
-        const razonQuery = `
-            SELECT NombreRazon 
-            FROM razonessociales 
-            WHERE Id = ?
-        `;
-        
+        const razonQuery = `SELECT NombreRazon FROM razonessociales WHERE Id = ?`;
         const razonResult = await connection.query(razonQuery, [newValue]);
         await connection.close();
         
@@ -903,69 +1098,68 @@ async function updateBranchOrdenesCompraFactura(branchConnection, fieldConfig, n
         }
         
         const nombreRazon = razonResult[0].NombreRazon;
-        
-        // Actualizar ambos campos en ordenescompra_factura sucursal
         updateQuery = `
             UPDATE ordenescompra_factura 
             SET IdRazonSocial_Factura = ?, RazonSocial_Factura = ?
             WHERE IdInventario = ?
         `;
-        
         queryParams = [newValue, nombreRazon, window.currentInvoice.IdInventory];
         
+    } else if (fieldConfig.fieldName === 'NIT') {
+        // NUEVO: Para cambio de proveedor
+        if (!selectedProvider) {
+            throw new Error('No se proporcionó información del proveedor para actualizar ordenescompra_factura sucursal');
+        }
+        
+        updateQuery = `
+            UPDATE ordenescompra_factura 
+            SET IdProveedor_Factura = ?, NITProveedor_Factura = ?, NombreProveedor_Factura = ?
+            WHERE IdInventario = ?
+        `;
+        queryParams = [selectedProvider.Id, selectedProvider.NIT, selectedProvider.Nombre, window.currentInvoice.IdInventory];
+        
     } else {
-        // Para otros campos (Serie_Factura, Numero_Factura, Monto_Factura, Fecha_Factura)
+        // Para otros campos
         updateQuery = `
             UPDATE ordenescompra_factura 
             SET ${ordenField} = ? 
             WHERE IdInventario = ?
         `;
-        
         queryParams = [newValue, window.currentInvoice.IdInventory];
     }
     
-    // Ejecutar la actualización
     const [result] = await branchConnection.execute(updateQuery, queryParams);
     
-    // Verificar que se actualizó al menos un registro
     if (result.affectedRows === 0) {
-        console.warn(`No se encontró ordenescompra_factura con IdInventario: ${window.currentInvoice.IdInventory} en la sucursal`);
+
     } else {
-        console.log(`ordenescompra_factura actualizada en sucursal. Registros afectados: ${result.affectedRows}`);
+
     }
 }
-async function updateBranchFacturasCompras(branchConnection, fieldConfig, newValue) {
+
+async function updateBranchFacturasCompras(branchConnection, fieldConfig, newValue, selectedProvider = null) {
     let updateQuery;
     let queryParams;
     
-    // Mapear los campos de facturas_compras central a facturas_compras sucursal
     const fieldMapping = {
         'Serie': 'Serie',
         'Numero': 'Numero', 
         'MontoFactura': 'MontoFactura',
         'FechaFactura': 'FechaFactura',
-        'IdRazon': 'IdRazon'
+        'IdRazon': 'IdRazon',
+        'NIT': 'IdProveedor' // NUEVO: Mapear NIT a IdProveedor
     };
     
     const branchField = fieldMapping[fieldConfig.fieldName];
     
-    // Todos los campos se mapean a facturas_compras en sucursal
     if (!branchField) {
-        console.log(`Campo ${fieldConfig.fieldName} no reconocido para facturas_compras sucursal`);
         return;
     }
     
     if (fieldConfig.fieldName === 'IdRazon') {
-        // Para razón social, actualizar tanto IdRazon como NombreRazon
-        // Obtener el nombre de la razón social desde la base central
+        // Código existente para razón social
         const connection = await odbc.connect('DSN=facturas;charset=utf8');
-        
-        const razonQuery = `
-            SELECT NombreRazon 
-            FROM razonessociales 
-            WHERE Id = ?
-        `;
-        
+        const razonQuery = `SELECT NombreRazon FROM razonessociales WHERE Id = ?`;
         const razonResult = await connection.query(razonQuery, [newValue]);
         await connection.close();
         
@@ -974,70 +1168,69 @@ async function updateBranchFacturasCompras(branchConnection, fieldConfig, newVal
         }
         
         const nombreRazon = razonResult[0].NombreRazon;
-        
-        // Actualizar ambos campos en facturas_compras sucursal
         updateQuery = `
             UPDATE facturas_compras 
             SET IdRazon = ?, NombreRazon = ?
             WHERE IdInventarios = ?
         `;
-        
         queryParams = [newValue, nombreRazon, window.currentInvoice.IdInventory];
         
+    } else if (fieldConfig.fieldName === 'NIT') {
+        // NUEVO: Para cambio de proveedor
+        if (!selectedProvider) {
+            throw new Error('No se proporcionó información del proveedor para actualizar facturas_compras sucursal');
+        }
+        
+        updateQuery = `
+            UPDATE facturas_compras 
+            SET IdProveedor = ?, NombreProveedor = ?
+            WHERE IdInventarios = ?
+        `;
+        queryParams = [selectedProvider.Id, selectedProvider.Nombre, window.currentInvoice.IdInventory];
+        
     } else {
-        // Para otros campos (Serie, Numero, MontoFactura, FechaFactura)
+        // Para otros campos
         updateQuery = `
             UPDATE facturas_compras 
             SET ${branchField} = ? 
             WHERE IdInventarios = ?
         `;
-        
         queryParams = [newValue, window.currentInvoice.IdInventory];
     }
     
-    // Ejecutar la actualización
     const [result] = await branchConnection.execute(updateQuery, queryParams);
     
-    // Verificar que se actualizó al menos un registro
     if (result.affectedRows === 0) {
-        console.warn(`No se encontró facturas_compras con IdInventarios: ${window.currentInvoice.IdInventory} en la sucursal`);
+
     } else {
-        console.log(`facturas_compras actualizada en sucursal. Registros afectados: ${result.affectedRows}`);
+
     }
 }
+
 // Función para actualizar campo específico en tabla inventarios de sucursal
-async function updateInventoryField(branchConnection, fieldConfig, newValue) {
+async function updateInventoryField(branchConnection, fieldConfig, newValue, selectedProvider = null) {
     let updateQuery;
     let queryParams;
     
-    // Mapear los campos de facturas_compras a inventarios
     const fieldMapping = {
         'Serie': 'Serie',
         'Numero': 'Numero', 
         'FechaFactura': 'FechaFactura',
         'IdRazon': 'IdRazon',
-        'MontoFactura': null // Este campo NO existe en inventarios
+        'MontoFactura': null,
+        'NIT': 'IdProveedores' // NUEVO: Mapear NIT a IdProveedores
     };
     
     const inventoryField = fieldMapping[fieldConfig.fieldName];
     
-    // Si el campo no se mapea a inventarios, no hacer nada
     if (inventoryField === null) {
-        console.log(`Campo ${fieldConfig.fieldName} no se actualiza en inventarios`);
         return;
     }
     
     if (fieldConfig.fieldName === 'IdRazon') {
-        // Para razón social, actualizar tanto IdRazon como NombreRazon
-        // Obtener el nombre de la razón social desde la base central
+        // Código existente para razón social
         const connection = await odbc.connect('DSN=facturas;charset=utf8');
-        
-        const razonQuery = `
-            SELECT NombreRazon 
-            FROM razonessociales 
-            WHERE Id = ?
-        `;
-        
+        const razonQuery = `SELECT NombreRazon FROM razonessociales WHERE Id = ?`;
         const razonResult = await connection.query(razonQuery, [newValue]);
         await connection.close();
         
@@ -1046,52 +1239,53 @@ async function updateInventoryField(branchConnection, fieldConfig, newValue) {
         }
         
         const nombreRazon = razonResult[0].NombreRazon;
-        
-        // Actualizar ambos campos en inventarios
         updateQuery = `
             UPDATE inventarios 
             SET IdRazon = ?, NombreRazon = ?
             WHERE IdInventarios = ?
         `;
-        
         queryParams = [newValue, nombreRazon, window.currentInvoice.IdInventory];
         
+    } else if (fieldConfig.fieldName === 'NIT') {
+        // NUEVO: Para cambio de proveedor
+        if (!selectedProvider) {
+            throw new Error('No se proporcionó información del proveedor para actualizar inventarios sucursal');
+        }
+        
+        updateQuery = `
+            UPDATE inventarios 
+            SET IdProveedores = ?, Proveedor = ?
+            WHERE IdInventarios = ?
+        `;
+        queryParams = [selectedProvider.Id, selectedProvider.Nombre, window.currentInvoice.IdInventory];
+        
     } else {
-        // Para otros campos (Serie, Numero, FechaFactura)
+        // Para otros campos
         updateQuery = `
             UPDATE inventarios 
             SET ${inventoryField} = ? 
             WHERE IdInventarios = ?
         `;
-        
         queryParams = [newValue, window.currentInvoice.IdInventory];
     }
     
-    // Ejecutar la actualización
     const [result] = await branchConnection.execute(updateQuery, queryParams);
     
-    // Verificar que se actualizó al menos un registro
     if (result.affectedRows === 0) {
-        console.warn(`No se encontró inventario con IdInventarios: ${window.currentInvoice.IdInventory} en la sucursal`);
+
     } else {
-        console.log(`Inventario actualizado en sucursal. Registros afectados: ${result.affectedRows}`);
+
     }
 }
 
 // Actualizar campo en la tabla facturas_compras
-async function updateInvoiceField(connection, fieldConfig, newValue) {
+async function updateInvoiceField(connection, fieldConfig, newValue, selectedProvider = null) {
     let updateQuery;
     let queryParams;
     
     if (fieldConfig.fieldName === 'IdRazon') {
-        // Para razón social, necesitamos actualizar tanto IdRazon como NombreRazon
-        // Primero obtenemos el nombre de la razón social seleccionada
-        const razonQuery = `
-            SELECT NombreRazon 
-            FROM razonessociales 
-            WHERE Id = ?
-        `;
-        
+        // Para razón social (código existente)
+        const razonQuery = `SELECT NombreRazon FROM razonessociales WHERE Id = ?`;
         const razonResult = await connection.query(razonQuery, [newValue]);
         
         if (razonResult.length === 0) {
@@ -1099,35 +1293,80 @@ async function updateInvoiceField(connection, fieldConfig, newValue) {
         }
         
         const nombreRazon = razonResult[0].NombreRazon;
-        
-        // Actualizar ambos campos
         updateQuery = `
             UPDATE facturas_compras 
             SET IdRazon = ?, NombreRazon = ?
             WHERE Id = ?
         `;
-        
         queryParams = [newValue, nombreRazon, window.currentInvoice.Id];
         
+    } else if (fieldConfig.fieldName === 'NIT') {
+        // NUEVO: Para cambio de proveedor
+        if (!selectedProvider) {
+            throw new Error('No se proporcionó información del proveedor seleccionado');
+        }
+        
+        updateQuery = `
+            UPDATE facturas_compras 
+            SET IdProveedor = ?, NombreProveedor = ?, NIT = ?
+            WHERE Id = ?
+        `;
+        queryParams = [selectedProvider.Id, selectedProvider.Nombre, selectedProvider.NIT, window.currentInvoice.Id];
+        
     } else {
-        // Para otros campos, mantener el comportamiento original
+        // Para otros campos (código existente)
         updateQuery = `
             UPDATE facturas_compras 
             SET ${fieldConfig.fieldName} = ? 
             WHERE Id = ?
         `;
-        
         queryParams = [newValue, window.currentInvoice.Id];
     }
     
     await connection.query(updateQuery, queryParams);
 }
 
-
 // Registrar cambio en historial
-async function logFieldChange(connection, fieldConfig, oldValue, newValue) {
+async function logFieldChange(connection, fieldConfig, oldValue, newValue, selectedProvider = null) {
     const userId = localStorage.getItem('userId') || '0';
     const userName = localStorage.getItem('userName') || 'Usuario Desconocido';
+    
+    let valorAnterior = oldValue.toString();
+    let valorNuevo = newValue.toString();
+    
+    // NUEVO: Para cambios de proveedor, registrar información más detallada
+    if (fieldConfig.fieldName === 'NIT' && selectedProvider) {
+        const currentProvider = `${window.currentInvoice.Nombre} (${formatNIT(window.currentInvoice.NIT)})`;
+        const newProvider = `${selectedProvider.Nombre} (${formatNIT(selectedProvider.NIT)})`;
+        
+        valorAnterior = currentProvider;
+        valorNuevo = newProvider;
+    }
+    
+    // NUEVO: Para cambios de razón social, guardar NOMBRES en lugar de IDs
+    if (fieldConfig.fieldName === 'IdRazon') {
+        try {
+            // Obtener nombre de la razón social anterior
+            const oldRazonName = window.currentInvoice.NombreRazon || 'No disponible';
+            
+            // Obtener nombre de la nueva razón social
+            const newRazonQuery = `
+                SELECT NombreRazon 
+                FROM razonessociales 
+                WHERE Id = ?
+            `;
+            
+            const newRazonResult = await connection.query(newRazonQuery, [newValue]);
+            const newRazonName = newRazonResult.length > 0 ? newRazonResult[0].NombreRazon : 'No encontrada';
+            
+            valorAnterior = oldRazonName;
+            valorNuevo = newRazonName;
+            
+        } catch (error) {
+            valorAnterior = `ID: ${oldValue}`;
+            valorNuevo = `ID: ${newValue}`;
+        }
+    }
     
     const insertQuery = `
         INSERT INTO CambiosFacturasHistorial (
@@ -1144,41 +1383,60 @@ async function logFieldChange(connection, fieldConfig, oldValue, newValue) {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
-    await connection.query(insertQuery, [
-        fieldConfig.tipoCambio,
-        getFieldDisplayName(fieldConfig.tipoCambio),
-        oldValue.toString(),
-        newValue.toString(),
-        window.currentInvoice.IdInventory || '',
-        window.currentInvoice.IdSucursalCori || 0,
-        window.currentInvoice.NombreSucursal || '',
-        window.currentInvoice.Id,
-        parseInt(userId),
-        userName
-    ]);
+    try {
+        const result = await connection.query(insertQuery, [
+            fieldConfig.tipoCambio,
+            getFieldDisplayName(fieldConfig.tipoCambio),
+            valorAnterior,
+            valorNuevo,
+            window.currentInvoice.IdInventory || '',
+            window.currentInvoice.IdSucursalCori || 0,
+            window.currentInvoice.NombreSucursal || '',
+            window.currentInvoice.Id,
+            parseInt(userId),
+            userName
+        ]);
+        return result;
+        
+    } catch (error) {
+        throw error;
+    }
 }
 
 // Actualizar objeto currentInvoice
-function updateCurrentInvoiceObject(fieldConfig, newValue, newDisplayValue) {
-    switch (fieldConfig.fieldName) {
-        case 'Serie':
-            window.currentInvoice.Serie = newValue;
-            break;
-        case 'Numero':
-            window.currentInvoice.Numero = newValue;
-            break;
-        case 'IdRazon':
-            window.currentInvoice.IdRazon = newValue;
-            window.currentInvoice.NombreRazon = newDisplayValue;
-            // *** NUEVO: También actualizar el campo NombreRazon en el objeto ***
-            break;
-        case 'MontoFactura':
-            window.currentInvoice.MontoFactura = newValue;
-            break;
-        case 'FechaFactura':
-            window.currentInvoice.FechaFactura = newValue;
-            break;
-    }
+function updateCurrentInvoiceObject(fieldConfig, newValue, newDisplayValue, selectedProvider = null) {
+   switch (fieldConfig.fieldName) {
+       case 'Serie':
+           window.currentInvoice.Serie = newValue;
+           break;
+       case 'Numero':
+           window.currentInvoice.Numero = newValue;
+           break;
+       case 'IdRazon':
+           window.currentInvoice.IdRazon = newValue;
+           window.currentInvoice.NombreRazon = newDisplayValue;
+           break;
+       case 'MontoFactura':
+           window.currentInvoice.MontoFactura = newValue;
+           break;
+       case 'FechaFactura':
+           window.currentInvoice.FechaFactura = newValue;
+           break;
+       // NUEVO: Actualizar información del proveedor
+       case 'NIT':
+           if (selectedProvider) {
+               window.currentInvoice.NIT = selectedProvider.NIT;
+               window.currentInvoice.Nombre = selectedProvider.Nombre;
+               window.currentInvoice.IdProveedor = selectedProvider.Id;
+               
+               // Actualizar también la UI del proveedor
+               const providerNameElement = document.getElementById('providerName');
+               if (providerNameElement) {
+                   providerNameElement.textContent = selectedProvider.Nombre;
+               }
+           }
+           break;
+   }
 }
 
 // Mostrar toast informativo
@@ -1311,14 +1569,10 @@ async function handleAddCreditNote() {
         // Llenar información de la factura original
         fillOriginalInvoiceInfo();
         
-        // Establecer fecha actual por defecto
-        setDefaultDate();
-        
         // Mostrar el modal
         showCreditNoteModal();
         
     } catch (error) {
-        console.error('Error al abrir formulario de nota de crédito:', error);
         handleCreditNoteError(error);
     }
 }
@@ -1351,7 +1605,6 @@ async function loadCreditNoteTypes() {
         });
         
     } catch (error) {
-        console.error('Error cargando tipos de nota de crédito:', error);
         throw error;
     }
 }
@@ -1366,17 +1619,6 @@ function fillOriginalInvoiceInfo() {
         formatCurrency(invoice.MontoFactura);
     document.getElementById('originalProvider').textContent = 
         invoice.Nombre || 'No disponible';
-}
-
-// Establecer fecha actual por defecto
-function setDefaultDate() {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const formattedDate = `${year}-${month}-${day}`;
-    
-    document.getElementById('creditNoteDate').value = formattedDate;
 }
 
 // Mostrar modal de nota de crédito
@@ -1434,24 +1676,17 @@ function selectConceptType(conceptType) {
 }
 
 // Manejar envío del formulario de nota de crédito
-function handleCreditNoteSubmit(e) {
+async function handleCreditNoteSubmit(e) {
     e.preventDefault();
-    
-    // Validar que se haya seleccionado un concepto
     if (!window.selectedConcept) {
         showErrorToast('Debe seleccionar un tipo de concepto (Mercadería u Otros conceptos)');
         return;
     }
-    
-    // Obtener datos del formulario
     const formData = getCreditNoteFormData();
-    
-    // Validar datos
-    if (!validateCreditNoteData(formData)) {
-        return;
+    const isValid = await validateCreditNoteData(formData);
+    if (!isValid) {
+        return; // No continuar si hay errores o duplicados
     }
-    
-    // Mostrar confirmación
     confirmCreditNoteCreation(formData);
 }
 
@@ -1470,7 +1705,8 @@ function getCreditNoteFormData() {
 }
 
 // Validar datos de la nota de crédito
-function validateCreditNoteData(data) {
+async function validateCreditNoteData(data) {
+    // Validaciones básicas existentes
     if (!data.typeId) {
         showErrorToast('Debe seleccionar un tipo de nota de crédito');
         document.getElementById('creditNoteType').focus();
@@ -1502,15 +1738,27 @@ function validateCreditNoteData(data) {
     }
     
     if (!data.date) {
-        showErrorToast('Debe seleccionar la fecha de la nota');
+        showErrorToast('⚠️ Debe seleccionar la fecha de la nota de crédito');
         document.getElementById('creditNoteDate').focus();
+        
+        // Opcional: Resaltar visualmente el campo
+        const dateField = document.getElementById('creditNoteDate');
+        dateField.style.borderColor = '#ff5e6d';
+        dateField.style.boxShadow = '0 0 0 3px rgba(255, 94, 109, 0.2)';
+        
+        // Remover resaltado después de que el usuario interactúe
+        dateField.addEventListener('input', function() {
+            this.style.borderColor = '';
+            this.style.boxShadow = '';
+        }, { once: true });
+        
         return false;
     }
     
     // Validar que la fecha no sea futura
     const selectedDate = new Date(data.date);
     const today = new Date();
-    today.setHours(23, 59, 59, 999); // Final del día actual
+    today.setHours(23, 59, 59, 999);
     
     if (selectedDate > today) {
         showErrorToast('La fecha de la nota no puede ser futura');
@@ -1518,7 +1766,130 @@ function validateCreditNoteData(data) {
         return false;
     }
     
-    return true;
+    // *** VERIFICAR DUPLICIDAD ***
+    try {
+        // Mostrar loading durante validación CON Z-INDEX ALTO
+        Swal.fire({
+            title: 'Validando...',
+            text: 'Verificando que la nota de crédito no exista',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            // *** AGREGAR CONFIGURACIÓN DE Z-INDEX ***
+            customClass: {
+                container: 'swal2-container-front'
+            },
+            didOpen: () => {
+                Swal.showLoading();
+                // Forzar z-index específicamente
+                const swalContainer = document.querySelector('.swal2-container');
+                if (swalContainer) {
+                    swalContainer.style.zIndex = '99999';
+                    swalContainer.style.position = 'fixed';
+                }
+            }
+        });
+        
+        const existingNote = await validateCreditNoteExists(
+            data.serie, 
+            data.number, 
+            data.originalInvoice.Id
+        );
+        
+        // Cerrar loading
+        Swal.close();
+        
+        if (existingNote) {
+            // *** MOSTRAR ERROR CON Z-INDEX MÁXIMO ***
+            await Swal.fire({
+                icon: 'error',
+                title: 'Nota de Crédito Duplicada',
+                html: `
+                    <div style="text-align: left; margin: 20px 0;">
+                        <p><strong>⚠️ Ya existe una nota de crédito con estos datos:</strong></p>
+                        <hr style="margin: 15px 0;">
+                        <p><strong>Serie-Número:</strong> ${existingNote.Serie}-${existingNote.Numero}</p>
+                        <p><strong>Factura:</strong> ${data.originalInvoice.Serie}-${data.originalInvoice.Numero}</p>
+                        <p><strong>Proveedor:</strong> ${existingNote.Proveedor}</p>
+                        <p><strong>Monto:</strong> ${formatCurrency(existingNote.Monto)}</p>
+                        <p><strong>Fecha:</strong> ${formatDate(existingNote.FechaNotaCredito)}</p>
+                        <hr style="margin: 15px 0;">
+                        <p style="color: #ff5e6d; font-weight: 600;">
+                            <i class="fas fa-exclamation-circle"></i> 
+                            Por favor cambie la serie o número de la nota de crédito
+                        </p>
+                    </div>
+                `,
+                confirmButtonColor: '#6e78ff',
+                confirmButtonText: 'Entendido',
+                // *** CONFIGURACIÓN DE Z-INDEX CRÍTICA ***
+                customClass: {
+                    container: 'swal2-validation-error'
+                },
+                backdrop: true,
+                allowOutsideClick: false,
+                didOpen: () => {
+                    // Forzar z-index máximo
+                    const swalContainer = document.querySelector('.swal2-container');
+                    const swalPopup = document.querySelector('.swal2-popup');
+                    
+                    if (swalContainer) {
+                        swalContainer.style.zIndex = '999999';
+                        swalContainer.style.position = 'fixed';
+                        swalContainer.style.top = '0';
+                        swalContainer.style.left = '0';
+                        swalContainer.style.width = '100%';
+                        swalContainer.style.height = '100%';
+                    }
+                    
+                    if (swalPopup) {
+                        swalPopup.style.zIndex = '1000000';
+                        swalPopup.style.position = 'relative';
+                    }
+                },
+                willClose: () => {
+                    // Limpiar estilos después de cerrar
+                    const swalContainer = document.querySelector('.swal2-container');
+                    if (swalContainer) {
+                        swalContainer.style.zIndex = '';
+                        swalContainer.style.position = '';
+                    }
+                }
+            });
+            
+            // Enfocar el campo de serie para que lo cambien
+            document.getElementById('creditNoteSerie').focus();
+            document.getElementById('creditNoteSerie').select();
+            
+            return false; // No continuar
+        }
+        
+        // Si llegamos aquí, no hay duplicados
+        return true;
+        
+    } catch (error) {
+        // Cerrar loading si hay error
+        Swal.close();
+        
+        // *** MOSTRAR ERROR CON Z-INDEX ALTO ***
+        await Swal.fire({
+            icon: 'error',
+            title: 'Error de Validación',
+            text: 'Error al validar la nota de crédito. Intente nuevamente.',
+            confirmButtonColor: '#6e78ff',
+            customClass: {
+                container: 'swal2-validation-error'
+            },
+            didOpen: () => {
+                const swalContainer = document.querySelector('.swal2-container');
+                if (swalContainer) {
+                    swalContainer.style.zIndex = '999999';
+                }
+            }
+        });
+        
+        return false;
+    }
 }
 // Confirmar creación de nota de crédito
 function confirmCreditNoteCreation(data) {
@@ -1540,6 +1911,11 @@ function confirmCreditNoteCreation(data) {
                     <p><strong>Concepto:</strong> ${conceptText}</p>
                     <hr style="margin: 15px 0;">
                     <p><strong>Factura Original:</strong> ${data.originalInvoice.Serie}-${data.originalInvoice.Numero}</p>
+                    <hr style="margin: 15px 0;">
+                    <p style="color: #4caf50; font-weight: 600;">
+                        <i class="fas fa-check-circle"></i> 
+                        ✅ Validación exitosa: No hay duplicados
+                    </p>
                 </div>
             `,
             icon: 'question',
@@ -1549,7 +1925,8 @@ function confirmCreditNoteCreation(data) {
             confirmButtonText: 'Sí, continuar',
             cancelButtonText: 'Cancelar',
             customClass: {
-                popup: 'credit-note-confirmation'
+                popup: 'credit-note-confirmation',
+                container: 'swal2-container-front'
             }
         }).then((result) => {
             if (result.isConfirmed) {
@@ -1568,7 +1945,7 @@ function confirmCreditNoteCreation(data) {
                 }, 100);
             }
         });
-    }, 350); // Esperar a que termine la animación de cierre del modal
+    }, 350);
 }
 
 // Proceder con mercadería con loading
@@ -1620,7 +1997,6 @@ async function proceedWithMerchandiseWithLoading(data) {
         }, 200);
         
     } catch (error) {
-        console.error('Error al proceder con mercadería:', error);
         
         // Cerrar loading y mostrar error
         Swal.close();
@@ -1901,13 +2277,6 @@ function saveOtherConceptsNote() {
     });
 }
 
-// Mostrar modal de mercadería (simplificado)
-function showMerchandiseModal() {
-    // Crear y mostrar el modal directamente
-    // (los productos ya fueron cargados en proceedWithMerchandiseWithLoading)
-    createMerchandiseModal();
-}
-
 // Cargar productos del inventario usando MySQL2
 async function loadInventoryProducts() {
     let connection = null;
@@ -1923,8 +2292,7 @@ async function loadInventoryProducts() {
             user: connectionData.user,
             password: connectionData.password,
             port: 3306,
-            connectTimeout: 10000,
-            acquireTimeout: 10000
+            connectTimeout: 10000
         });
         
         // Consultar productos
@@ -1949,20 +2317,640 @@ async function loadInventoryProducts() {
         return rows;
         
     } catch (error) {
-        console.error('Error cargando productos del inventario:', error);
         throw new Error(`Error conectando a la base de datos de la sucursal: ${error.message}`);
     } finally {
         if (connection) {
             try {
                 await connection.end();
             } catch (closeError) {
-                console.error('Error cerrando conexión MySQL:', closeError);
             }
         }
     }
 }
 
-// Crear modal de mercadería
+// ===== FUNCIONALIDAD F1 - AGREGAR PRODUCTOS ADICIONALES =====
+
+// Agregar event listener para F1 cuando esté en el modal de mercadería
+function setupF1ProductSearch() {
+    document.addEventListener('keydown', handleF1KeyPress);
+}
+
+// Remover event listener cuando se cierre el modal
+function removeF1ProductSearch() {
+    document.removeEventListener('keydown', handleF1KeyPress);
+}
+
+// Manejar presión de tecla F1
+function handleF1KeyPress(event) {
+    // Solo funciona si estamos en el modal de mercadería
+    const merchandiseModal = document.getElementById('merchandiseModal');
+    if (!merchandiseModal || !merchandiseModal.classList.contains('show')) {
+        return;
+    }
+    
+    if (event.key === 'F1') {
+        event.preventDefault();
+        openAdditionalProductsModal();
+    }
+}
+
+// Abrir modal de productos adicionales
+async function openAdditionalProductsModal() {
+    try {
+        // Mostrar loading mientras se prepara el modal
+        Swal.fire({
+            title: 'Preparando búsqueda...',
+            text: 'Cargando catálogo de productos',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        // Crear el modal
+        await createAdditionalProductsModal();
+        
+        // Cerrar loading
+        Swal.close();
+        
+        // Mostrar el modal
+        showAdditionalProductsModal();
+        
+    } catch (error) {
+        Swal.close();
+        showErrorToast('Error al cargar el catálogo de productos: ' + error.message);
+    }
+}
+
+// Crear modal de productos adicionales
+async function createAdditionalProductsModal() {
+    // Verificar si ya existe el modal
+    let existingModal = document.getElementById('additionalProductsModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modalHTML = `
+        <div class="modal-overlay" id="additionalProductsModal">
+            <div class="modal-container additional-products-modal">
+                <div class="modal-header">
+                    <div class="modal-icon">
+                        <i class="fas fa-plus-circle"></i>
+                    </div>
+                    <div class="modal-title">
+                        <h2>Agregar Productos Adicionales</h2>
+                        <p>Buscar productos del catálogo para agregar a la nota de crédito</p>
+                    </div>
+                    <button class="modal-close" id="closeAdditionalProductsModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="modal-content">
+                    <!-- Información de ayuda -->
+                    <div class="help-section">
+                        <div class="help-icon">
+                            <i class="fas fa-info-circle"></i>
+                        </div>
+                        <div class="help-text">
+                            <p><strong>Presiona F1</strong> para abrir esta ventana desde el modal de mercadería</p>
+                            <p>Busca productos por UPC o descripción y agrégalos a tu nota de crédito</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Buscador de productos -->
+                    <div class="additional-search-section">
+                        <div class="search-input-group">
+                            <div class="search-input-icon">
+                                <i class="fas fa-search"></i>
+                            </div>
+                            <input type="text" id="additionalProductSearch" 
+                                   placeholder="Buscar por UPC o descripción del producto..."
+                                   autocomplete="off">
+                            <div class="search-input-line"></div>
+                        </div>
+                        <div class="search-help">
+                            <small>Escribe al menos 3 caracteres para iniciar la búsqueda</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Lista de productos encontrados -->
+                    <div class="additional-products-section">
+                        <div class="additional-products-header">
+                            <h3><i class="fas fa-list"></i> Resultados de Búsqueda</h3>
+                            <div class="additional-products-count">
+                                <span id="additionalProductsCount">0</span> productos encontrados
+                            </div>
+                        </div>
+                        
+                        <div class="additional-products-container" id="additionalProductsContainer">
+                            <div class="no-search-yet">
+                                <div class="no-search-icon">
+                                    <i class="fas fa-search"></i>
+                                </div>
+                                <p>Escribe en el campo de búsqueda para encontrar productos</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Productos seleccionados para agregar -->
+                    <div class="selected-additional-section" id="selectedAdditionalSection" style="display: none;">
+                        <div class="selected-header">
+                            <h3><i class="fas fa-cart-plus"></i> Productos Seleccionados</h3>
+                            <div class="selected-count">
+                                <span id="selectedAdditionalCount">0</span> productos
+                            </div>
+                        </div>
+                        
+                        <div class="selected-additional-container" id="selectedAdditionalContainer">
+                            <!-- Los productos seleccionados aparecerán aquí -->
+                        </div>
+                    </div>
+                    
+                    <!-- Botones de acción -->
+                    <div class="modal-actions">
+                        <button type="button" class="btn-secondary" id="cancelAdditionalProducts">
+                            <i class="fas fa-times"></i>
+                            Cancelar
+                        </button>
+                        <button type="button" class="btn-primary" id="addSelectedProducts" disabled>
+                            <i class="fas fa-plus"></i>
+                            Agregar Productos (<span id="addButtonCount">0</span>)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Agregar modal al DOM
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Configurar event listeners
+    setupAdditionalProductsEventListeners();
+}
+
+// Configurar event listeners del modal
+function setupAdditionalProductsEventListeners() {
+    const additionalProductSearch = document.getElementById('additionalProductSearch');
+    const closeAdditionalProductsModal = document.getElementById('closeAdditionalProductsModal');
+    const cancelAdditionalProducts = document.getElementById('cancelAdditionalProducts');
+    const addSelectedProducts = document.getElementById('addSelectedProducts');
+    const additionalProductsModal = document.getElementById('additionalProductsModal');
+    
+    // Event listeners
+    closeAdditionalProductsModal.addEventListener('click', closeAdditionalProductsModalFunc);
+    cancelAdditionalProducts.addEventListener('click', closeAdditionalProductsModalFunc);
+    addSelectedProducts.addEventListener('click', confirmAddSelectedProducts);
+    
+    // Cerrar modal al hacer clic fuera
+    additionalProductsModal.addEventListener('click', (e) => {
+        if (e.target === additionalProductsModal) {
+            closeAdditionalProductsModalFunc();
+        }
+    });
+    
+    // Búsqueda con debounce
+    let searchTimeout;
+    additionalProductSearch.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        const query = e.target.value.trim();
+        
+        if (query.length >= 3) {
+            searchTimeout = setTimeout(() => {
+                searchAdditionalProducts(query);
+            }, 300); // Debounce de 300ms
+        } else {
+            showNoSearchYet();
+        }
+    });
+    
+    // Manejar Enter en búsqueda
+    additionalProductSearch.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const query = e.target.value.trim();
+            if (query.length >= 3) {
+                clearTimeout(searchTimeout);
+                searchAdditionalProducts(query);
+            }
+        }
+    });
+    
+    // Inicializar arrays para productos seleccionados
+    window.selectedAdditionalProducts = [];
+}
+
+// Buscar productos adicionales en la base de datos
+async function searchAdditionalProducts(query) {
+    let connection = null;
+    
+    try {
+        // Mostrar loading en el contenedor
+        showAdditionalSearchLoading();
+        
+        // Conectar a la base de datos de la sucursal
+        const connectionData = window.branchConnectionData;
+        
+        connection = await mysql.createConnection({
+            host: connectionData.server,
+            database: connectionData.database,
+            user: connectionData.user,
+            password: connectionData.password,
+            port: 3306,
+            connectTimeout: 10000
+        });
+        
+        // Consultar productos
+        const searchQuery = `
+            SELECT
+                productos.Upc,
+                productos.DescLarga
+            FROM productos
+            WHERE (productos.Upc LIKE ? OR productos.DescLarga LIKE ?)
+            ORDER BY productos.DescLarga
+            LIMIT 50
+        `;
+        
+        const searchPattern = `%${query}%`;
+        const [rows] = await connection.execute(searchQuery, [searchPattern, searchPattern]);
+        
+        // Mostrar resultados
+        displayAdditionalProducts(rows, query);
+        
+    } catch (error) {
+        showAdditionalSearchError(error.message);
+    } finally {
+        if (connection) {
+            try {
+                await connection.end();
+            } catch (closeError) {
+            }
+        }
+    }
+}
+
+// Mostrar loading durante búsqueda
+function showAdditionalSearchLoading() {
+    const container = document.getElementById('additionalProductsContainer');
+    container.innerHTML = `
+        <div class="additional-search-loading">
+            <div class="loading-spinner"></div>
+            <p>Buscando productos...</p>
+        </div>
+    `;
+    document.getElementById('additionalProductsCount').textContent = '0';
+}
+
+// Mostrar estado inicial (sin búsqueda)
+function showNoSearchYet() {
+    const container = document.getElementById('additionalProductsContainer');
+    container.innerHTML = `
+        <div class="no-search-yet">
+            <div class="no-search-icon">
+                <i class="fas fa-search"></i>
+            </div>
+            <p>Escribe en el campo de búsqueda para encontrar productos</p>
+        </div>
+    `;
+    document.getElementById('additionalProductsCount').textContent = '0';
+}
+
+// Mostrar error en búsqueda
+function showAdditionalSearchError(errorMessage) {
+    const container = document.getElementById('additionalProductsContainer');
+    container.innerHTML = `
+        <div class="additional-search-error">
+            <div class="error-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <p>Error al buscar productos:</p>
+            <p class="error-detail">${errorMessage}</p>
+        </div>
+    `;
+    document.getElementById('additionalProductsCount').textContent = '0';
+}
+
+// Mostrar productos encontrados
+function displayAdditionalProducts(products, query) {
+    const container = document.getElementById('additionalProductsContainer');
+    
+    if (!products || products.length === 0) {
+        container.innerHTML = `
+            <div class="no-additional-products">
+                <div class="no-products-icon">
+                    <i class="fas fa-search-minus"></i>
+                </div>
+                <p>No se encontraron productos para: <strong>"${query}"</strong></p>
+                <p class="search-suggestion">Intenta con otros términos de búsqueda</p>
+            </div>
+        `;
+        document.getElementById('additionalProductsCount').textContent = '0';
+        return;
+    }
+    
+    const productsHTML = products.map((product, index) => `
+        <div class="additional-product-item" data-upc="${product.Upc}">
+            <div class="additional-product-info">
+                <div class="additional-product-upc">
+                    <i class="fas fa-barcode"></i>
+                    <span>${product.Upc}</span>
+                </div>
+                <div class="additional-product-description">
+                    <h4>${highlightSearchTerm(product.DescLarga, query)}</h4>
+                </div>
+            </div>
+            <div class="additional-product-actions">
+                <div class="additional-quantity-group">
+                    <label for="additional_quantity_${index}">Cantidad:</label>
+                    <input type="number" 
+                           id="additional_quantity_${index}" 
+                           class="additional-quantity-input" 
+                           min="1" 
+                           step="1" 
+                           value="1"
+                           data-upc="${product.Upc}">
+                </div>
+                <button type="button" class="select-additional-btn" 
+                        onclick="selectAdditionalProduct('${product.Upc}', '${product.DescLarga.replace(/'/g, "\\'")}', ${index})">
+                    <i class="fas fa-plus"></i>
+                    Seleccionar
+                </button>
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = productsHTML;
+    document.getElementById('additionalProductsCount').textContent = products.length;
+    
+    // Agregar event listeners a los inputs de cantidad
+    const quantityInputs = document.querySelectorAll('.additional-quantity-input');
+    quantityInputs.forEach(input => {
+        input.addEventListener('change', validateAdditionalQuantity);
+    });
+}
+
+// Resaltar término de búsqueda
+function highlightSearchTerm(text, term) {
+    if (!term) return text;
+    
+    const regex = new RegExp(`(${term})`, 'gi');
+    return text.replace(regex, '<mark>$1</mark>');
+}
+
+// Validar cantidad adicional
+function validateAdditionalQuantity(event) {
+    const input = event.target;
+    const value = parseInt(input.value) || 1;
+    
+    if (value < 1) {
+        input.value = 1;
+    }
+}
+
+// Seleccionar producto adicional
+function selectAdditionalProduct(upc, description, index) {
+    const quantityInput = document.getElementById(`additional_quantity_${index}`);
+    const quantity = parseInt(quantityInput.value) || 1;
+    
+    // Verificar si el producto ya está seleccionado
+    const existingProduct = window.selectedAdditionalProducts.find(p => p.Upc === upc);
+    
+    if (existingProduct) {
+        // Si ya existe, sumar la cantidad
+        existingProduct.quantityToReturn += quantity;
+        showInfoToast(`Cantidad actualizada para ${upc}: ${existingProduct.quantityToReturn}`);
+    } else {
+        // Agregar nuevo producto
+        window.selectedAdditionalProducts.push({
+            Upc: upc,
+            Descripcion: description,
+            quantityToReturn: quantity,
+            isAdditional: true // Marcar como producto adicional
+        });
+        showSuccessToast(`Producto agregado: ${upc}`);
+    }
+    
+    // Actualizar display de productos seleccionados
+    updateSelectedAdditionalDisplay();
+    
+    // Limpiar cantidad y deshabilitar botón temporalmente
+    quantityInput.value = 1;
+    const button = quantityInput.closest('.additional-product-item').querySelector('.select-additional-btn');
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-check"></i> Agregado';
+    button.classList.add('selected');
+    
+    // Rehabilitar botón después de un momento
+    setTimeout(() => {
+        button.disabled = false;
+        button.innerHTML = '<i class="fas fa-plus"></i> Seleccionar';
+        button.classList.remove('selected');
+    }, 2000);
+}
+
+// Actualizar display de productos seleccionados
+function updateSelectedAdditionalDisplay() {
+    const selectedSection = document.getElementById('selectedAdditionalSection');
+    const selectedContainer = document.getElementById('selectedAdditionalContainer');
+    const selectedCount = document.getElementById('selectedAdditionalCount');
+    const addButtonCount = document.getElementById('addButtonCount');
+    const addButton = document.getElementById('addSelectedProducts');
+    
+    const count = window.selectedAdditionalProducts.length;
+    
+    if (count === 0) {
+        selectedSection.style.display = 'none';
+        addButton.disabled = true;
+    } else {
+        selectedSection.style.display = 'block';
+        addButton.disabled = false;
+        
+        // Generar HTML de productos seleccionados
+        const selectedHTML = window.selectedAdditionalProducts.map((product, index) => `
+            <div class="selected-additional-item">
+                <div class="selected-product-info">
+                    <div class="selected-product-upc">
+                        <i class="fas fa-barcode"></i>
+                        <span>${product.Upc}</span>
+                    </div>
+                    <div class="selected-product-description">
+                        <span>${product.Descripcion}</span>
+                    </div>
+                    <div class="selected-product-quantity">
+                        <strong>Cantidad: ${product.quantityToReturn}</strong>
+                    </div>
+                </div>
+                <button type="button" class="remove-selected-btn" 
+                        onclick="removeSelectedAdditionalProduct(${index})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `).join('');
+        
+        selectedContainer.innerHTML = selectedHTML;
+    }
+    
+    selectedCount.textContent = count;
+    addButtonCount.textContent = count;
+}
+
+// Remover producto seleccionado
+function removeSelectedAdditionalProduct(index) {
+    const product = window.selectedAdditionalProducts[index];
+    window.selectedAdditionalProducts.splice(index, 1);
+    updateSelectedAdditionalDisplay();
+    showInfoToast(`Producto removido: ${product.Upc}`);
+}
+
+// Mostrar modal de productos adicionales
+function showAdditionalProductsModal() {
+    const modal = document.getElementById('additionalProductsModal');
+    modal.style.display = 'flex';
+    
+    setTimeout(() => {
+        modal.classList.add('show');
+    }, 10);
+    
+    // Enfocar el campo de búsqueda
+    setTimeout(() => {
+        document.getElementById('additionalProductSearch').focus();
+    }, 300);
+}
+
+// Cerrar modal de productos adicionales
+function closeAdditionalProductsModalFunc() {
+    const modal = document.getElementById('additionalProductsModal');
+    if (modal) {
+        modal.classList.remove('show');
+        
+        setTimeout(() => {
+            modal.remove();
+            // Limpiar variables
+            window.selectedAdditionalProducts = [];
+        }, 300);
+    }
+}
+
+// Confirmar agregar productos seleccionados
+function confirmAddSelectedProducts() {
+    if (!window.selectedAdditionalProducts || window.selectedAdditionalProducts.length === 0) {
+        showErrorToast('No hay productos seleccionados para agregar');
+        return;
+    }
+    
+    const totalProducts = window.selectedAdditionalProducts.length;
+    const totalQuantity = window.selectedAdditionalProducts.reduce((sum, p) => sum + p.quantityToReturn, 0);
+    
+    Swal.fire({
+        title: '¿Agregar productos seleccionados?',
+        html: `
+            <div style="text-align: left; margin: 20px 0;">
+                <p><strong>Productos a agregar:</strong> ${totalProducts}</p>
+                <p><strong>Cantidad total:</strong> ${totalQuantity}</p>
+                <hr style="margin: 15px 0;">
+                <div style="max-height: 200px; overflow-y: auto;">
+                    ${window.selectedAdditionalProducts.map(p => `
+                        <p style="margin: 5px 0;">
+                            <strong>${p.Upc}</strong> - ${p.Descripcion} 
+                            <span style="color: #4caf50;">(${p.quantityToReturn})</span>
+                        </p>
+                    `).join('')}
+                </div>
+                <hr style="margin: 15px 0;">
+                <p style="color: #ff9800; font-weight: 600;">
+                    <i class="fas fa-info-circle"></i> 
+                    Estos productos se agregarán a tu selección actual de mercadería
+                </p>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#4caf50',
+        cancelButtonColor: '#ff5e6d',
+        confirmButtonText: 'Sí, agregar',
+        cancelButtonText: 'Cancelar',
+        // *** AGREGAR ESTAS LÍNEAS PARA Z-INDEX ***
+        customClass: {
+            container: 'swal2-container-front'
+        },
+        backdrop: true,
+        allowOutsideClick: false,
+        // Configurar z-index específicamente
+        didOpen: () => {
+            const swalContainer = document.querySelector('.swal2-container');
+            if (swalContainer) {
+                swalContainer.style.zIndex = '99999';
+            }
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            addProductsToMerchandiseSelection();
+            closeAdditionalProductsModalFunc();
+            showSuccessToast(`${totalProducts} productos agregados exitosamente`);
+        }
+    });
+}
+
+// Agregar productos a la selección de mercadería
+function addProductsToMerchandiseSelection() {
+    // Agregar productos adicionales al array global de productos de inventario
+    window.selectedAdditionalProducts.forEach(additionalProduct => {
+        // Verificar si ya existe en los productos de inventario
+        const existingProduct = window.inventoryProducts.find(p => p.Upc === additionalProduct.Upc);
+        
+        if (!existingProduct) {
+            // Si no existe, agregarlo al array de productos de inventario
+            window.inventoryProducts.push({
+                Upc: additionalProduct.Upc,
+                Descripcion: additionalProduct.Descripcion,
+                Cantidad_Rechequeo: 0, // No tiene cantidad en inventario original
+                Bonificacion_Rechequeo: 0,
+                isAdditional: true // Marcar como adicional
+            });
+        }
+    });
+    
+    // Actualizar el display de productos en el modal de mercadería
+    if (window.filteredProducts) {
+        // Agregar también a los productos filtrados si existe una búsqueda activa
+        window.selectedAdditionalProducts.forEach(additionalProduct => {
+            const existingInFiltered = window.filteredProducts.find(p => p.Upc === additionalProduct.Upc);
+            if (!existingInFiltered) {
+                window.filteredProducts.push({
+                    Upc: additionalProduct.Upc,
+                    Descripcion: additionalProduct.Descripcion,
+                    Cantidad_Rechequeo: 0,
+                    Bonificacion_Rechequeo: 0,
+                    isAdditional: true
+                });
+            }
+        });
+        
+        displayProducts(window.filteredProducts);
+    } else {
+        displayProducts(window.inventoryProducts);
+    }
+    
+    // Pre-llenar las cantidades de los productos adicionales
+    setTimeout(() => {
+        window.selectedAdditionalProducts.forEach(additionalProduct => {
+            const quantityInput = document.querySelector(`input[data-upc="${additionalProduct.Upc}"]`);
+            if (quantityInput) {
+                quantityInput.value = additionalProduct.quantityToReturn;
+                // Marcar el item como adicional visualmente
+                const productItem = quantityInput.closest('.product-item');
+                if (productItem) {
+                    productItem.classList.add('additional-product');
+                }
+            }
+        });
+    }, 100);
+}
+
+// CREAR MODAL DE MERCADERÍA (MODIFICADO PARA SOPORTE F1)
 function createMerchandiseModal() {
     // Verificar si ya existe el modal
     let existingModal = document.getElementById('merchandiseModal');
@@ -1980,6 +2968,12 @@ function createMerchandiseModal() {
                     <div class="modal-title">
                         <h2>Seleccionar Mercadería</h2>
                         <p>Productos de la factura ${window.currentCreditNote.originalInvoice.Serie}-${window.currentCreditNote.originalInvoice.Numero}</p>
+                    </div>
+                    <div class="f1-help-indicator">
+                        <div class="f1-help">
+                            <kbd>F1</kbd> 
+                            <span>Agregar productos adicionales</span>
+                        </div>
                     </div>
                     <button class="modal-close" id="closeMerchandiseModal">
                         <i class="fas fa-times"></i>
@@ -2050,6 +3044,9 @@ function createMerchandiseModal() {
         }
     });
     
+    // Configurar F1 para productos adicionales
+    setupF1ProductSearch();
+    
     // Mostrar productos iniciales
     displayProducts(window.inventoryProducts);
     
@@ -2065,7 +3062,22 @@ function createMerchandiseModal() {
     }, 300);
 }
 
-// Mostrar productos en el contenedor
+// CERRAR MODAL DE MERCADERÍA (MODIFICADO PARA LIMPIAR F1)
+function closeMerchandiseModalFunc() {
+    // Limpiar event listener de F1
+    removeF1ProductSearch();
+    
+    if (merchandiseModal) {
+        merchandiseModal.classList.remove('show');
+        
+        setTimeout(() => {
+            merchandiseModal.remove();
+            merchandiseModal = null;
+        }, 300);
+    }
+}
+
+// MOSTRAR PRODUCTOS (MODIFICADO PARA MANEJAR PRODUCTOS ADICIONALES)
 function displayProducts(products) {
     if (!products || products.length === 0) {
         productsContainer.innerHTML = `
@@ -2080,45 +3092,52 @@ function displayProducts(products) {
         return;
     }
     
-    const productsHTML = products.map((product, index) => `
-        <div class="product-item" data-upc="${product.Upc}">
-            <div class="product-info">
-                <div class="product-main">
-                    <div class="product-upc">
-                        <i class="fas fa-barcode"></i>
-                        <span>${product.Upc}</span>
+    const productsHTML = products.map((product, index) => {
+        const isAdditional = product.isAdditional || false;
+        const availableText = isAdditional ? 'Producto adicional' : `Disponible: ${product.Cantidad_Rechequeo || 0}`;
+        
+        return `
+            <div class="product-item ${isAdditional ? 'additional-product' : ''}" data-upc="${product.Upc}">
+                <div class="product-info">
+                    <div class="product-main">
+                        <div class="product-upc">
+                            <i class="fas fa-barcode"></i>
+                            <span>${product.Upc}</span>
+                            ${isAdditional ? '<span class="additional-badge"><i class="fas fa-plus"></i> Adicional</span>' : ''}
+                        </div>
+                        <div class="product-description">
+                            <h4>${product.Descripcion}</h4>
+                        </div>
                     </div>
-                    <div class="product-description">
-                        <h4>${product.Descripcion}</h4>
+                    <div class="product-details">
+                        <div class="product-quantity">
+                            <span class="detail-label">${availableText}</span>
+                            ${!isAdditional ? `<span class="detail-value">${product.Cantidad_Rechequeo || 0}</span>` : ''}
+                        </div>
+                        ${!isAdditional ? `
+                            <div class="product-bonus">
+                                <span class="detail-label">Bonificación:</span>
+                                <span class="detail-value">${product.Bonificacion_Rechequeo || 0}</span>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
-                <div class="product-details">
-                    <div class="product-quantity">
-                        <span class="detail-label">Cantidad:</span>
-                        <span class="detail-value">${product.Cantidad_Rechequeo || 0}</span>
-                    </div>
-                    <div class="product-bonus">
-                        <span class="detail-label">Bonificación:</span>
-                        <span class="detail-value">${product.Bonificacion_Rechequeo || 0}</span>
+                <div class="product-actions">
+                    <div class="quantity-input-group">
+                        <label for="quantity_${index}">Cantidad a devolver:</label>
+                        <input type="number" 
+                               id="quantity_${index}" 
+                               class="quantity-input" 
+                               min="0"
+                               step="1" 
+                               value="0"
+                               data-upc="${product.Upc}"
+                               data-additional="${isAdditional}">
                     </div>
                 </div>
             </div>
-            <div class="product-actions">
-                <div class="quantity-input-group">
-                    <label for="quantity_${index}">Cantidad a devolver:</label>
-                    <input type="number" 
-                           id="quantity_${index}" 
-                           class="quantity-input" 
-                           min="0" 
-                           max="${product.Cantidad_Rechequeo || 0}"
-                           step="1" 
-                           value="0"
-                           data-upc="${product.Upc}"
-                           data-max="${product.Cantidad_Rechequeo || 0}">
-                </div>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
     
     productsContainer.innerHTML = productsHTML;
     document.getElementById('productsCount').textContent = products.length;
@@ -2129,6 +3148,16 @@ function displayProducts(products) {
         input.addEventListener('input', validateQuantityInput);
         input.addEventListener('change', validateQuantityInput);
     });
+}
+
+// VALIDAR INPUT DE CANTIDAD (MODIFICADO PARA PRODUCTOS ADICIONALES)
+function validateQuantityInput(event) {
+    const input = event.target;
+    const currentValue = parseInt(input.value) || 0;
+    if (currentValue < 0) {
+        input.value = 0;
+        showWarningToast('La cantidad no puede ser negativa');
+    }
 }
 
 // Filtrar productos por búsqueda
@@ -2145,34 +3174,6 @@ function filterProducts() {
     }
     
     displayProducts(window.filteredProducts);
-}
-
-// Validar input de cantidad
-function validateQuantityInput(event) {
-    const input = event.target;
-    const maxQuantity = parseInt(input.dataset.max);
-    const currentValue = parseInt(input.value) || 0;
-    
-    if (currentValue > maxQuantity) {
-        input.value = maxQuantity;
-        showErrorToast(`La cantidad máxima disponible es ${maxQuantity}`);
-    }
-    
-    if (currentValue < 0) {
-        input.value = 0;
-    }
-}
-
-// Cerrar modal de mercadería
-function closeMerchandiseModalFunc() {
-    if (merchandiseModal) {
-        merchandiseModal.classList.remove('show');
-        
-        setTimeout(() => {
-            merchandiseModal.remove();
-            merchandiseModal = null;
-        }, 300);
-    }
 }
 
 // Guardar selección de mercadería
@@ -2265,7 +3266,7 @@ function saveMerchandiseSelection() {
             } else {
                 // Si cancela, volver a mostrar el modal de mercadería
                 setTimeout(() => {
-                    showMerchandiseModal();
+                    createMerchandiseModal();
                     // Restaurar las cantidades seleccionadas
                     restoreMerchandiseSelection(selectedProducts);
                 }, 100);
@@ -2321,7 +3322,6 @@ function restoreMerchandiseSelection(selectedProducts) {
 
 // Manejar errores de nota de crédito
 function handleCreditNoteError(error) {
-    console.error('Error en nota de crédito:', error);
     
     let errorMessage = 'Error al procesar la nota de crédito. ';
     
@@ -2340,6 +3340,271 @@ function handleCreditNoteError(error) {
         confirmButtonColor: '#6e78ff'
     });
 }
+
+// FUNCIONES DE GUARDADO EN BASE DE DATOS
+
+// Guardar nota de crédito - Otros Conceptos
+async function saveOtherConceptsCreditNote(data, observation) {
+    let connection = null;
+    
+    try {
+        const connection = await odbc.connect('DSN=facturas;charset=utf8');
+        
+        // Preparar datos para insertar
+        const creditNoteData = await prepareCreditNoteData(data, observation);
+        
+        // Insertar en NCTProveedores
+        const insertQuery = `
+            INSERT INTO NCTProveedores (
+                IdFacturaCompras,
+                IdProveedor,
+                NombreProveedore,
+                NIT,
+                Monto,
+                Serie,
+                Numero,
+                TipoNotaCredito,
+                FechaNotaCredito,
+                Observaciones,
+                IdUsuario,
+                NombreUsuario,
+                IdConcepto
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2)
+        `;
+        
+        const result = await connection.query(insertQuery, [
+            creditNoteData.IdFacturaCompras,
+            creditNoteData.IdProveedor,
+            creditNoteData.NombreProveedore,
+            creditNoteData.NIT,
+            creditNoteData.Monto,
+            creditNoteData.Serie,
+            creditNoteData.Numero,
+            creditNoteData.TipoNotaCredito,
+            creditNoteData.FechaNotaCredito,
+            creditNoteData.Observaciones,
+            creditNoteData.IdUsuario,
+            creditNoteData.NombreUsuario
+        ]);
+        
+        await connection.close();
+        
+        // Mostrar mensaje de éxito
+        showSaveSuccessMessage(data, 'Otros Conceptos');
+        
+        // *** REGRESAR A LA PANTALLA INICIAL DESPUÉS DE GUARDAR OTROS CONCEPTOS ***
+        setTimeout(() => {
+            resetToInitialStateComplete();
+        }, 1500);
+        
+        return true;
+        
+    } catch (error) {
+        if (connection) {
+            try {
+                await connection.close();
+            } catch (closeError) {
+            }
+        }
+        
+        showSaveErrorMessage(error);
+        return false;
+    }
+}
+// Guardar nota de crédito - Mercadería
+async function saveMerchandiseCreditNote(data, selectedProducts) {
+    let connection = null;
+    
+    try {
+        const connection = await odbc.connect('DSN=facturas;charset=utf8');
+        
+        // Preparar datos para insertar
+        const creditNoteData = await prepareCreditNoteData(data, 'Devolución de productos');
+        
+        // Insertar en NCTProveedores
+        const insertQuery = `
+            INSERT INTO NCTProveedores (
+                IdFacturaCompras,
+                IdProveedor,
+                NombreProveedore,
+                NIT,
+                Monto,
+                Serie,
+                Numero,
+                TipoNotaCredito,
+                FechaNotaCredito,
+                Observaciones,
+                IdUsuario,
+                NombreUsuario,
+                IdConcepto
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        `;
+        
+        const result = await connection.query(insertQuery, [
+            creditNoteData.IdFacturaCompras,
+            creditNoteData.IdProveedor,
+            creditNoteData.NombreProveedore,
+            creditNoteData.NIT,
+            creditNoteData.Monto,
+            creditNoteData.Serie,
+            creditNoteData.Numero,
+            creditNoteData.TipoNotaCredito,
+            creditNoteData.FechaNotaCredito,
+            creditNoteData.Observaciones,
+            creditNoteData.IdUsuario,
+            creditNoteData.NombreUsuario
+        ]);
+        
+        // Obtener el ID generado de la nota de crédito
+        const getIdQuery = `
+            SELECT LAST_INSERT_ID() as IdNTCProveedor
+        `;
+        
+        const idResult = await connection.query(getIdQuery);
+        const idNTCProveedor = idResult[0].IdNTCProveedor;
+        
+        // Insertar productos en NCTProveedoresDetalle
+        await saveProductDetails(connection, idNTCProveedor, selectedProducts);
+        
+        await connection.close();
+        
+        // Mostrar mensaje de éxito
+        showSaveSuccessMessage(data, 'Mercadería', selectedProducts.length);
+        
+        return true;
+        
+    } catch (error) {
+        if (connection) {
+            try {
+                await connection.close();
+            } catch (closeError) {
+            }
+        }
+        
+        showSaveErrorMessage(error);
+        return false;
+    }
+}
+
+// Preparar datos de la nota de crédito
+async function prepareCreditNoteData(data, observaciones) {
+    const userId = localStorage.getItem('userId') || '0';
+    const userName = localStorage.getItem('userName') || 'Usuario Desconocido';
+    
+    // Obtener datos adicionales de la factura
+    let connection = null;
+    let facturaData = null;
+    
+    try {
+        const connection = await odbc.connect('DSN=facturas;charset=utf8');
+        
+        const facturaQuery = `
+            SELECT IdProveedor
+            FROM facturas_compras 
+            WHERE Id = ?
+        `;
+        
+        const facturaResult = await connection.query(facturaQuery, [data.originalInvoice.Id]);
+        facturaData = facturaResult[0];
+        
+        await connection.close();
+        
+    } catch (error) {
+        if (connection) {
+            try {
+                await connection.close();
+            } catch (closeError) {
+            }
+        }
+        throw error;
+    }
+    
+    return {
+        IdFacturaCompras: data.originalInvoice.Id,
+        IdProveedor: facturaData ? facturaData.IdProveedor : null,
+        NombreProveedore: data.originalInvoice.Nombre,
+        NIT: data.originalInvoice.NIT,
+        Monto: data.amount,
+        Serie: data.serie,
+        Numero: data.number,
+        TipoNotaCredito: data.typeId,
+        FechaNotaCredito: data.date,
+        Observaciones: observaciones,
+        IdUsuario: parseInt(userId),
+        NombreUsuario: userName
+    };
+}
+
+async function saveProductDetails(connection, idNTCProveedor, selectedProducts) {
+    const insertDetailQuery = `
+        INSERT INTO NCTProveedoresDetalle (
+            IdNTCProveedor,
+            Upc,
+            Descripcion,
+            Cantidad
+        ) VALUES (?, ?, ?, ?)
+    `;
+    
+    // Insertar cada producto seleccionado
+    for (const product of selectedProducts) {
+        await connection.query(insertDetailQuery, [
+            idNTCProveedor,
+            product.Upc,
+            product.Descripcion,
+            product.quantityToReturn.toString()
+        ]);
+    }
+}
+
+function showSaveSuccessMessage(data, tipo, productCount = 0) {
+    let detailMessage = '';
+    
+    if (tipo === 'Mercadería') {
+        detailMessage = `Se guardaron ${productCount} productos seleccionados.`;
+    } else {
+        detailMessage = 'La observación ha sido registrada correctamente.';
+    }
+    
+    Swal.fire({
+        title: '¡Nota de Crédito Guardada!',
+        html: `
+            <div style="text-align: left; margin: 20px 0;">
+                <p><strong>Serie-Número:</strong> ${data.serie}-${data.number}</p>
+                <p><strong>Monto:</strong> ${formatCurrency(data.amount)}</p>
+                <p><strong>Tipo:</strong> ${tipo}</p>
+                <hr style="margin: 15px 0;">
+                <p style="color: #4caf50; font-weight: 600;">${detailMessage}</p>
+            </div>
+        `,
+        icon: 'success',
+        confirmButtonColor: '#6e78ff',
+        confirmButtonText: 'Continuar',
+        timer: 3000,
+        timerProgressBar: true
+    });
+}
+
+function showSaveErrorMessage(error) {
+    let errorMessage = 'Error al guardar la nota de crédito. ';
+    
+    if (error.message && error.message.includes('connection')) {
+        errorMessage += 'Problema de conexión con la base de datos.';
+    } else if (error.message && error.message.includes('Duplicate')) {
+        errorMessage += 'Ya existe una nota de crédito con esta serie y número.';
+    } else {
+        errorMessage += 'Por favor intente nuevamente.';
+    }
+    
+    Swal.fire({
+        icon: 'error',
+        title: 'Error al Guardar',
+        text: errorMessage,
+        confirmButtonColor: '#6e78ff',
+        confirmButtonText: 'Entendido'
+    });
+}
+
+// FUNCIONES DE UTILIDAD Y UI
 
 // Cambiar estado de carga del botón
 function setLoadingState(isLoading) {
@@ -2455,11 +3720,10 @@ function formatDate(dateString) {
         const [year, month, day] = dateOnly.split('-').map(Number);
         
         // Crear la fecha usando el constructor específico (evita problemas de zona horaria)
-        const date = new Date(year, month - 1, day); // month - 1 porque los meses en JS empiezan en 0
+        const date = new Date(year, month - 1, day); 
         
         // Verificar que la fecha es válida
         if (isNaN(date.getTime())) {
-            console.warn('Fecha inválida:', dateString);
             return dateString; // Devolver el string original si no es válida
         }
         
@@ -2471,7 +3735,6 @@ function formatDate(dateString) {
         }).format(date);
         
     } catch (error) {
-        console.error('Error formateando fecha:', error);
         return dateString;
     }
 }
@@ -2541,7 +3804,6 @@ function showWarningToast(message) {
 
 // Manejar errores de búsqueda
 function handleSearchError(error) {
-    console.error('Error en la búsqueda:', error);
     
     let errorMessage = 'Error al buscar la factura. ';
     
@@ -2568,287 +3830,37 @@ function handleSearchError(error) {
     
     shakeSearchPanel();
 }
-
-// Guardar nota de crédito - Otros Conceptos
-async function saveOtherConceptsCreditNote(data, observation) {
+async function validateCreditNoteExists(serie, numero, idFactura) {
     let connection = null;
     
     try {
-        const connection = await odbc.connect('DSN=facturas;charset=utf8');
+        connection = await odbc.connect('DSN=facturas;charset=utf8');
         
-        // Preparar datos para insertar
-        const creditNoteData = await prepareCreditNoteData(data, observation);
-        
-        // Insertar en NCTProveedores
-        const insertQuery = `
-            INSERT INTO NCTProveedores (
-                IdFacturaCompras,
-                IdProveedor,
-                NombreProveedore,
-                NIT,
-                Monto,
+        const query = `
+            SELECT 
+                IdNotaCreditoProveedores,
                 Serie,
                 Numero,
-                TipoNotaCredito,
-                FechaNotaCredito,
-                Observaciones,
-                IdUsuario,
-                NombreUsuario,
-                IdConcepto
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2)
-        `;
-        
-        const result = await connection.query(insertQuery, [
-            creditNoteData.IdFacturaCompras,
-            creditNoteData.IdProveedor,
-            creditNoteData.NombreProveedore,
-            creditNoteData.NIT,
-            creditNoteData.Monto,
-            creditNoteData.Serie,
-            creditNoteData.Numero,
-            creditNoteData.TipoNotaCredito,
-            creditNoteData.FechaNotaCredito,
-            creditNoteData.Observaciones,
-            creditNoteData.IdUsuario,
-            creditNoteData.NombreUsuario
-        ]);
-        
-        await connection.close();
-        
-        // Mostrar mensaje de éxito
-        showSaveSuccessMessage(data, 'Otros Conceptos');
-        
-        // *** REGRESAR A LA PANTALLA INICIAL DESPUÉS DE GUARDAR OTROS CONCEPTOS ***
-        setTimeout(() => {
-            resetToInitialStateComplete();
-        }, 1500);
-        
-        return true;
-        
-    } catch (error) {
-        console.error('Error guardando nota de crédito:', error);
-        if (connection) {
-            try {
-                await connection.close();
-            } catch (closeError) {
-                console.error('Error cerrando conexión:', closeError);
-            }
-        }
-        
-        showSaveErrorMessage(error);
-        return false;
-    }
-}
-
-// Guardar nota de crédito - Mercadería
-async function saveMerchandiseCreditNote(data, selectedProducts) {
-    let connection = null;
-    
-    try {
-        const connection = await odbc.connect('DSN=facturas;charset=utf8');
-        
-        // Preparar datos para insertar
-        const creditNoteData = await prepareCreditNoteData(data, 'Devolución de productos');
-        
-        // Insertar en NCTProveedores
-        const insertQuery = `
-            INSERT INTO NCTProveedores (
                 IdFacturaCompras,
-                IdProveedor,
-                NombreProveedore,
-                NIT,
+                NombreProveedore as Proveedor,
                 Monto,
-                Serie,
-                Numero,
-                TipoNotaCredito,
-                FechaNotaCredito,
-                Observaciones,
-                IdUsuario,
-                NombreUsuario,
-                IdConcepto
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                FechaNotaCredito
+            FROM NCTProveedores 
+            WHERE Serie = ? AND Numero = ? AND IdFacturaCompras = ?
         `;
         
-        const result = await connection.query(insertQuery, [
-            creditNoteData.IdFacturaCompras,
-            creditNoteData.IdProveedor,
-            creditNoteData.NombreProveedore,
-            creditNoteData.NIT,
-            creditNoteData.Monto,
-            creditNoteData.Serie,
-            creditNoteData.Numero,
-            creditNoteData.TipoNotaCredito,
-            creditNoteData.FechaNotaCredito,
-            creditNoteData.Observaciones,
-            creditNoteData.IdUsuario,
-            creditNoteData.NombreUsuario
-        ]);
-        
-        // Obtener el ID generado de la nota de crédito
-        const getIdQuery = `
-            SELECT LAST_INSERT_ID() as IdNTCProveedor
-        `;
-        
-        const idResult = await connection.query(getIdQuery);
-        const idNTCProveedor = idResult[0].IdNTCProveedor;
-        
-        // Insertar productos en NCTProveedoresDetalle
-        await saveProductDetails(connection, idNTCProveedor, selectedProducts);
-        
+        const result = await connection.query(query, [serie, numero, idFactura]);
         await connection.close();
         
-        // Mostrar mensaje de éxito
-        showSaveSuccessMessage(data, 'Mercadería', selectedProducts.length);
-        
-        return true;
+        return result.length > 0 ? result[0] : null;
         
     } catch (error) {
-        console.error('Error guardando nota de crédito:', error);
         if (connection) {
             try {
                 await connection.close();
             } catch (closeError) {
-                console.error('Error cerrando conexión:', closeError);
-            }
-        }
-        
-        showSaveErrorMessage(error);
-        return false;
-    }
-}
-
-// Preparar datos de la nota de crédito
-async function prepareCreditNoteData(data, observaciones) {
-    const userId = localStorage.getItem('userId') || '0';
-    const userName = localStorage.getItem('userName') || 'Usuario Desconocido';
-    
-    // Obtener datos adicionales de la factura
-    let connection = null;
-    let facturaData = null;
-    
-    try {
-        const connection = await odbc.connect('DSN=facturas;charset=utf8');
-        
-        const facturaQuery = `
-            SELECT IdProveedor
-            FROM facturas_compras 
-            WHERE Id = ?
-        `;
-        
-        const facturaResult = await connection.query(facturaQuery, [data.originalInvoice.Id]);
-        facturaData = facturaResult[0];
-        
-        await connection.close();
-        
-    } catch (error) {
-        console.error('Error obteniendo datos de factura:', error);
-        if (connection) {
-            try {
-                await connection.close();
-            } catch (closeError) {
-                console.error('Error cerrando conexión:', closeError);
             }
         }
         throw error;
     }
-    
-    return {
-        IdFacturaCompras: data.originalInvoice.Id,
-        IdProveedor: facturaData ? facturaData.IdProveedor : null,
-        NombreProveedore: data.originalInvoice.Nombre,
-        NIT: data.originalInvoice.NIT,
-        Monto: data.amount,
-        Serie: data.serie,
-        Numero: data.number,
-        TipoNotaCredito: data.typeId,
-        FechaNotaCredito: data.date,
-        Observaciones: observaciones,
-        IdUsuario: parseInt(userId),
-        NombreUsuario: userName
-    };
-}
-
-async function saveProductDetails(connection, idNTCProveedor, selectedProducts) {
-    const insertDetailQuery = `
-        INSERT INTO NCTProveedoresDetalle (
-            IdNTCProveedor,
-            Upc,
-            Descripcion,
-            Cantidad
-        ) VALUES (?, ?, ?, ?)
-    `;
-    
-    // Insertar cada producto seleccionado
-    for (const product of selectedProducts) {
-        await connection.query(insertDetailQuery, [
-            idNTCProveedor,
-            product.Upc,
-            product.Descripcion,
-            product.quantityToReturn.toString()
-        ]);
-    }
-}
-
-function showSaveSuccessMessage(data, tipo, productCount = 0) {
-    let detailMessage = '';
-    
-    if (tipo === 'Mercadería') {
-        detailMessage = `Se guardaron ${productCount} productos seleccionados.`;
-    } else {
-        detailMessage = 'La observación ha sido registrada correctamente.';
-    }
-    
-    Swal.fire({
-        title: '¡Nota de Crédito Guardada!',
-        html: `
-            <div style="text-align: left; margin: 20px 0;">
-                <p><strong>Serie-Número:</strong> ${data.serie}-${data.number}</p>
-                <p><strong>Monto:</strong> ${formatCurrency(data.amount)}</p>
-                <p><strong>Tipo:</strong> ${tipo}</p>
-                <hr style="margin: 15px 0;">
-                <p style="color: #4caf50; font-weight: 600;">${detailMessage}</p>
-            </div>
-        `,
-        icon: 'success',
-        confirmButtonColor: '#6e78ff',
-        confirmButtonText: 'Continuar',
-        timer: 3000, // Reducido de 5000 a 3000
-        timerProgressBar: true
-    });
-}
-
-function showSaveErrorMessage(error) {
-    let errorMessage = 'Error al guardar la nota de crédito. ';
-    
-    if (error.message && error.message.includes('connection')) {
-        errorMessage += 'Problema de conexión con la base de datos.';
-    } else if (error.message && error.message.includes('Duplicate')) {
-        errorMessage += 'Ya existe una nota de crédito con esta serie y número.';
-    } else {
-        errorMessage += 'Por favor intente nuevamente.';
-    }
-    
-    Swal.fire({
-        icon: 'error',
-        title: 'Error al Guardar',
-        text: errorMessage,
-        confirmButtonColor: '#6e78ff',
-        confirmButtonText: 'Entendido'
-    });
-}
-
-// Resetear al estado inicial
-function resetToInitialState() {
-    // Limpiar variables globales
-    window.currentInvoice = null;
-    window.currentCreditNote = null;
-    window.selectedMerchandise = null;
-    window.selectedConcept = null;
-    
-    // Resetear variables de edición
-    isEditing = false;
-    currentEditingElement = null;
-    
-    // Mostrar panel de búsqueda nuevamente
-    showSearchPanel();
 }

@@ -20,9 +20,6 @@
     <header class="header">
         <div class="header-content">
             <div class="header-left">
-                <button class="back-button" onclick="history.back()">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
                 <div class="header-title">
                     <i class="fas fa-file-invoice-dollar"></i>
                     <h1>Facturas de Compras</h1>
@@ -133,7 +130,8 @@
                         </div>
                         <div class="detail-item">
                             <label>NIT:</label>
-                            <span id="providerNit" class="nit-field">-</span>
+                            <!-- CAMPO MODIFICADO: Agregar clases para hacerlo editable -->
+                            <span id="providerNit" class="nit-field" title="Doble clic para buscar otro proveedor">-</span>
                         </div>
                         <div class="detail-item">
                             <label>Razón Social:</label>
@@ -286,11 +284,12 @@
                             </div>
                         </div>
 
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="creditNoteDate">Fecha de la Nota de Crédito</label>
-                                <input type="date" id="creditNoteDate" required>
-                            </div>
+                        <div class="form-group">
+                            <label for="creditNoteDate">Fecha de la Nota de Crédito *</label>
+                            <input type="date" id="creditNoteDate" required>
+                            <small style="color: #6c757d; font-style: italic; margin-top: 5px; display: block;">
+                                📅 Seleccione la fecha correspondiente a la nota de crédito
+                            </small>
                         </div>
                     </div>
 

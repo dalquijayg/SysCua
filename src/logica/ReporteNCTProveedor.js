@@ -10,10 +10,15 @@ let totalRecords = 0;
 let allCreditNotes = [];
 let filteredCreditNotes = [];
 
+// Variables adicionales para el panel compacto
+let isSearchPanelCollapsed = false;
+let searchPanel = null;
+
 // Elementos del DOM
 let searchForm, searchFields, creditNotesContainer, resultsPanel, noResultsPanel;
 let searchTypeButtons, exportBtn, printBtn, adjustFiltersBtn;
 let creditNoteDetailModal, closeDetailModal;
+let clearFiltersInlineBtn = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     // Inicializar elementos del DOM
@@ -33,17 +38,19 @@ function initializeDOMElements() {
     creditNotesContainer = document.getElementById('creditNotesContainer');
     resultsPanel = document.getElementById('resultsPanel');
     noResultsPanel = document.getElementById('noResultsPanel');
+    searchPanel = document.querySelector('.search-panel');
     
     searchTypeButtons = document.querySelectorAll('.search-type-btn');
     exportBtn = document.getElementById('exportBtn');
     printBtn = document.getElementById('printBtn');
     adjustFiltersBtn = document.getElementById('adjustFiltersBtn');
+    clearFiltersInlineBtn = document.getElementById('clearFiltersInline');
     
     creditNoteDetailModal = document.getElementById('creditNoteDetailModal');
     closeDetailModal = document.getElementById('closeDetailModal');
     
     // Verificar elementos críticos
-    if (!searchForm || !searchFields || !creditNotesContainer) {
+    if (!searchForm || !creditNotesContainer) {
         console.error('Error: No se encontraron elementos críticos del DOM');
         return;
     }
@@ -57,8 +64,11 @@ function initializeApp() {
     // Cargar información del usuario
     loadUserInfo();
     
-    // Configurar campos de búsqueda inicial
-    updateSearchFields();
+    // Configurar campos inline por defecto
+    updateInlineFields();
+    
+    // Configurar fechas por defecto
+    setupInlineDateFields();
     
     // Ocultar paneles de resultados
     hideAllResultPanels();
@@ -68,18 +78,17 @@ function initializeApp() {
 function setupEventListeners() {
     // Botones de tipo de búsqueda
     searchTypeButtons.forEach(button => {
-        button.addEventListener('click', handleSearchTypeChange);
+        button.addEventListener('click', handleSearchTypeChangeInline);
     });
     
     // Formulario de búsqueda
     if (searchForm) {
-        searchForm.addEventListener('submit', handleSearch);
+        searchForm.addEventListener('submit', handleSearchInline);
     }
     
-    // Limpiar filtros
-    const clearFiltersBtn = document.getElementById('clearFilters');
-    if (clearFiltersBtn) {
-        clearFiltersBtn.addEventListener('click', clearAllFilters);
+    // Limpiar filtros (botón inline)
+    if (clearFiltersInlineBtn) {
+        clearFiltersInlineBtn.addEventListener('click', clearAllFiltersInline);
     }
     
     // Botones de acción
@@ -100,6 +109,14 @@ function setupEventListeners() {
             }
         });
     }
+    
+    // Configurar fechas por defecto y validación
+    setupInlineDateFields();
+    
+    // Agregar botón de toggle al panel
+    setTimeout(() => {
+        addToggleButtonToPanel();
+    }, 100);
 }
 
 // Animar elementos de la página
@@ -132,8 +149,83 @@ function loadUserInfo() {
     }
 }
 
-// Manejar cambio de tipo de búsqueda
-function handleSearchTypeChange(e) {
+// Función para agregar el botón de toggle al panel
+function addToggleButtonToPanel() {
+    if (!searchPanel) return;
+    
+    const panelHeader = searchPanel.querySelector('.panel-header');
+    if (!panelHeader) return;
+    
+    // Verificar si ya existe el botón
+    if (panelHeader.querySelector('.panel-toggle')) return;
+    
+    const toggleButton = document.createElement('button');
+    toggleButton.className = 'panel-toggle';
+    toggleButton.type = 'button';
+    toggleButton.innerHTML = '<i class="fas fa-chevron-up"></i>';
+    toggleButton.title = 'Colapsar panel de búsqueda';
+    
+    toggleButton.addEventListener('click', toggleSearchPanel);
+    
+    panelHeader.style.position = 'relative';
+    panelHeader.appendChild(toggleButton);
+}
+
+// Función para toggle del panel de búsqueda
+function toggleSearchPanel() {
+    if (!searchPanel) return;
+    
+    const toggleButton = searchPanel.querySelector('.panel-toggle');
+    const toggleIcon = toggleButton.querySelector('i');
+    
+    isSearchPanelCollapsed = !isSearchPanelCollapsed;
+    
+    if (isSearchPanelCollapsed) {
+        searchPanel.classList.add('collapsed');
+        toggleIcon.className = 'fas fa-chevron-down';
+        toggleButton.title = 'Expandir panel de búsqueda';
+    } else {
+        searchPanel.classList.remove('collapsed');
+        toggleIcon.className = 'fas fa-chevron-up';
+        toggleButton.title = 'Colapsar panel de búsqueda';
+    }
+}
+
+// Función para colapsar automáticamente cuando hay resultados
+function autoCollapsePanel() {
+    if (!searchPanel || isSearchPanelCollapsed) return;
+    
+    // Auto-colapsar solo si hay resultados
+    if (filteredCreditNotes && filteredCreditNotes.length > 0) {
+        setTimeout(() => {
+            toggleSearchPanel();
+        }, 800); // Delay para que el usuario vea los resultados primero
+    }
+}
+
+// Configurar campos de fecha inline
+function setupInlineDateFields() {
+    const fechaInicio = document.getElementById('fechaInicioInline');
+    const fechaFin = document.getElementById('fechaFinInline');
+    
+    if (fechaInicio && fechaFin) {
+        // Configurar fecha fin como hoy
+        const today = new Date();
+        fechaFin.value = today.toISOString().split('T')[0];
+        
+        // Configurar fecha inicio como 30 días atrás por defecto
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+        fechaInicio.value = thirtyDaysAgo.toISOString().split('T')[0];
+        
+        // Agregar event listeners para validación
+        fechaInicio.addEventListener('change', validateInlineDateRange);
+        fechaFin.addEventListener('change', validateInlineDateRange);
+    }
+}
+
+// Manejar cambio de tipo de búsqueda INLINE
+function handleSearchTypeChangeInline(e) {
     e.preventDefault();
     
     // Remover clase active de todos los botones
@@ -145,131 +237,165 @@ function handleSearchTypeChange(e) {
     // Actualizar tipo de búsqueda actual
     currentSearchType = e.currentTarget.dataset.type;
     
-    // Actualizar campos de búsqueda
-    updateSearchFields();
+    // Actualizar campos visibles
+    updateInlineFields();
+    
+    // Actualizar indicador de filtros
+    setTimeout(updateFiltersIndicator, 100);
 }
 
-// Actualizar campos de búsqueda según el tipo
-function updateSearchFields() {
-    let fieldsHTML = '';
+// Actualizar campos visibles según el tipo inline
+function updateInlineFields() {
+    // Ocultar todos los campos
+    const dateFields = document.querySelector('.date-fields-inline');
+    const serieInput = document.querySelector('.serie-input');
+    const numeroInput = document.querySelector('.numero-input');
+    const productInput = document.querySelector('.product-input');
+    const searchInfo = document.getElementById('searchInfoInline');
     
+    // Ocultar todos primero
+    if (dateFields) dateFields.style.display = 'none';
+    if (serieInput) serieInput.style.display = 'none';
+    if (numeroInput) numeroInput.style.display = 'none';
+    if (productInput) productInput.style.display = 'none';
+    if (searchInfo) searchInfo.style.display = 'none';
+    
+    // Actualizar clase del formulario para CSS
+    const searchMainRow = document.querySelector('.search-main-row');
+    if (searchMainRow) {
+        searchMainRow.className = `search-main-row search-type-${currentSearchType}`;
+    }
+    
+    // Mostrar campos según el tipo
     switch (currentSearchType) {
         case 'all':
-            fieldsHTML = `
-                <div class="search-inputs-group">
-                    <div class="input-group">
-                        <label>Mostrar todas las notas de crédito</label>
-                        <p style="font-size: 14px; color: var(--text-secondary); margin-top: 10px; padding: 15px; background: rgba(110, 120, 255, 0.05); border-radius: 8px;">
-                            <i class="fas fa-info-circle" style="margin-right: 8px;"></i>
-                            Se mostrarán todas las notas de crédito registradas en el sistema.
-                        </p>
-                    </div>
-                </div>
-            `;
+            if (dateFields) dateFields.style.display = 'flex';
             break;
             
         case 'invoice':
-            fieldsHTML = `
-                <div class="search-inputs-group">
-                    <div class="input-group">
-                        <label for="invoiceSerie">Serie de Factura</label>
-                        <input type="text" id="invoiceSerie" placeholder="Ej: A001, F001, etc.">
-                    </div>
-                    <div class="input-group">
-                        <label for="invoiceNumber">Número de Factura</label>
-                        <input type="text" id="invoiceNumber" placeholder="Ej: 123456">
-                    </div>
-                </div>
-            `;
-            break;
-            
         case 'credit-note':
-            fieldsHTML = `
-                <div class="search-inputs-group">
-                    <div class="input-group">
-                        <label for="creditNoteSerie">Serie de Nota de Crédito</label>
-                        <input type="text" id="creditNoteSerie" placeholder="Ej: NC001, CR001, etc.">
-                    </div>
-                    <div class="input-group">
-                        <label for="creditNoteNumber">Número de Nota de Crédito</label>
-                        <input type="text" id="creditNoteNumber" placeholder="Ej: 789">
-                    </div>
-                </div>
-            `;
+            if (serieInput) serieInput.style.display = 'block';
+            if (numeroInput) numeroInput.style.display = 'block';
             break;
             
         case 'product':
-            fieldsHTML = `
-                <div class="search-inputs-group">
-                    <div class="input-group">
-                        <label for="productSearch">UPC o Descripción del Producto</label>
-                        <input type="text" id="productSearch" placeholder="Buscar por código UPC o descripción del producto...">
-                    </div>
-                </div>
-            `;
+            if (productInput) productInput.style.display = 'block';
+            break;
+    }
+}
+
+// Validar rango de fechas inline
+function validateInlineDateRange() {
+    const fechaInicio = document.getElementById('fechaInicioInline');
+    const fechaFin = document.getElementById('fechaFinInline');
+    
+    if (fechaInicio && fechaFin && fechaInicio.value && fechaFin.value) {
+        const startDate = new Date(fechaInicio.value);
+        const endDate = new Date(fechaFin.value);
+        
+        // Limpiar clases previas
+        fechaInicio.classList.remove('valid', 'invalid');
+        fechaFin.classList.remove('valid', 'invalid');
+        
+        if (startDate > endDate) {
+            showWarningToast('La fecha de inicio no puede ser mayor que la fecha de fin');
+            fechaInicio.classList.add('invalid');
+            fechaFin.classList.add('invalid');
+            return false;
+        } else {
+            fechaInicio.classList.add('valid');
+            fechaFin.classList.add('valid');
+            setTimeout(updateFiltersIndicator, 100);
+            return true;
+        }
+    } else {
+        setTimeout(updateFiltersIndicator, 100);
+    }
+    return true;
+}
+
+// Función para mostrar indicador de filtros activos
+function updateFiltersIndicator() {
+    if (!searchPanel) return;
+    
+    const params = getInlineSearchParameters();
+    let hasActiveFilters = false;
+    
+    switch (params.type) {
+        case 'all':
+            hasActiveFilters = params.fechaInicio || params.fechaFin;
+            break;
+        case 'invoice':
+            hasActiveFilters = params.invoiceSerie || params.invoiceNumber;
+            break;
+        case 'credit-note':
+            hasActiveFilters = params.creditNoteSerie || params.creditNoteNumber;
+            break;
+        case 'product':
+            hasActiveFilters = params.productSearch && params.productSearch.length >= 3;
             break;
     }
     
-    searchFields.innerHTML = fieldsHTML;
-    
-    // Animar los nuevos campos
-    setTimeout(() => {
-        const newInputs = searchFields.querySelectorAll('.input-group');
-        newInputs.forEach((input, index) => {
-            input.style.opacity = '0';
-            input.style.transform = 'translateY(20px)';
-            input.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
-            
-            setTimeout(() => {
-                input.style.opacity = '1';
-                input.style.transform = 'translateY(0)';
-            }, index * 100);
-        });
-    }, 50);
-}
-
-// Manejar búsqueda
-async function handleSearch(e) {
-    e.preventDefault();
-    
-    // Mostrar loading
-    showLoadingState(true);
-    
-    try {
-        // Construir query según el tipo de búsqueda
-        const searchParams = getSearchParameters();
-        
-        // Validar parámetros de búsqueda específicos
-        if (!validateSearchParameters(searchParams)) {
-            return;
-        }
-        
-        // Ejecutar búsqueda
-        const results = await executeSearch(searchParams);
-        
-        // Procesar resultados
-        if (results && results.length > 0) {
-            allCreditNotes = results;
-            filteredCreditNotes = results;
-            totalRecords = results.length;
-            currentPage = 1;
-            
-            displayResults();
-        } else {
-            showNoResults();
-        }
-        
-    } catch (error) {
-        console.error('Error en la búsqueda:', error);
-        handleSearchError(error);
-    } finally {
-        showLoadingState(false);
+    if (hasActiveFilters) {
+        searchPanel.classList.add('has-filters');
+    } else {
+        searchPanel.classList.remove('has-filters');
     }
 }
 
-// Validar parámetros de búsqueda
-function validateSearchParameters(params) {
+// Obtener parámetros de búsqueda inline
+function getInlineSearchParameters() {
+    const params = {
+        type: currentSearchType
+    };
+    
+    switch (currentSearchType) {
+        case 'all':
+            params.fechaInicio = document.getElementById('fechaInicioInline')?.value || '';
+            params.fechaFin = document.getElementById('fechaFinInline')?.value || '';
+            break;
+            
+        case 'invoice':
+            params.invoiceSerie = document.getElementById('serieInline')?.value.trim() || '';
+            params.invoiceNumber = document.getElementById('numeroInline')?.value.trim() || '';
+            break;
+            
+        case 'credit-note':
+            params.creditNoteSerie = document.getElementById('serieInline')?.value.trim() || '';
+            params.creditNoteNumber = document.getElementById('numeroInline')?.value.trim() || '';
+            break;
+            
+        case 'product':
+            params.productSearch = document.getElementById('productSearchInline')?.value.trim() || '';
+            break;
+    }
+    
+    return params;
+}
+
+// Validar parámetros inline
+function validateInlineSearchParameters(params) {
     switch (params.type) {
+        case 'all':
+            if (params.fechaInicio && params.fechaFin) {
+                const startDate = new Date(params.fechaInicio);
+                const endDate = new Date(params.fechaFin);
+                
+                if (startDate > endDate) {
+                    showErrorToast('La fecha de inicio no puede ser mayor que la fecha de fin');
+                    return false;
+                }
+                
+                const today = new Date();
+                today.setHours(23, 59, 59, 999);
+                
+                if (endDate > today) {
+                    showErrorToast('La fecha de fin no puede ser futura');
+                    return false;
+                }
+            }
+            break;
+            
         case 'invoice':
             if (!params.invoiceSerie && !params.invoiceNumber) {
                 showErrorToast('Debe ingresar al menos la serie o el número de la factura');
@@ -294,30 +420,48 @@ function validateSearchParameters(params) {
     return true;
 }
 
-// Obtener parámetros de búsqueda
-function getSearchParameters() {
-    const params = {
-        type: currentSearchType
-    };
+// Ocultar todos los paneles de resultados
+function hideAllResultPanels() {
+    if (resultsPanel) resultsPanel.style.display = 'none';
+    if (noResultsPanel) noResultsPanel.style.display = 'none';
+}
+// Manejar búsqueda inline
+async function handleSearchInline(e) {
+    e.preventDefault();
     
-    // Parámetros específicos según el tipo de búsqueda
-    switch (currentSearchType) {
-        case 'invoice':
-            params.invoiceSerie = document.getElementById('invoiceSerie')?.value.trim() || '';
-            params.invoiceNumber = document.getElementById('invoiceNumber')?.value.trim() || '';
-            break;
+    // Mostrar loading
+    showLoadingStateInline(true);
+    
+    try {
+        // Construir query según el tipo de búsqueda
+        const searchParams = getInlineSearchParameters();
+        
+        // Validar parámetros de búsqueda
+        if (!validateInlineSearchParameters(searchParams)) {
+            return;
+        }
+        
+        // Ejecutar búsqueda
+        const results = await executeSearch(searchParams);
+        
+        // Procesar resultados
+        if (results && results.length > 0) {
+            allCreditNotes = results;
+            filteredCreditNotes = results;
+            totalRecords = results.length;
+            currentPage = 1;
             
-        case 'credit-note':
-            params.creditNoteSerie = document.getElementById('creditNoteSerie')?.value.trim() || '';
-            params.creditNoteNumber = document.getElementById('creditNoteNumber')?.value.trim() || '';
-            break;
-            
-        case 'product':
-            params.productSearch = document.getElementById('productSearch')?.value.trim() || '';
-            break;
+            displayResults();
+        } else {
+            showNoResults();
+        }
+        
+    } catch (error) {
+        console.error('Error en la búsqueda:', error);
+        handleSearchError(error);
+    } finally {
+        showLoadingStateInline(false);
     }
-    
-    return params;
 }
 
 // Ejecutar búsqueda en la base de datos
@@ -399,6 +543,18 @@ function buildWhereClause(params) {
     
     // Filtros específicos según tipo de búsqueda
     switch (params.type) {
+        case 'all':
+            // Filtros por rango de fechas
+            if (params.fechaInicio) {
+                conditions.push('NCTProveedores.FechaHoraRegistro >= ?');
+                queryParams.push(params.fechaInicio + ' 00:00:00');
+            }
+            if (params.fechaFin) {
+                conditions.push('NCTProveedores.FechaHoraRegistro <= ?');
+                queryParams.push(params.fechaFin + ' 23:59:59');
+            }
+            break;
+            
         case 'invoice':
             if (params.invoiceSerie) {
                 conditions.push('facturas_compras.Serie = ?');
@@ -438,6 +594,7 @@ function buildWhereClause(params) {
     
     return { whereClause, queryParams };
 }
+
 // Mostrar resultados
 function displayResults() {
     // Mostrar panel de resultados
@@ -456,6 +613,9 @@ function displayResults() {
     // Mostrar paginación
     displayPagination();
     
+    // Actualizar indicador de filtros
+    updateFiltersIndicator();
+    
     // Animar panel
     setTimeout(() => {
         resultsPanel.style.opacity = '0';
@@ -471,6 +631,9 @@ function displayResults() {
                 behavior: 'smooth', 
                 block: 'start' 
             });
+            
+            // Auto-colapsar panel después del scroll
+            autoCollapsePanel();
         }, 100);
     }, 50);
     
@@ -595,21 +758,12 @@ function displayCreditNotes() {
 
 // Toggle detalles de nota de crédito
 async function toggleCreditNoteDetails(creditNoteId) {
-    
     const creditNoteItem = document.querySelector(`[data-id="${creditNoteId}"]`);
     const detailsContainer = document.getElementById(`details-${creditNoteId}`);
     const expandButton = creditNoteItem?.querySelector('.expand-toggle');
     
     // Verificar que todos los elementos existen
-    if (!creditNoteItem) {
-        return;
-    }
-    
-    if (!detailsContainer) {
-        return;
-    }
-    
-    if (!expandButton) {
+    if (!creditNoteItem || !detailsContainer || !expandButton) {
         return;
     }
     
@@ -634,7 +788,6 @@ async function toggleCreditNoteDetails(creditNoteId) {
             
             try {
                 const details = await loadCreditNoteDetails(creditNoteId);
-                
                 displayCreditNoteDetails(creditNoteId, details);
             } catch (error) {
                 console.error('Error cargando detalles:', error);
@@ -704,6 +857,7 @@ async function loadCreditNoteDetails(creditNoteId) {
         }
         
         const creditNote = creditNoteResult[0];
+        
         // Obtener detalles de productos (si existen)
         const productsQuery = `
             SELECT
@@ -717,8 +871,6 @@ async function loadCreditNoteDetails(creditNoteId) {
         
         const productsResult = await connection.query(productsQuery, [creditNoteId]);
         
-        await connection.close();
-        
         return {
             creditNote: creditNote,
             products: productsResult
@@ -726,6 +878,8 @@ async function loadCreditNoteDetails(creditNoteId) {
         
     } catch (error) {
         console.error('Error detallado en loadCreditNoteDetails:', error);
+        throw error;
+    } finally {
         if (connection) {
             try {
                 await connection.close();
@@ -733,7 +887,6 @@ async function loadCreditNoteDetails(creditNoteId) {
                 console.error('Error cerrando conexión:', closeError);
             }
         }
-        throw error;
     }
 }
 
@@ -940,29 +1093,112 @@ function showNoResults() {
     
     showWarningToast('No se encontraron notas de crédito con los criterios especificados');
 }
-
-// Ocultar todos los paneles de resultados
-function hideAllResultPanels() {
-    if (resultsPanel) resultsPanel.style.display = 'none';
-    if (noResultsPanel) noResultsPanel.style.display = 'none';
-}
-
-// Limpiar todos los filtros
-function clearAllFilters() {
-    // Limpiar campos específicos de búsqueda
-    const searchInputs = searchFields.querySelectorAll('input');
-    searchInputs.forEach(input => input.value = '');
+// Limpiar filtros inline
+function clearAllFiltersInline() {
+    // Limpiar todos los campos inline
+    const fechaInicio = document.getElementById('fechaInicioInline');
+    const fechaFin = document.getElementById('fechaFinInline');
+    const serie = document.getElementById('serieInline');
+    const numero = document.getElementById('numeroInline');
+    const product = document.getElementById('productSearchInline');
     
-    // Resetear tipo de búsqueda a "Todas"
+    if (fechaInicio) fechaInicio.value = '';
+    if (fechaFin) fechaFin.value = '';
+    if (serie) serie.value = '';
+    if (numero) numero.value = '';
+    if (product) product.value = '';
+    
+    // Limpiar estilos de validación
+    [fechaInicio, fechaFin, serie, numero, product].forEach(input => {
+        if (input) {
+            input.classList.remove('valid', 'invalid');
+            input.style.borderColor = 'var(--border-color)';
+        }
+    });
+    
+    // Resetear a "Mostrar Todas"
     searchTypeButtons.forEach(btn => btn.classList.remove('active'));
     document.getElementById('searchAll').classList.add('active');
     currentSearchType = 'all';
-    updateSearchFields();
+    updateInlineFields();
+    
+    // Configurar fechas por defecto
+    setupInlineDateFields();
     
     // Ocultar resultados
     hideAllResultPanels();
     
+    // Expandir panel si está colapsado
+    if (isSearchPanelCollapsed) {
+        toggleSearchPanel();
+    }
+    
+    // Actualizar indicador de filtros
+    updateFiltersIndicator();
+    
     showSuccessToast('Filtros limpiados correctamente');
+}
+
+// Mostrar estado de carga inline
+function showLoadingStateInline(isLoading) {
+    const searchButton = document.querySelector('.search-button-inline');
+    const buttonText = searchButton?.querySelector('.button-text');
+    const buttonIcon = searchButton?.querySelector('.button-icon');
+    
+    if (isLoading) {
+        if (buttonText) buttonText.textContent = 'Buscando...';
+        if (buttonIcon) buttonIcon.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        if (searchButton) {
+            searchButton.disabled = true;
+            searchButton.style.cursor = 'not-allowed';
+            searchButton.style.opacity = '0.7';
+        }
+    } else {
+        if (buttonText) buttonText.textContent = 'Buscar';
+        if (buttonIcon) buttonIcon.innerHTML = '<i class="fas fa-search"></i>';
+        if (searchButton) {
+            searchButton.disabled = false;
+            searchButton.style.cursor = 'pointer';
+            searchButton.style.opacity = '1';
+        }
+    }
+}
+
+// Función para scroll optimizado hacia filtros
+function scrollToFilters() {
+    if (!searchPanel) return;
+    
+    // Expandir panel si está colapsado
+    if (isSearchPanelCollapsed) {
+        toggleSearchPanel();
+    }
+    
+    // Scroll suave hacia el panel
+    setTimeout(() => {
+        searchPanel.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
+        });
+        
+        // Focus en el primer campo visible
+        setTimeout(() => {
+            const firstVisibleInput = document.querySelector('.search-inputs-inline input:not([style*="display: none"])');
+            if (firstVisibleInput) {
+                firstVisibleInput.focus();
+            }
+        }, 300);
+    }, isSearchPanelCollapsed ? 300 : 0);
+}
+
+// Cerrar modal de detalle
+function closeDetailModalFunc() {
+    if (creditNoteDetailModal) {
+        creditNoteDetailModal.classList.remove('show');
+        
+        setTimeout(() => {
+            creditNoteDetailModal.style.display = 'none';
+        }, 300);
+    }
 }
 
 // Manejar exportación
@@ -1026,7 +1262,7 @@ async function exportToExcel() {
             }
         }
         
-        // Generar el archivo como ArrayBuffer en lugar de descargarlo directamente
+        // Generar el archivo como ArrayBuffer
         const excelBuffer = XLSX.write(workbook, { 
             bookType: 'xlsx', 
             type: 'array' 
@@ -1043,10 +1279,9 @@ async function exportToExcel() {
         // Nombre sugerido para el archivo
         const suggestedFileName = `reporte_notas_credito_${getCurrentDateForFilename()}.xlsx`;
         
-        // Verificar si el navegador soporta File System Access API (Chrome, Edge modernos)
+        // Verificar si el navegador soporta File System Access API
         if ('showSaveFilePicker' in window) {
             try {
-                // Usar la API moderna para mostrar el diálogo de guardado
                 const fileHandle = await window.showSaveFilePicker({
                     suggestedName: suggestedFileName,
                     types: [{
@@ -1057,7 +1292,6 @@ async function exportToExcel() {
                     }]
                 });
                 
-                // Escribir el archivo en la ubicación seleccionada
                 const writable = await fileHandle.createWritable();
                 await writable.write(blob);
                 await writable.close();
@@ -1065,15 +1299,12 @@ async function exportToExcel() {
                 showSuccessToast('Archivo Excel guardado exitosamente');
                 
             } catch (error) {
-                // Si el usuario cancela el diálogo o hay error, usar método de fallback
                 if (error.name !== 'AbortError') {
                     console.warn('Error con showSaveFilePicker, usando fallback:', error);
                     downloadFileWithFallback(blob, suggestedFileName);
                 }
-                // Si es AbortError, el usuario canceló, no mostrar error
             }
         } else {
-            // Fallback para navegadores que no soportan File System Access API
             downloadFileWithFallback(blob, suggestedFileName);
         }
         
@@ -1083,23 +1314,18 @@ async function exportToExcel() {
         showErrorToast('Error al exportar los datos');
     }
 }
+
 function downloadFileWithFallback(blob, fileName) {
     try {
-        // Crear URL del blob
         const url = URL.createObjectURL(blob);
-        
-        // Crear elemento <a> temporal
         const downloadLink = document.createElement('a');
         downloadLink.href = url;
         downloadLink.download = fileName;
         downloadLink.style.display = 'none';
         
-        // Agregar al DOM, hacer clic y remover
         document.body.appendChild(downloadLink);
         downloadLink.click();
         document.body.removeChild(downloadLink);
-        
-        // Limpiar URL del blob
         URL.revokeObjectURL(url);
         
         showSuccessToast('Archivo Excel descargado exitosamente');
@@ -1109,6 +1335,7 @@ function downloadFileWithFallback(blob, fileName) {
         showErrorToast('Error al descargar el archivo');
     }
 }
+
 // Crear hoja de resumen
 function createSummarySheet() {
     const totalAmount = filteredCreditNotes.reduce((sum, note) => sum + parseFloat(note.Monto || 0), 0);
@@ -1117,12 +1344,40 @@ function createSummarySheet() {
     
     const now = new Date();
     
+    // Obtener información del filtro aplicado
+    const searchParams = getInlineSearchParameters();
+    let filterInfo = '';
+    
+    switch (searchParams.type) {
+        case 'all':
+            if (searchParams.fechaInicio && searchParams.fechaFin) {
+                filterInfo = `Rango de fechas: ${formatDate(searchParams.fechaInicio)} - ${formatDate(searchParams.fechaFin)}`;
+            } else if (searchParams.fechaInicio) {
+                filterInfo = `Desde: ${formatDate(searchParams.fechaInicio)}`;
+            } else if (searchParams.fechaFin) {
+                filterInfo = `Hasta: ${formatDate(searchParams.fechaFin)}`;
+            } else {
+                filterInfo = 'Todas las notas de crédito';
+            }
+            break;
+        case 'invoice':
+            filterInfo = `Factura: ${searchParams.invoiceSerie || ''}-${searchParams.invoiceNumber || ''}`;
+            break;
+        case 'credit-note':
+            filterInfo = `Nota de Crédito: ${searchParams.creditNoteSerie || ''}-${searchParams.creditNoteNumber || ''}`;
+            break;
+        case 'product':
+            filterInfo = `Producto: ${searchParams.productSearch || ''}`;
+            break;
+    }
+    
     return [
         ['REPORTE NOTAS DE CRÉDITO PROVEEDORES'],
         [''],
         ['Fecha de Generación:', formatDate(now)],
         ['Hora de Generación:', now.toLocaleTimeString()],
         ['Usuario:', localStorage.getItem('userName') || 'N/A'],
+        ['Filtro aplicado:', filterInfo],
         [''],
         ['RESUMEN ESTADÍSTICO'],
         [''],
@@ -1193,7 +1448,6 @@ async function createProductsSheet() {
         const merchandiseNotes = filteredCreditNotes.filter(note => note.IdConcepto === 1);
         const allProducts = [];
         
-        // Obtener productos para cada nota de mercadería
         for (const note of merchandiseNotes) {
             try {
                 const details = await loadCreditNoteDetails(note.IdNotaCreditoProveedores);
@@ -1245,9 +1499,7 @@ function handlePrint() {
         return;
     }
     
-    // Crear ventana de impresión
     const printWindow = window.open('', '_blank');
-    
     const printContent = generatePrintContent();
     
     printWindow.document.write(`
@@ -1277,7 +1529,6 @@ function handlePrint() {
                 }
             </style>
         </head>
-        </head>
         <body>
             ${printContent}
         </body>
@@ -1286,7 +1537,6 @@ function handlePrint() {
     
     printWindow.document.close();
     
-    // Esperar a que cargue y luego imprimir
     setTimeout(() => {
         printWindow.print();
         printWindow.close();
@@ -1360,51 +1610,6 @@ function generatePrintContent() {
     `;
 }
 
-// Scroll hacia filtros
-function scrollToFilters() {
-    const searchPanel = document.querySelector('.search-panel');
-    if (searchPanel) {
-        searchPanel.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'start' 
-        });
-    }
-}
-
-// Cerrar modal de detalle
-function closeDetailModalFunc() {
-    if (creditNoteDetailModal) {
-        creditNoteDetailModal.classList.remove('show');
-        
-        setTimeout(() => {
-            creditNoteDetailModal.style.display = 'none';
-        }, 300);
-    }
-}
-
-// Mostrar estado de carga
-function showLoadingState(isLoading) {
-    const searchButton = document.querySelector('.search-button');
-    const buttonText = searchButton?.querySelector('.button-text');
-    const buttonIcon = searchButton?.querySelector('.button-icon');
-    
-    if (isLoading) {
-        if (buttonText) buttonText.textContent = 'Buscando...';
-        if (buttonIcon) buttonIcon.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-        if (searchButton) {
-            searchButton.disabled = true;
-            searchButton.style.cursor = 'not-allowed';
-        }
-    } else {
-        if (buttonText) buttonText.textContent = 'Buscar Notas de Crédito';
-        if (buttonIcon) buttonIcon.innerHTML = '<i class="fas fa-search"></i>';
-        if (searchButton) {
-            searchButton.disabled = false;
-            searchButton.style.cursor = 'pointer';
-        }
-    }
-}
-
 // Manejar errores de búsqueda
 function handleSearchError(error) {
     console.error('Error en la búsqueda:', error);
@@ -1466,7 +1671,6 @@ function formatDateForExcel(dateString) {
     try {
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return dateString;
-        
         return date;
     } catch (error) {
         return dateString;
@@ -1539,8 +1743,72 @@ function showWarningToast(message) {
     });
 }
 
+// Funciones helper para obtener y aplicar estados
+function getFiltersState() {
+    return {
+        searchType: currentSearchType,
+        parameters: getInlineSearchParameters(),
+        hasActiveFilters: searchPanel?.classList.contains('has-filters') || false,
+        isCollapsed: isSearchPanelCollapsed
+    };
+}
+
+function applyFiltersState(state) {
+    if (!state) return;
+    
+    if (state.searchType) {
+        currentSearchType = state.searchType;
+        searchTypeButtons.forEach(btn => btn.classList.remove('active'));
+        const targetBtn = document.querySelector(`[data-type="${state.searchType}"]`);
+        if (targetBtn) targetBtn.classList.add('active');
+        updateInlineFields();
+    }
+    
+    if (state.parameters) {
+        const params = state.parameters;
+        
+        switch (params.type) {
+            case 'all':
+                const fechaInicio = document.getElementById('fechaInicioInline');
+                const fechaFin = document.getElementById('fechaFinInline');
+                if (fechaInicio && params.fechaInicio) fechaInicio.value = params.fechaInicio;
+                if (fechaFin && params.fechaFin) fechaFin.value = params.fechaFin;
+                break;
+                
+            case 'invoice':
+            case 'credit-note':
+                const serie = document.getElementById('serieInline');
+                const numero = document.getElementById('numeroInline');
+                if (serie && (params.invoiceSerie || params.creditNoteSerie)) {
+                    serie.value = params.invoiceSerie || params.creditNoteSerie;
+                }
+                if (numero && (params.invoiceNumber || params.creditNoteNumber)) {
+                    numero.value = params.invoiceNumber || params.creditNoteNumber;
+                }
+                break;
+                
+            case 'product':
+                const product = document.getElementById('productSearchInline');
+                if (product && params.productSearch) product.value = params.productSearch;
+                break;
+        }
+    }
+    
+    if (state.isCollapsed && !isSearchPanelCollapsed) {
+        toggleSearchPanel();
+    }
+    
+    updateFiltersIndicator();
+}
+
 // Hacer funciones globales para uso en HTML
+window.handleSearchTypeChangeInline = handleSearchTypeChangeInline;
+window.handleSearchInline = handleSearchInline;
+window.clearAllFiltersInline = clearAllFiltersInline;
+window.toggleSearchPanel = toggleSearchPanel;
 window.toggleCreditNoteDetails = toggleCreditNoteDetails;
 window.loadCreditNoteDetails = loadCreditNoteDetails;
 window.displayCreditNoteDetails = displayCreditNoteDetails;
 window.goToPage = goToPage;
+window.getFiltersState = getFiltersState;
+window.applyFiltersState = applyFiltersState;

@@ -42,16 +42,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (resultado.length > 0) {
                 const permisoValor = resultado[0][nombrePermiso];
-                console.log(`Permiso ${nombrePermiso} para usuario ${userId}:`, permisoValor);
                 
                 // Verificar si el permiso es 1 (tiene acceso)
                 return Number(permisoValor) === 1;
             } else {
-                console.warn(`No se encontraron permisos para el usuario ${userId}`);
                 return false;
             }
         } catch (error) {
-            console.error('Error al consultar permisos:', error);
             throw error; // Re-lanzar el error para que sea manejado por el caller
         } finally {
             if (connection) {
@@ -326,7 +323,55 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error al verificar permisos:', error);
         }
     });
+    document.getElementById('historialFacturasComprasLink').addEventListener('click', async (e) => {
+        e.preventDefault();
+        
+        // Mostrar indicador de carga mientras verifica permisos
+        const loadingAlert = Swal.fire({
+            title: 'Verificando permisos...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
 
+        try {
+            // Verificar permiso en tiempo real consultando la base de datos
+            const tienePermiso = await verificarPermisoEnTiempoReal('Historial_FacturasCompras');
+            
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            if (tienePermiso) {
+                // Mostrar mensaje de acceso concedido
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Acceso Concedido',
+                    text: 'Abriendo módulo de Reporte de Facturas...',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => {
+                    ipcRenderer.send('open-HisotrialFC-window');
+                });
+            } else {
+                mostrarAccesoDenegado('Historial de Cambios Facturas Comprasd');
+            }
+        } catch (error) {
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            // Manejar error de verificación
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Verificación',
+                text: 'No se pudo verificar los permisos. Inténtelo nuevamente.',
+                confirmButtonColor: '#6e78ff'
+            });
+            console.error('Error al verificar permisos:', error);
+        }
+    });
     // Función para obtener el saludo e icono según la hora del día
     function getGreetingAndIcon() {
         const hour = new Date().getHours();
@@ -425,7 +470,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('totalMontoFacturadocero').textContent = result[0]['COUNT(Idcuadre)'] || 0;
                 break;
             default:
-                console.warn(`Resultado no manejado para ${name}`);
         }
     }
 
@@ -484,9 +528,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const valor = item[valorKey];
             return typeof valor === 'bigint' ? Number(valor) : valor;
         });
-
-        console.log('Labels:', labels);
-        console.log('Valores:', valores);
 
         let total = valores.reduce((a, b) => a + b, 0);
         let titleText = canvasId === 'totalCuadresPorDiaChart' 
