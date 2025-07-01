@@ -2846,3 +2846,323 @@ body {
     border-color: #4caf50;
     background: rgba(76, 175, 80, 0.05);
 }
+/* Modificar la estructura de botones de acción */
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 25px;
+    padding-top: 0;
+}
+
+.action-buttons-row {
+    display: flex;
+    gap: 12px;
+}
+
+/* Nuevos estilos para botones de modificación y refacturación */
+.action-button.modification {
+    background: linear-gradient(135deg, var(--warning-color), #ffb74d);
+    color: white;
+    flex: 1;
+}
+
+.action-button.modification:hover {
+    box-shadow: 0 6px 20px rgba(255, 167, 38, 0.3);
+    transform: translateY(-1px);
+}
+
+.action-button.refacturation {
+    background: linear-gradient(135deg, var(--info-color), #4fc3f7);
+    color: white;
+    flex: 1;
+}
+
+.action-button.refacturation:hover {
+    box-shadow: 0 6px 20px rgba(41, 182, 246, 0.3);
+    transform: translateY(-1px);
+}
+
+/* Estilos para el modal de motivo de modificación */
+.modal-icon.modification {
+    background: linear-gradient(135deg, var(--warning-color), #ffb74d);
+}
+
+.modification-reason-form {
+    padding: 20px 0;
+}
+
+.modification-reason-form .form-group {
+    margin-bottom: 30px;
+}
+
+.modification-reason-form label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Responsive para botones */
+@media (max-width: 768px) {
+    .action-buttons-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .action-button.modification,
+    .action-button.refacturation {
+        width: 100%;
+    }
+}
+/* Mejorar estilos para campos editables en modo modificación */
+.editable-field {
+    transition: all 0.3s ease !important;
+}
+
+.editable-field:hover {
+    background: rgba(255, 167, 38, 0.1) !important;
+    border-color: var(--warning-color) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(255, 167, 38, 0.2) !important;
+}
+
+.edit-indicator {
+    animation: pulse-edit 2s infinite;
+}
+
+@keyframes pulse-edit {
+    0%, 100% { 
+        opacity: 0.7; 
+        transform: scale(1); 
+    }
+    50% { 
+        opacity: 1; 
+        transform: scale(1.2); 
+    }
+}
+
+/* Banner de modo modificación mejorado */
+.modification-banner {
+    background: linear-gradient(135deg, var(--warning-color), #ffb74d);
+    color: white;
+    padding: 15px 25px;
+    margin: 20px 25px 0;
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    animation: slideDown 0.6s ease;
+    border-left: 5px solid #ff8f00;
+}
+
+.modification-banner .banner-content {
+    flex: 1;
+}
+
+.modification-banner .banner-title {
+    font-weight: 700;
+    font-size: 16px;
+    margin-bottom: 5px;
+}
+
+.modification-banner .banner-subtitle {
+    font-size: 14px;
+    opacity: 0.9;
+    margin: 0;
+}
+
+.modification-banner .deactivate-btn {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.3s ease;
+}
+
+.modification-banner .deactivate-btn:hover {
+    background: rgba(255,255,255,0.3);
+}
+/* Estilos para el modal de refacturación */
+.modal-icon.refacturation {
+    background: linear-gradient(135deg, var(--info-color), #4fc3f7);
+}
+
+.refacturation-reason-form {
+    padding: 20px 0;
+}
+
+.refacturation-reason-form .form-group {
+    margin-bottom: 30px;
+}
+
+.refacturation-reason-form label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Advertencia de refacturación */
+.refacturation-warning {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px 20px;
+    background: rgba(255, 152, 0, 0.1);
+    border: 1px solid rgba(255, 152, 0, 0.3);
+    border-radius: var(--border-radius-md);
+    margin-bottom: 25px;
+}
+
+.refacturation-warning .warning-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--warning-color), #ffb74d);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.refacturation-warning .warning-text {
+    flex: 1;
+}
+
+.refacturation-warning .warning-text p {
+    margin: 3px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.refacturation-warning .warning-text p:first-child {
+    font-weight: 600;
+    color: var(--warning-color);
+}
+
+/* Banner de refacturación */
+.refactoring-banner {
+    background: linear-gradient(135deg, var(--info-color), #4fc3f7);
+    color: white;
+    padding: 15px 25px;
+    margin: 20px 25px 0;
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    animation: slideDown 0.6s ease;
+    border-left: 5px solid #1976d2;
+}
+
+.refactoring-banner .banner-content {
+    flex: 1;
+}
+
+.refactoring-banner .banner-title {
+    font-weight: 700;
+    font-size: 16px;
+    margin-bottom: 5px;
+}
+
+.refactoring-banner .banner-subtitle {
+    font-size: 14px;
+    opacity: 0.9;
+    margin: 0;
+}
+
+.refactoring-banner .deactivate-btn {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.3s ease;
+}
+
+.refactoring-banner .deactivate-btn:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+/* Botón de refacturación */
+.btn-primary.refacturation-btn {
+    background: linear-gradient(135deg, var(--info-color), #4fc3f7);
+}
+
+.btn-primary.refacturation-btn:hover {
+    background: linear-gradient(135deg, #1e88e5, var(--info-color));
+    box-shadow: 0 6px 20px rgba(41, 182, 246, 0.3);
+}
+
+/* Campos en modo refacturación */
+.editable-field.refacturation-mode {
+    border: 2px dashed var(--info-color) !important;
+    background: rgba(41, 182, 246, 0.05) !important;
+    min-height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.editable-field.refacturation-mode:hover {
+    background: rgba(41, 182, 246, 0.1) !important;
+    border-color: #1e88e5 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(41, 182, 246, 0.2) !important;
+}
+
+/* Placeholder para campos vacíos */
+.field-placeholder {
+    color: #999 !important;
+    font-style: italic !important;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.field-placeholder::before {
+    content: "📝";
+    font-size: 12px;
+}
+
+/* Responsive para refacturación */
+@media (max-width: 768px) {
+    .refacturation-warning {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+        padding: 15px;
+    }
+    
+    .refacturation-warning .warning-text p {
+        font-size: 12px;
+    }
+    
+    .refactoring-banner {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+    
+    .refactoring-banner .deactivate-btn {
+        width: 100%;
+        padding: 10px;
+    }
+}

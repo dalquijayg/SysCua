@@ -173,14 +173,26 @@
 
             <!-- Botones de acción -->
             <div class="action-buttons">
-                <button class="action-button primary" id="addCreditNoteBtn">
-                    <i class="fas fa-plus"></i>
-                    Agregar Nota de Crédito
-                </button>
-                <button class="action-button secondary" id="newSearchBtn">
-                    <i class="fas fa-search"></i>
-                    Nueva Búsqueda
-                </button>
+                <div class="action-buttons-row">
+                    <button class="action-button modification" id="modificationBtn">
+                        <i class="fas fa-edit"></i>
+                        Modificación
+                    </button>
+                    <button class="action-button refacturation" id="refacturationBtn">
+                        <i class="fas fa-redo"></i>
+                        Refacturación
+                    </button>
+                </div>
+                <div class="action-buttons-row">
+                    <button class="action-button primary" id="addCreditNoteBtn">
+                        <i class="fas fa-plus"></i>
+                        Agregar Nota de Crédito
+                    </button>
+                    <button class="action-button secondary" id="newSearchBtn">
+                        <i class="fas fa-search"></i>
+                        Nueva Búsqueda
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -334,7 +346,104 @@
             </div>
         </div>
     </div>
-
+    <!-- Modal para Motivo de Modificación -->
+    <div class="modal-overlay" id="modificationReasonModal" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-icon modification">
+                    <i class="fas fa-edit"></i>
+                </div>
+                <div class="modal-title">
+                    <h2>Seleccionar Motivo de Modificación</h2>
+                    <p>Seleccione la razón por la cual va a modificar esta factura</p>
+                </div>
+                <button class="modal-close" id="closeModificationReasonModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-content">
+                <form id="modificationReasonForm" class="modification-reason-form">
+                    <div class="form-group">
+                        <label for="modificationReason">Motivo de la Modificación *</label>
+                        <div class="select-wrapper">
+                            <select id="modificationReason" required>
+                                <option value="">Seleccione un motivo...</option>
+                            </select>
+                            <div class="select-icon">
+                                <i class="fas fa-chevron-down"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-actions">
+                        <button type="button" class="btn-secondary" id="cancelModificationReason">
+                            <i class="fas fa-times"></i>
+                            Cancelar
+                        </button>
+                        <button type="submit" class="btn-primary" id="acceptModificationReason">
+                            <i class="fas fa-check"></i>
+                            Habilitar Modificación
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- Modal para Motivo de Refacturación -->
+    <div class="modal-overlay" id="refacturingReasonModal" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-icon refacturation">
+                    <i class="fas fa-redo"></i>
+                </div>
+                <div class="modal-title">
+                    <h2>Seleccionar Motivo de Refacturación</h2>
+                    <p>Seleccione la razón por la cual va a refacturar esta factura</p>
+                </div>
+                <button class="modal-close" id="closeRefacturingReasonModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-content">
+                <div class="refacturation-warning">
+                    <div class="warning-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="warning-text">
+                        <p><strong>⚠️ Importante:</strong> La refacturación limpiará todos los campos editables.</p>
+                        <p>Deberá volver a ingresar toda la información requerida.</p>
+                    </div>
+                </div>
+                
+                <form id="refacturingReasonForm" class="refacturation-reason-form">
+                    <div class="form-group">
+                        <label for="refacturingReason">Motivo de la Refacturación *</label>
+                        <div class="select-wrapper">
+                            <select id="refacturingReason" required>
+                                <option value="">Seleccione un motivo...</option>
+                            </select>
+                            <div class="select-icon">
+                                <i class="fas fa-chevron-down"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-actions">
+                        <button type="button" class="btn-secondary" id="cancelRefacturingReason">
+                            <i class="fas fa-times"></i>
+                            Cancelar
+                        </button>
+                        <button type="submit" class="btn-primary refacturation-btn" id="acceptRefacturingReason">
+                            <i class="fas fa-redo"></i>
+                            Iniciar Refacturación
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
     <script src="../logica/FacturasCompras.js"></script>
 </body>
 </html>

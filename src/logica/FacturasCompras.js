@@ -8,6 +8,14 @@ let resultsPanel, notFoundPanel, newSearchBtn, tryAgainBtn, addCreditNoteBtn;
 let creditNoteModal, closeCreditNoteModal, cancelCreditNote, creditNoteForm;
 let merchandiseBtn, otherConceptsBtn;
 let merchandiseModal, closeMerchandiseModal, productSearchInput, productsContainer;
+let modificationReasonModal, closeModificationReasonModal, modificationReasonForm;
+let modificationBtn, refacturationBtn;
+let selectedModificationReason = null;
+let isModificationMode = false;
+let refacturingReasonModal, closeRefacturingReasonModal, refacturingReasonForm;
+let selectedRefacturingReason = null;
+let isRefacturingMode = false;
+let originalFieldValues = {};
 
 // Variables para edición inline
 let isEditing = false;
@@ -19,7 +27,15 @@ document.addEventListener('DOMContentLoaded', () => {
     searchSerie = document.getElementById('searchSerie');
     searchNumber = document.getElementById('searchNumber');
     searchButton = document.querySelector('.search-button');
-    
+    modificationBtn = document.getElementById('modificationBtn');
+    refacturationBtn = document.getElementById('refacturationBtn');
+    modificationReasonModal = document.getElementById('modificationReasonModal');
+    closeModificationReasonModal = document.getElementById('closeModificationReasonModal');
+    modificationReasonForm = document.getElementById('modificationReasonForm');
+    refacturingReasonModal = document.getElementById('refacturingReasonModal');
+    closeRefacturingReasonModal = document.getElementById('closeRefacturingReasonModal');
+    refacturingReasonForm = document.getElementById('refacturingReasonForm');
+
     // Verificar que los elementos críticos existen
     if (!searchForm || !searchSerie || !searchNumber || !searchButton) {
         return;
@@ -57,16 +73,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (creditNoteForm) creditNoteForm.addEventListener('submit', handleCreditNoteSubmit);
     if (merchandiseBtn) merchandiseBtn.addEventListener('click', () => selectConceptType('mercaderia'));
     if (otherConceptsBtn) otherConceptsBtn.addEventListener('click', () => selectConceptType('otros'));
-    
-    // Cerrar modal al hacer clic fuera
-    if (creditNoteModal) {
-        creditNoteModal.addEventListener('click', (e) => {
-            if (e.target === creditNoteModal) {
-                closeCreditNoteModalFunc();
-            }
-        });
-    }
+    if (modificationBtn) modificationBtn.addEventListener('click', handleModification);
+    if (refacturationBtn) refacturationBtn.addEventListener('click', handleRefacturation);
+    if (closeModificationReasonModal) closeModificationReasonModal.addEventListener('click', closeModificationReasonModalFunc);
+    if (modificationReasonForm) modificationReasonForm.addEventListener('submit', handleModificationReasonSubmit);
+    if (closeRefacturingReasonModal) closeRefacturingReasonModal.addEventListener('click', closeRefacturingReasonModalFunc);
+    if (refacturingReasonForm) refacturingReasonForm.addEventListener('submit', handleRefacturingReasonSubmit);
 
+    // Event listener para cancelar refacturación
+    const cancelRefacturingReason = document.getElementById('cancelRefacturingReason');
+    if (cancelRefacturingReason) cancelRefacturingReason.addEventListener('click', closeRefacturingReasonModalFunc);
     // Enfocar el primer input de búsqueda al cargar
     setTimeout(() => {
         if (searchSerie) {
@@ -74,7 +90,942 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, 100);
 });
+async function handleModification() {
+    if (!window.currentInvoice) {
+        showErrorToast('No hay una factura seleccionada');
+        return;
+    }
 
+    try {
+        // Cargar motivos de modificación
+        await loadModificationReasons();
+        
+        // Mostrar el modal
+        showModificationReasonModal();
+        
+    } catch (error) {
+        showErrorToast('Error al cargar los motivos de modificación: ' + error.message);
+    }
+}
+async function handleRefacturation() {
+    if (!window.currentInvoice) {
+        showErrorToast('No hay una factura seleccionada');
+        return;
+    }
+
+    try {
+        // Cargar motivos de refacturación
+        await loadRefacturingReasons();
+        
+        // Mostrar el modal
+        showRefacturingReasonModal();
+        
+    } catch (error) {
+        showErrorToast('Error al cargar los motivos de refacturación: ' + error.message);
+    }
+}
+// Mostrar modal de motivo de refacturación
+function showRefacturingReasonModal() {
+    refacturingReasonModal.style.display = 'flex';
+    
+    setTimeout(() => {
+        refacturingReasonModal.classList.add('show');
+    }, 10);
+    
+    setTimeout(() => {
+        document.getElementById('refacturingReason').focus();
+    }, 300);
+}
+
+// Cerrar modal de motivo de refacturación
+function closeRefacturingReasonModalFunc() {
+    refacturingReasonModal.classList.remove('show');
+    
+    setTimeout(() => {
+        refacturingReasonModal.style.display = 'none';
+        // Limpiar formulario
+        document.getElementById('refacturingReasonForm').reset();
+        selectedRefacturingReason = null;
+    }, 300);
+}
+
+// Manejar envío del formulario de motivo de refacturación
+function handleRefacturingReasonSubmit(e) {
+    e.preventDefault();
+    
+    const reasonId = document.getElementById('refacturingReason').value;
+    const reasonText = document.getElementById('refacturingReason').selectedOptions[0]?.text;
+    
+    console.log('🔍 Debug Refacturación - Reason ID:', reasonId);
+    console.log('🔍 Debug Refacturación - Reason Text:', reasonText);
+    
+    if (!reasonId) {
+        showErrorToast('Debe seleccionar un motivo de refacturación');
+        return;
+    }
+    
+    // Guardar el motivo seleccionado
+    window.selectedRefacturingReason = {
+        id: reasonId,
+        text: reasonText
+    };
+    
+    selectedRefacturingReason = window.selectedRefacturingReason;
+    
+    console.log('✅ Debug Refacturación - Motivo guardado:', selectedRefacturingReason);
+    
+    // Cerrar modal
+    closeRefacturingReasonModalFunc();
+    
+    // Habilitar modo refacturación
+    enableRefacturingMode();
+}
+function saveOriginalFieldValues() {
+    originalFieldValues = {
+        invoiceSerie: document.getElementById('invoiceSerie').textContent,
+        invoiceNumber: document.getElementById('invoiceNumber').textContent,
+        socialReason: document.getElementById('socialReason').textContent,
+        invoiceAmount: document.getElementById('invoiceAmount').textContent,
+        invoiceDate: document.getElementById('invoiceDate').textContent,
+        providerNit: document.getElementById('providerNit').textContent
+    };
+    
+    console.log('💾 Valores originales guardados:', originalFieldValues);
+}
+// Habilitar modo refacturación
+function enableRefacturingMode() {
+    isRefacturingMode = true;
+    isModificationMode = false; // Asegurar que no esté en modo modificación
+    
+    // Guardar valores originales antes de limpiar
+    saveOriginalFieldValues();
+    
+    // Limpiar los campos editables
+    clearEditableFields();
+    
+    // Configurar campos editables
+    setupEditableFieldsForRefactoring();
+    
+    // Cambiar apariencia de los campos editables
+    const editableElements = document.querySelectorAll('.editable-field');
+    editableElements.forEach(element => {
+        element.style.border = '2px dashed var(--info-color)';
+        element.style.backgroundColor = 'rgba(41, 182, 246, 0.05)';
+        element.style.cursor = 'pointer';
+        
+        // Agregar indicador visual de refacturación
+        if (!element.querySelector('.edit-indicator')) {
+            const indicator = document.createElement('span');
+            indicator.className = 'edit-indicator';
+            indicator.innerHTML = '🔄';
+            indicator.style.cssText = `
+                position: absolute;
+                top: 2px;
+                right: 5px;
+                font-size: 10px;
+                opacity: 0.7;
+                pointer-events: none;
+            `;
+            element.style.position = 'relative';
+            element.appendChild(indicator);
+        }
+    });
+    
+    // Mostrar mensaje de confirmación
+    showSuccessToast(`Modo refacturación habilitado: ${selectedRefacturingReason.text}`);
+    
+    // Mostrar banner de modo refacturación
+    showRefacturingBanner();
+    
+    // Hacer campos inmediatamente editables
+    makeFieldsImmediatelyEditableForRefactoring();
+}
+// Limpiar campos editables
+function clearEditableFields() {
+    const fieldsTolear = [
+        'invoiceSerie',
+        'invoiceNumber', 
+        'socialReason',
+        'invoiceAmount',
+        'invoiceDate',
+        'providerNit'
+    ];
+    
+    fieldsTolear.forEach(fieldId => {
+        const element = document.getElementById(fieldId);
+        if (element) {
+            element.textContent = '';
+            element.style.minHeight = '20px'; // Para que no colapse
+            element.style.border = '1px dashed #ccc';
+            element.style.padding = '5px';
+            
+            // Agregar placeholder visual
+            const placeholder = document.createElement('span');
+            placeholder.style.color = '#999';
+            placeholder.style.fontStyle = 'italic';
+            placeholder.textContent = 'Campo requerido - clic para editar';
+            element.appendChild(placeholder);
+        }
+    });
+}
+
+// Configurar campos editables para refacturación
+function setupEditableFieldsForRefactoring() {
+    const editableFields = [
+        { id: 'invoiceSerie', type: 'text', fieldName: 'Serie', tipoCambio: 1 },
+        { id: 'invoiceNumber', type: 'text', fieldName: 'Numero', tipoCambio: 2 },
+        { id: 'socialReason', type: 'select', fieldName: 'IdRazon', tipoCambio: 3 },
+        { id: 'invoiceAmount', type: 'number', fieldName: 'MontoFactura', tipoCambio: 4 },
+        { id: 'invoiceDate', type: 'date', fieldName: 'FechaFactura', tipoCambio: 5 },
+        { id: 'providerNit', type: 'provider-nit', fieldName: 'NIT', tipoCambio: 6 }
+    ];
+
+    editableFields.forEach(field => {
+        const element = document.getElementById(field.id);
+        if (element) {
+            element.classList.add('editable-field');
+        }
+    });
+}
+
+// Hacer campos inmediatamente editables para refacturación
+function makeFieldsImmediatelyEditableForRefactoring() {
+    const editableFields = [
+        { id: 'invoiceSerie', type: 'text', fieldName: 'Serie', tipoCambio: 1 },
+        { id: 'invoiceNumber', type: 'text', fieldName: 'Numero', tipoCambio: 2 },
+        { id: 'socialReason', type: 'select', fieldName: 'IdRazon', tipoCambio: 3 },
+        { id: 'invoiceAmount', type: 'number', fieldName: 'MontoFactura', tipoCambio: 4 },
+        { id: 'invoiceDate', type: 'date', fieldName: 'FechaFactura', tipoCambio: 5 },
+        { id: 'providerNit', type: 'provider-nit', fieldName: 'NIT', tipoCambio: 6 }
+    ];
+
+    editableFields.forEach(field => {
+        const element = document.getElementById(field.id);
+        if (element) {
+            // Agregar event listener de clic simple
+            element.addEventListener('click', () => {
+                if (isRefacturingMode && !isEditing) {
+                    enableInlineEditForRefactoring(element, field);
+                }
+            });
+            
+            // Actualizar título
+            element.title = 'Clic para editar (REQUERIDO)';
+        }
+    });
+}
+
+// Mostrar banner de modo refacturación
+function showRefacturingBanner() {
+    // Crear banner si no existe
+    let banner = document.getElementById('refacturingBanner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'refacturingBanner';
+        banner.className = 'refactoring-banner';
+        banner.innerHTML = `
+            <i class="fas fa-redo" style="font-size: 20px;"></i>
+            <div class="banner-content">
+                <div class="banner-title">Modo Refacturación Activo</div>
+                <p class="banner-subtitle">Motivo: ${selectedRefacturingReason.text}</p>
+                <small style="font-size: 12px; opacity: 0.8;">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    Todos los campos han sido limpiados y deben ser rellenados
+                </small>
+            </div>
+            <button onclick="disableRefacturingMode()" class="deactivate-btn">
+                <i class="fas fa-times"></i> Desactivar
+            </button>
+        `;
+        
+        // Insertar después del panel header
+        const resultsPanel = document.getElementById('resultsPanel');
+        const panelHeader = resultsPanel.querySelector('.panel-header');
+        panelHeader.insertAdjacentElement('afterend', banner);
+    }
+}
+function restoreOriginalFieldValues() {
+    Object.keys(originalFieldValues).forEach(fieldId => {
+        const element = document.getElementById(fieldId);
+        if (element && originalFieldValues[fieldId]) {
+            element.textContent = originalFieldValues[fieldId];
+        }
+    });
+}
+// Función especial para editar en modo refacturación
+async function enableInlineEditForRefactoring(element, fieldConfig) {
+    if (isEditing) {
+        showWarningToast('Ya hay un campo en edición. Complete la edición actual primero.');
+        return;
+    }
+
+    isEditing = true;
+    currentEditingElement = element;
+    
+    // Para refacturación, el valor original siempre viene de originalFieldValues
+    const originalValue = getOriginalValueForRefactoring(fieldConfig);
+    const currentValue = ''; // En refacturación siempre empezamos vacío
+    
+    // Limpiar el placeholder
+    element.innerHTML = '';
+    
+    // Crear el elemento de edición
+    let editElement;
+    
+    if (fieldConfig.type === 'select' && fieldConfig.fieldName === 'IdRazon') {
+        editElement = await createSocialReasonSelect(''); // Vacío para refacturación
+    } else if (fieldConfig.type === 'provider-nit') {
+        editElement = await createProviderNitInput(''); // Vacío para refacturación
+    } else {
+        editElement = createInputElement(fieldConfig.type, ''); // Vacío para refacturación
+    }
+    
+    // Reemplazar el contenido del span con el elemento de edición
+    element.appendChild(editElement);
+    
+    // Agregar botones de acción
+    const actionButtons = createActionButtons();
+    element.appendChild(actionButtons);
+    
+    // Enfocar el elemento
+    if (editElement.focus) {
+        editElement.focus();
+    }
+    
+    // Manejar eventos (similar pero con lógica de refacturación)
+    const handleSave = async () => {
+        let newValue;
+        let newDisplayValue;
+        let selectedProvider = null;
+        
+        // Lógica similar a la edición normal pero validando que no esté vacío
+        if (fieldConfig.type === 'select') {
+            const selectedOption = editElement.options[editElement.selectedIndex];
+            newValue = editElement.value;
+            newDisplayValue = selectedOption ? selectedOption.text : '';
+            
+            if (!newValue) {
+                showErrorToast('Debe seleccionar un valor para continuar con la refacturación');
+                return;
+            }
+            
+        } else if (fieldConfig.type === 'provider-nit') {
+            newValue = editElement.mainInput.value.trim();
+            selectedProvider = editElement.selectedProvider;
+            
+            if (!selectedProvider) {
+                showErrorToast('Debe seleccionar un proveedor válido para continuar con la refacturación');
+                return;
+            }
+            
+            newDisplayValue = formatNIT(selectedProvider.NIT);
+            
+        } else if (fieldConfig.type === 'number') {
+            newValue = parseFloat(editElement.value);
+            if (!newValue || newValue <= 0) {
+                showErrorToast('Debe ingresar un monto válido para continuar con la refacturación');
+                return;
+            }
+            newDisplayValue = formatCurrency(newValue);
+        } else if (fieldConfig.type === 'date') {
+            newValue = editElement.value;
+            if (!newValue) {
+                showErrorToast('Debe seleccionar una fecha para continuar con la refacturación');
+                return;
+            }
+            newDisplayValue = formatDate(newValue);
+        } else {
+            newValue = editElement.value.trim();
+            if (!newValue) {
+                showErrorToast('Este campo es requerido para continuar con la refacturación');
+                return;
+            }
+            newDisplayValue = newValue;
+        }
+        
+        // Validaciones específicas
+        if (!validateFieldValue(fieldConfig, newValue, selectedProvider)) {
+            return;
+        }
+        
+        try {
+            // Confirmar cambio (usando valor original guardado)
+            const confirmed = await confirmRefacturingChange(fieldConfig, originalValue, newDisplayValue, selectedProvider);
+            if (!confirmed) {
+                return;
+            }
+            
+            // Mostrar loading durante la actualización
+            Swal.fire({
+                title: 'Actualizando Sistema Completo...',
+                html: `
+                    <div style="text-align: center; margin: 20px 0;">
+                        <div class="loading-spinner"></div>
+                        <p style="margin-top: 15px; font-weight: 600;">Refacturando datos en:</p>
+                        <div style="text-align: left; margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 8px;">
+                            <p style="margin: 5px 0;"><strong>Sistema Central:</strong></p>
+                            <p style="margin: 2px 0; font-size: 14px;">• facturas_compras</p>
+                            <p style="margin: 2px 0; font-size: 14px;">• CambiosFacturasHistorial</p>
+                            <br>
+                            <p style="margin: 5px 0;"><strong>Sucursal:</strong></p>
+                            <p style="margin: 2px 0; font-size: 14px;">• inventarios</p>
+                            <p style="margin: 2px 0; font-size: 14px;">• facturas_compras</p>
+                            <p style="margin: 2px 0; font-size: 14px;">• ordenescompra_factura</p>
+                        </div>
+                        <p style="font-size: 14px; color: #6c757d;">Por favor espere...</p>
+                    </div>
+                `,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Guardar en base de datos usando la lógica de refacturación
+            await saveRefacturingFieldChange(fieldConfig, originalValue, newValue, selectedProvider);
+            
+            // Cerrar loading
+            Swal.close();
+            
+            // Actualizar la interfaz
+            element.innerHTML = newDisplayValue;
+            element.classList.add('field-updated');
+            
+            // Actualizar el objeto currentInvoice
+            updateCurrentInvoiceObject(fieldConfig, newValue, newDisplayValue, selectedProvider);
+            
+            // Resetear estado
+            isEditing = false;
+            currentEditingElement = null;
+            
+            // Mensaje de éxito
+            showSuccessToast('🎉 Campo refacturado exitosamente (Central + Sucursal)');
+            
+            // Quitar resaltado después de un tiempo
+            setTimeout(() => {
+                element.classList.remove('field-updated');
+            }, 3000);
+            
+        } catch (error) {
+            // Cerrar loading si está abierto
+            Swal.close();
+            showErrorToast('❌ Error al refacturar: ' + error.message);
+        }
+    };
+    
+    const cancelEdit = () => {
+        // En refacturación, volver a mostrar placeholder
+        element.innerHTML = '';
+        const placeholder = document.createElement('span');
+        placeholder.style.color = '#999';
+        placeholder.style.fontStyle = 'italic';
+        placeholder.textContent = 'Campo requerido - clic para editar';
+        element.appendChild(placeholder);
+        
+        isEditing = false;
+        currentEditingElement = null;
+    };
+    
+    // Event listeners para los botones
+    actionButtons.querySelector('.save-btn').addEventListener('click', handleSave);
+    actionButtons.querySelector('.cancel-btn').addEventListener('click', cancelEdit);
+    
+    // Event listener para Enter y Escape
+    editElement.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleSave();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelEdit();
+        }
+    });
+}
+
+// Obtener valor original para refacturación
+function getOriginalValueForRefactoring(fieldConfig) {
+    switch (fieldConfig.fieldName) {
+        case 'Serie':
+            return window.currentInvoice.Serie || '';
+        case 'Numero':
+            return window.currentInvoice.Numero || '';
+        case 'IdRazon':
+            return window.currentInvoice.IdRazon || '';
+        case 'MontoFactura':
+            return window.currentInvoice.MontoFactura || 0;
+        case 'FechaFactura':
+            if (window.currentInvoice.FechaFactura) {
+                const dateOnly = window.currentInvoice.FechaFactura.includes('T') 
+                    ? window.currentInvoice.FechaFactura.split('T')[0] 
+                    : window.currentInvoice.FechaFactura;
+                return dateOnly;
+            }
+            return '';
+        case 'NIT':
+            return window.currentInvoice.NIT || '';
+        default:
+            return '';
+    }
+}
+// Función auxiliar para obtener ID del elemento por fieldConfig
+function getFieldElementId(fieldConfig) {
+    const mapping = {
+        'Serie': 'invoiceSerie',
+        'Numero': 'invoiceNumber',
+        'IdRazon': 'socialReason',
+        'MontoFactura': 'invoiceAmount',
+        'FechaFactura': 'invoiceDate',
+        'NIT': 'providerNit'
+    };
+    return mapping[fieldConfig.fieldName] || '';
+}
+// Guardar cambio de refacturación (usa TipoModificacion = '1')
+async function saveRefacturingFieldChange(fieldConfig, oldValue, newValue, selectedProvider = null) {
+    let connection = null;
+    
+    try {
+        // 1. ACTUALIZAR EN LA BASE DE DATOS CENTRAL (DSN=facturas)
+        connection = await odbc.connect('DSN=facturas;charset=utf8');
+        
+        // Actualizar la factura en la base central
+        await updateInvoiceField(connection, fieldConfig, newValue, selectedProvider);
+        
+        // Registrar el cambio en el historial CON REFACTURACIÓN
+        await logRefacturingFieldChange(connection, fieldConfig, oldValue, newValue, selectedProvider);
+        
+        await connection.close();
+        connection = null;
+        
+        // 2. ACTUALIZAR EN LA BASE DE DATOS DE LA SUCURSAL (MySQL)
+        await updateBranchInventory(fieldConfig, newValue, selectedProvider);
+        
+    } catch (error) {
+        if (connection) {
+            try {
+                await connection.close();
+            } catch (closeError) {
+            }
+        }
+        
+        throw error;
+    }
+}
+
+// Registrar cambio de refacturación en historial
+async function logRefacturingFieldChange(connection, fieldConfig, oldValue, newValue, selectedProvider = null) {
+    const userId = localStorage.getItem('userId') || '0';
+    const userName = localStorage.getItem('userName') || 'Usuario Desconocido';
+    
+    let valorAnterior = oldValue.toString();
+    let valorNuevo = newValue.toString();
+    
+    // Para cambios de proveedor, registrar información más detallada
+    if (fieldConfig.fieldName === 'NIT' && selectedProvider) {
+        // Buscar el nombre del proveedor anterior
+        const originalProvider = `${window.currentInvoice.Nombre} (${formatNIT(window.currentInvoice.NIT)})`;
+        const newProvider = `${selectedProvider.Nombre} (${formatNIT(selectedProvider.NIT)})`;
+        
+        valorAnterior = originalProvider;
+        valorNuevo = newProvider;
+    }
+    
+    // Para cambios de razón social, guardar NOMBRES en lugar de IDs
+    if (fieldConfig.fieldName === 'IdRazon') {
+        try {
+            const oldRazonName = window.currentInvoice.NombreRazon || 'No disponible';
+            const newRazonQuery = `SELECT NombreRazon FROM razonessociales WHERE Id = ?`;
+            const newRazonResult = await connection.query(newRazonQuery, [newValue]);
+            const newRazonName = newRazonResult.length > 0 ? newRazonResult[0].NombreRazon : 'No encontrada';
+            
+            valorAnterior = oldRazonName;
+            valorNuevo = newRazonName;
+        } catch (error) {
+            valorAnterior = `ID: ${oldValue}`;
+            valorNuevo = `ID: ${newValue}`;
+        }
+    }
+    
+    const insertQuery = `
+        INSERT INTO CambiosFacturasHistorial (
+            IdTipoCambio,
+            TipoCambio,
+            ValorAnterior,
+            ValorNuevo,
+            IdInventario,
+            IdSucursal,
+            Sucursal,
+            IdFacturasCompras,
+            IdUsuario,
+            NombreUsuario,
+            TipoModificacion,
+            IdRazonModificacion
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    // Usar selectedRefacturingReason en lugar de selectedModificationReason
+    const refacturingReason = window.selectedRefacturingReason || selectedRefacturingReason;
+    
+    console.log('🔍 Debug Refacturación - Guardando en historial:', {
+        TipoModificacion: '1',
+        IdRazonModificacion: refacturingReason ? refacturingReason.id : null
+    });
+    
+    try {
+        const result = await connection.query(insertQuery, [
+            fieldConfig.tipoCambio,
+            getFieldDisplayName(fieldConfig.tipoCambio),
+            valorAnterior,
+            valorNuevo,
+            window.currentInvoice.IdInventory || '',
+            window.currentInvoice.IdSucursalCori || 0,
+            window.currentInvoice.NombreSucursal || '',
+            window.currentInvoice.Id,
+            parseInt(userId),
+            userName,
+            '1', // TipoModificacion para refacturación
+            refacturingReason ? refacturingReason.id : null // IdRazonModificacion
+        ]);
+        return result;
+        
+    } catch (error) {
+        throw error;
+    }
+}
+// Confirmar cambio de refacturación
+async function confirmRefacturingChange(fieldConfig, originalValue, newDisplayValue, selectedProvider = null) {
+    let changeDetails = `
+        <div style="text-align: left; margin: 20px 0;">
+            <p><strong>Campo:</strong> ${getFieldDisplayName(fieldConfig.tipoCambio)}</p>
+            <p><strong>Valor original:</strong> ${originalFieldValues[getFieldElementId(fieldConfig)] || 'No disponible'}</p>
+            <p><strong>Valor nuevo:</strong> ${newDisplayValue}</p>
+    `;
+    
+    if (fieldConfig.fieldName === 'NIT' && selectedProvider) {
+        changeDetails += `
+            <hr style="margin: 15px 0;">
+            <p><strong>Proveedor seleccionado:</strong></p>
+            <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 5px 0;">
+                <p style="margin: 2px 0;"><strong>Nombre:</strong> ${selectedProvider.Nombre}</p>
+                <p style="margin: 2px 0;"><strong>NIT:</strong> ${formatNIT(selectedProvider.NIT)}</p>
+                <p style="margin: 2px 0;"><strong>ID:</strong> ${selectedProvider.Id}</p>
+            </div>
+        `;
+    }
+    
+    changeDetails += `
+            <hr style="margin: 15px 0;">
+            <p style="color: #29b6f6; font-weight: 600;">
+                <i class="fas fa-redo"></i> 
+                Refacturación en progreso
+            </p>
+        </div>`;
+    
+    const result = await Swal.fire({
+        title: '¿Confirmar refacturación?',
+        html: changeDetails,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#29b6f6',
+        cancelButtonColor: '#ff5e6d',
+        confirmButtonText: 'Sí, refacturar',
+        cancelButtonText: 'Cancelar'
+    });
+    
+    return result.isConfirmed;
+}
+// Desactivar modo refacturación
+function disableRefacturingMode() {
+    isRefacturingMode = false;
+    selectedRefacturingReason = null;
+    
+    // Restaurar valores originales
+    restoreOriginalFieldValues();
+    
+    // Remover estilos de campos editables
+    const editableElements = document.querySelectorAll('.editable-field');
+    editableElements.forEach(element => {
+        element.style.border = '';
+        element.style.backgroundColor = '';
+        element.style.cursor = '';
+        element.style.position = '';
+        element.style.minHeight = '';
+        element.style.padding = '';
+        element.classList.remove('editable-field');
+        element.title = '';
+        
+        // Remover indicador de edición
+        const indicator = element.querySelector('.edit-indicator');
+        if (indicator) {
+            indicator.remove();
+        }
+        
+        // Remover todos los event listeners
+        const newElement = element.cloneNode(true);
+        element.parentNode.replaceChild(newElement, element);
+    });
+    
+    // Remover banner
+    const banner = document.getElementById('refacturingBanner');
+    if (banner) {
+        banner.remove();
+    }
+    
+    showInfoToast('Modo refacturación desactivado');
+}
+async function loadRefacturingReasons() {
+    try {
+        const connection = await odbc.connect('DSN=facturas;charset=utf8');
+        
+        const query = `
+            SELECT
+                TiposModificacion_Refacturacion.IdRazonModificacion, 
+                TiposModificacion_Refacturacion.RazonModificacion
+            FROM TiposModificacion_Refacturacion
+            WHERE TiposModificacion_Refacturacion.Motivo = 1
+            ORDER BY TiposModificacion_Refacturacion.RazonModificacion
+        `;
+        
+        const result = await connection.query(query);
+        await connection.close();
+        
+        // Llenar el select
+        const refacturingReasonSelect = document.getElementById('refacturingReason');
+        refacturingReasonSelect.innerHTML = '<option value="">Seleccione un motivo...</option>';
+        
+        result.forEach(reason => {
+            const option = document.createElement('option');
+            option.value = reason.IdRazonModificacion;
+            option.textContent = reason.RazonModificacion;
+            refacturingReasonSelect.appendChild(option);
+        });
+        
+    } catch (error) {
+        throw error;
+    }
+}
+// Cargar motivos de modificación
+async function loadModificationReasons() {
+    try {
+        const connection = await odbc.connect('DSN=facturas;charset=utf8');
+        
+        const query = `
+            SELECT
+                TiposModificacion_Refacturacion.IdRazonModificacion, 
+                TiposModificacion_Refacturacion.RazonModificacion
+            FROM TiposModificacion_Refacturacion
+            WHERE TiposModificacion_Refacturacion.Motivo = 2
+            ORDER BY TiposModificacion_Refacturacion.RazonModificacion
+        `;
+        
+        const result = await connection.query(query);
+        await connection.close();
+        
+        // Llenar el select
+        const modificationReasonSelect = document.getElementById('modificationReason');
+        modificationReasonSelect.innerHTML = '<option value="">Seleccione un motivo...</option>';
+        
+        result.forEach(reason => {
+            const option = document.createElement('option');
+            option.value = reason.IdRazonModificacion;
+            option.textContent = reason.RazonModificacion;
+            modificationReasonSelect.appendChild(option);
+        });
+        
+    } catch (error) {
+        throw error;
+    }
+}
+
+// Mostrar modal de motivo de modificación
+function showModificationReasonModal() {
+    modificationReasonModal.style.display = 'flex';
+    
+    setTimeout(() => {
+        modificationReasonModal.classList.add('show');
+    }, 10);
+    
+    setTimeout(() => {
+        document.getElementById('modificationReason').focus();
+    }, 300);
+}
+
+// Cerrar modal de motivo de modificación
+function closeModificationReasonModalFunc() {
+    modificationReasonModal.classList.remove('show');
+    
+    setTimeout(() => {
+        modificationReasonModal.style.display = 'none';
+        // Limpiar formulario
+        document.getElementById('modificationReasonForm').reset();
+        selectedModificationReason = null;
+    }, 300);
+}
+
+// Manejar envío del formulario de motivo
+function handleModificationReasonSubmit(e) {
+    e.preventDefault();
+    
+    const reasonId = document.getElementById('modificationReason').value;
+    const reasonText = document.getElementById('modificationReason').selectedOptions[0]?.text;
+    
+    if (!reasonId) {
+        showErrorToast('Debe seleccionar un motivo de modificación');
+        return;
+    }
+    
+    // Guardar en window object para mayor persistencia
+    window.selectedModificationReason = {
+        id: reasonId,
+        text: reasonText
+    };
+    
+    // También mantener la variable local
+    selectedModificationReason = window.selectedModificationReason;
+    
+    // Cerrar modal
+    closeModificationReasonModalFunc();
+    
+    // Habilitar modo modificación
+    enableModificationMode();
+}
+
+// Habilitar modo modificación
+function enableModificationMode() {
+    isModificationMode = true;
+    
+    // Configurar campos editables
+    setupEditableFields();
+    
+    // Cambiar apariencia de los campos editables Y hacerlos editables inmediatamente
+    const editableElements = document.querySelectorAll('.editable-field');
+    editableElements.forEach(element => {
+        element.style.border = '2px dashed var(--warning-color)';
+        element.style.backgroundColor = 'rgba(255, 167, 38, 0.05)';
+        element.style.cursor = 'pointer';
+        
+        // Agregar indicador visual de que es editable
+        if (!element.querySelector('.edit-indicator')) {
+            const indicator = document.createElement('span');
+            indicator.className = 'edit-indicator';
+            indicator.innerHTML = '✏️';
+            indicator.style.cssText = `
+                position: absolute;
+                top: 2px;
+                right: 5px;
+                font-size: 10px;
+                opacity: 0.7;
+                pointer-events: none;
+            `;
+            element.style.position = 'relative';
+            element.appendChild(indicator);
+        }
+    });
+    
+    // Cerrar modal
+    closeModificationReasonModalFunc();
+    
+    // Mostrar mensaje de confirmación
+    showSuccessToast(`Modo modificación habilitado: ${selectedModificationReason.text}`);
+    
+    // Mostrar banner de modo modificación
+    showModificationBanner();
+    
+    // Hacer campos inmediatamente editables
+    makeFieldsImmediatelyEditable();
+}
+function makeFieldsImmediatelyEditable() {
+    const editableFields = [
+        { id: 'invoiceSerie', type: 'text', fieldName: 'Serie', tipoCambio: 1 },
+        { id: 'invoiceNumber', type: 'text', fieldName: 'Numero', tipoCambio: 2 },
+        { id: 'socialReason', type: 'select', fieldName: 'IdRazon', tipoCambio: 3 },
+        { id: 'invoiceAmount', type: 'number', fieldName: 'MontoFactura', tipoCambio: 4 },
+        { id: 'invoiceDate', type: 'date', fieldName: 'FechaFactura', tipoCambio: 5 },
+        { id: 'providerNit', type: 'provider-nit', fieldName: 'NIT', tipoCambio: 6 }
+    ];
+
+    editableFields.forEach(field => {
+        const element = document.getElementById(field.id);
+        if (element) {
+            // Remover event listener de doble clic
+            element.removeEventListener('dblclick', () => enableInlineEdit(element, field));
+            
+            // Agregar event listener de clic simple
+            element.addEventListener('click', () => {
+                if (isModificationMode && !isEditing) {
+                    enableInlineEdit(element, field);
+                }
+            });
+            
+            // Actualizar título
+            element.title = 'Clic para editar';
+        }
+    });
+}
+function showModificationBanner() {
+    // Crear banner si no existe
+    let banner = document.getElementById('modificationBanner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'modificationBanner';
+        banner.className = 'modification-banner';
+        banner.innerHTML = `
+            <i class="fas fa-edit" style="font-size: 20px;"></i>
+            <div class="banner-content">
+                <div class="banner-title">Modo Modificación Activo</div>
+                <p class="banner-subtitle">Motivo: ${selectedModificationReason.text}</p>
+                <small style="font-size: 12px; opacity: 0.8;">
+                    <i class="fas fa-info-circle"></i> 
+                    Haz clic en cualquier campo naranja para editarlo
+                </small>
+            </div>
+            <button onclick="disableModificationMode()" class="deactivate-btn">
+                <i class="fas fa-times"></i> Desactivar
+            </button>
+        `;
+        
+        // Insertar después del panel header
+        const resultsPanel = document.getElementById('resultsPanel');
+        const panelHeader = resultsPanel.querySelector('.panel-header');
+        panelHeader.insertAdjacentElement('afterend', banner);
+    }
+}
+
+// Desactivar modo modificación
+function disableModificationMode() {
+    isModificationMode = false;
+    selectedModificationReason = null;
+    
+    // Remover estilos de campos editables
+    const editableElements = document.querySelectorAll('.editable-field');
+    editableElements.forEach(element => {
+        element.style.border = '';
+        element.style.backgroundColor = '';
+        element.style.cursor = '';
+        element.style.position = '';
+        element.classList.remove('editable-field');
+        element.title = '';
+        
+        // Remover indicador de edición
+        const indicator = element.querySelector('.edit-indicator');
+        if (indicator) {
+            indicator.remove();
+        }
+        
+        // Remover todos los event listeners
+        const newElement = element.cloneNode(true);
+        element.parentNode.replaceChild(newElement, element);
+    });
+    
+    // Remover banner
+    const banner = document.getElementById('modificationBanner');
+    if (banner) {
+        banner.remove();
+    }
+    
+    showInfoToast('Modo modificación desactivado');
+}
 // Inicializar la aplicación
 function initializeApp() {
     // Animar elementos de entrada
@@ -333,13 +1284,17 @@ function populateInvoiceData(invoice) {
 }
 // Configurar campos editables
 function setupEditableFields() {
+    // Solo configurar si estamos en modo modificación
+    if (!isModificationMode) {
+        return;
+    }
+    
     const editableFields = [
         { id: 'invoiceSerie', type: 'text', fieldName: 'Serie', tipoCambio: 1 },
         { id: 'invoiceNumber', type: 'text', fieldName: 'Numero', tipoCambio: 2 },
         { id: 'socialReason', type: 'select', fieldName: 'IdRazon', tipoCambio: 3 },
         { id: 'invoiceAmount', type: 'number', fieldName: 'MontoFactura', tipoCambio: 4 },
         { id: 'invoiceDate', type: 'date', fieldName: 'FechaFactura', tipoCambio: 5 },
-        // NUEVO: Agregar edición de proveedor por NIT
         { id: 'providerNit', type: 'provider-nit', fieldName: 'NIT', tipoCambio: 6 }
     ];
 
@@ -348,12 +1303,7 @@ function setupEditableFields() {
         if (element) {
             // Agregar clase para indicar que es editable
             element.classList.add('editable-field');
-            
-            // Agregar evento de doble clic
-            element.addEventListener('dblclick', () => enableInlineEdit(element, field));
-            
-            // Agregar indicador visual
-            element.title = 'Doble clic para editar';
+
         }
     });
 }
@@ -1331,42 +2281,48 @@ async function logFieldChange(connection, fieldConfig, oldValue, newValue, selec
     const userId = localStorage.getItem('userId') || '0';
     const userName = localStorage.getItem('userName') || 'Usuario Desconocido';
     
+    // Determinar qué tipo de modificación es
+    let modificationReason = null;
+    let tipoModificacion = '2'; // Por defecto modificación
+    
+    if (isRefacturingMode && selectedRefacturingReason) {
+        modificationReason = selectedRefacturingReason;
+        tipoModificacion = '1';
+        console.log('🔍 Debug - Usando refacturación:', modificationReason);
+    } else if (isModificationMode && selectedModificationReason) {
+        modificationReason = selectedModificationReason;
+        tipoModificacion = '2';
+        console.log('🔍 Debug - Usando modificación:', modificationReason);
+    } else {
+        // Intentar obtener de window object
+        modificationReason = window.selectedRefacturingReason || window.selectedModificationReason;
+        tipoModificacion = window.selectedRefacturingReason ? '1' : '2';
+    }
+    
+    console.log('🔍 Debug - Tipo modificación final:', tipoModificacion);
+    console.log('🔍 Debug - Razón final:', modificationReason);
+    
     let valorAnterior = oldValue.toString();
     let valorNuevo = newValue.toString();
     
-    // NUEVO: Para cambios de proveedor, registrar información más detallada
-    if (fieldConfig.fieldName === 'NIT' && selectedProvider) {
-        const currentProvider = `${window.currentInvoice.Nombre} (${formatNIT(window.currentInvoice.NIT)})`;
-        const newProvider = `${selectedProvider.Nombre} (${formatNIT(selectedProvider.NIT)})`;
-        
-        valorAnterior = currentProvider;
-        valorNuevo = newProvider;
-    }
+    // ... resto del código de formateo igual ...
     
-    // NUEVO: Para cambios de razón social, guardar NOMBRES en lugar de IDs
-    if (fieldConfig.fieldName === 'IdRazon') {
-        try {
-            // Obtener nombre de la razón social anterior
-            const oldRazonName = window.currentInvoice.NombreRazon || 'No disponible';
-            
-            // Obtener nombre de la nueva razón social
-            const newRazonQuery = `
-                SELECT NombreRazon 
-                FROM razonessociales 
-                WHERE Id = ?
-            `;
-            
-            const newRazonResult = await connection.query(newRazonQuery, [newValue]);
-            const newRazonName = newRazonResult.length > 0 ? newRazonResult[0].NombreRazon : 'No encontrada';
-            
-            valorAnterior = oldRazonName;
-            valorNuevo = newRazonName;
-            
-        } catch (error) {
-            valorAnterior = `ID: ${oldValue}`;
-            valorNuevo = `ID: ${newValue}`;
-        }
-    }
+    const insertParams = [
+        fieldConfig.tipoCambio,
+        getFieldDisplayName(fieldConfig.tipoCambio),
+        valorAnterior,
+        valorNuevo,
+        window.currentInvoice.IdInventory || '',
+        window.currentInvoice.IdSucursalCori || 0,
+        window.currentInvoice.NombreSucursal || '',
+        window.currentInvoice.Id,
+        parseInt(userId),
+        userName,
+        tipoModificacion, // '1' para refacturación, '2' para modificación
+        modificationReason ? modificationReason.id : null
+    ];
+    
+    console.log('🔍 Debug - Parámetros finales para INSERT:', insertParams);
     
     const insertQuery = `
         INSERT INTO CambiosFacturasHistorial (
@@ -1379,26 +2335,19 @@ async function logFieldChange(connection, fieldConfig, oldValue, newValue, selec
             Sucursal,
             IdFacturasCompras,
             IdUsuario,
-            NombreUsuario
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            NombreUsuario,
+            TipoModificacion,
+            IdRazonModificacion
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     try {
-        const result = await connection.query(insertQuery, [
-            fieldConfig.tipoCambio,
-            getFieldDisplayName(fieldConfig.tipoCambio),
-            valorAnterior,
-            valorNuevo,
-            window.currentInvoice.IdInventory || '',
-            window.currentInvoice.IdSucursalCori || 0,
-            window.currentInvoice.NombreSucursal || '',
-            window.currentInvoice.Id,
-            parseInt(userId),
-            userName
-        ]);
+        const result = await connection.query(insertQuery, insertParams);
+        console.log('✅ Debug - INSERT exitoso:', result);
         return result;
         
     } catch (error) {
+        console.error('❌ Debug - Error en INSERT:', error);
         throw error;
     }
 }
@@ -1504,11 +2453,13 @@ function resetSearch() {
     
     // Mostrar el panel de búsqueda con animación
     showSearchPanel();
-    
+    disableModificationMode();
+    disableRefacturingMode();
     // Limpiar datos guardados
     window.currentInvoice = null;
     isEditing = false;
     currentEditingElement = null;
+    
 }
 
 // Ocultar panel de búsqueda con animación
