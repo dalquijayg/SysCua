@@ -91,14 +91,26 @@
                             <option value="6">Proveedor</option>
                         </select>
                     </div>
-                    
-                    <!-- Filtro por usuario -->
                     <div class="filter-group">
-                        <label for="usuarioFiltro">
-                            <i class="fas fa-user"></i>
-                            Usuario (Opcional)
+                        <label for="tipoModificacion">
+                            <i class="fas fa-cog"></i>
+                            Motivo de Modificación
                         </label>
-                        <input type="text" id="usuarioFiltro" name="usuarioFiltro" placeholder="Nombre del usuario...">
+                        <select id="tipoModificacion" name="tipoModificacion">
+                            <option value="">Todos los motivos</option>
+                            <option value="1">Modificación</option>
+                            <option value="2">Refacturación</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="razonModificacion">
+                            <i class="fas fa-clipboard-list"></i>
+                            Razón de Modificación
+                        </label>
+                        <select id="razonModificacion" name="razonModificacion" disabled>
+                            <option value="">Seleccione primero el motivo</option>
+                        </select>
                     </div>
                 </div>
                 

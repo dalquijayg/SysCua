@@ -707,7 +707,7 @@ function displayCreditNotes() {
         
         return `
             <div class="credit-note-item" data-id="${note.IdNotaCreditoProveedores}">
-                <div class="credit-note-header" onclick="toggleCreditNoteDetails(${note.IdNotaCreditoProveedores})">
+                <div class="credit-note-header" onclick="window.toggleCreditNoteDetails(${note.IdNotaCreditoProveedores})">
                     <div class="credit-note-icon ${iconClass}">
                         <i class="${iconType}"></i>
                     </div>
@@ -758,12 +758,17 @@ function displayCreditNotes() {
 
 // Toggle detalles de nota de crédito
 async function toggleCreditNoteDetails(creditNoteId) {
+    console.log('Expandiendo nota:', creditNoteId); // Para debug
+    
     const creditNoteItem = document.querySelector(`[data-id="${creditNoteId}"]`);
     const detailsContainer = document.getElementById(`details-${creditNoteId}`);
     const expandButton = creditNoteItem?.querySelector('.expand-toggle');
     
+    console.log('Elementos encontrados:', {creditNoteItem, detailsContainer, expandButton}); // Para debug
+    
     // Verificar que todos los elementos existen
     if (!creditNoteItem || !detailsContainer || !expandButton) {
+        console.error('No se encontraron todos los elementos necesarios');
         return;
     }
     
@@ -776,6 +781,7 @@ async function toggleCreditNoteDetails(creditNoteId) {
     } else {
         creditNoteItem.classList.add('expanded');
         expandButton.classList.add('expanded');
+        detailsContainer.style.display = 'block';
         
         // Cargar detalles si no están cargados
         if (detailsContainer.innerHTML.trim() === '') {
@@ -795,17 +801,10 @@ async function toggleCreditNoteDetails(creditNoteId) {
                     <div style="text-align: center; padding: 20px; color: var(--error-color);">
                         <i class="fas fa-exclamation-triangle" style="font-size: 18px;"></i>
                         <span style="margin-left: 10px;">Error cargando detalles: ${error.message}</span>
-                        <br><br>
-                        <button onclick="toggleCreditNoteDetails(${creditNoteId})" 
-                                style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
-                            Intentar de nuevo
-                        </button>
                     </div>
                 `;
             }
         }
-        
-        detailsContainer.style.display = 'block';
     }
 }
 
@@ -1253,13 +1252,10 @@ async function exportToExcel() {
         XLSX.utils.book_append_sheet(workbook, detailSheet, 'Detalle Notas');
         
         // Hoja 3: Productos (solo si hay notas de mercadería)
-        const merchandiseNotes = filteredCreditNotes.filter(note => note.IdConcepto === 1);
-        if (merchandiseNotes.length > 0) {
-            const productsData = await createProductsSheet();
-            if (productsData && productsData.length > 0) {
-                const productsSheet = XLSX.utils.aoa_to_sheet(productsData);
-                XLSX.utils.book_append_sheet(workbook, productsSheet, 'Productos');
-            }
+        const productsData = await createProductsSheet();
+        if (productsData && productsData.length > 0) {
+            const productsSheet = XLSX.utils.aoa_to_sheet(productsData);
+            XLSX.utils.book_append_sheet(workbook, productsSheet, 'Detalle Completo');
         }
         
         // Generar el archivo como ArrayBuffer
@@ -1445,45 +1441,81 @@ function createDetailSheet() {
 // Crear hoja de productos (asíncrona)
 async function createProductsSheet() {
     try {
-        const merchandiseNotes = filteredCreditNotes.filter(note => note.IdConcepto === 1);
-        const allProducts = [];
+        const allRecords = [];
         
-        for (const note of merchandiseNotes) {
-            try {
-                const details = await loadCreditNoteDetails(note.IdNotaCreditoProveedores);
-                if (details && details.products && details.products.length > 0) {
-                    details.products.forEach(product => {
-                        allProducts.push([
-                            note.Serie + '-' + note.Numero,
-                            note.NombreProveedore,
-                            product.Upc || '',
-                            product.Descripcion || '',
-                            parseInt(product.Cantidad || 0)
+        for (const note of filteredCreditNotes) {
+            const baseRecord = [
+                note.Serie + '-' + note.Numero,
+                note.NombreProveedore || '',
+                parseFloat(note.Monto || 0),
+                formatDateForExcel(note.FechaHoraRegistro),
+                note.SeriaFacturaRecibida + '-' + note.NumeroFacturaRecibida,
+                parseFloat(note.MontoFactura || 0),
+                formatDateForExcel(note.FechaFactura)
+            ];
+            
+            // Si es nota de mercadería, intentar cargar productos
+            if (note.IdConcepto === 1) {
+                try {
+                    const details = await loadCreditNoteDetails(note.IdNotaCreditoProveedores);
+                    if (details && details.products && details.products.length > 0) {
+                        // Agregar cada producto como una fila
+                        details.products.forEach(product => {
+                            allRecords.push([
+                                ...baseRecord,
+                                product.Upc || '',
+                                product.Descripcion || '',
+                                parseInt(product.Cantidad || 0)
+                            ]);
+                        });
+                    } else {
+                        // Nota de mercadería sin productos
+                        allRecords.push([
+                            ...baseRecord,
+                            '',
+                            '',
+                            ''
                         ]);
-                    });
+                    }
+                } catch (error) {
+                    console.warn(`Error cargando productos para nota ${note.IdNotaCreditoProveedores}:`, error);
+                    // En caso de error, agregar sin productos
+                    allRecords.push([
+                        ...baseRecord,
+                        '',
+                        '',
+                        ''
+                    ]);
                 }
-            } catch (error) {
-                console.warn(`Error cargando productos para nota ${note.IdNotaCreditoProveedores}:`, error);
+            } else {
+                // Nota de otros conceptos (sin productos)
+                allRecords.push([
+                    ...baseRecord,
+                    '',
+                    '',
+                    ''
+                ]);
             }
-        }
-        
-        if (allProducts.length === 0) {
-            return null;
         }
         
         const headers = [
             'Nota de Crédito',
             'Proveedor',
+            'Monto Nota',
+            'Fecha Nota',
+            'Factura Original',
+            'Monto Factura',
+            'Fecha Factura',
             'UPC',
             'Descripción',
             'Cantidad'
         ];
         
         return [
-            ['PRODUCTOS DEVUELTOS'],
+            ['DETALLE COMPLETO - NOTAS DE CRÉDITO Y PRODUCTOS'],
             [''],
             headers,
-            ...allProducts
+            ...allRecords
         ];
         
     } catch (error) {

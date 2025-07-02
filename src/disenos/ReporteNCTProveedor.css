@@ -1098,12 +1098,7 @@ body {
     align-items: center;
     justify-content: center;
     font-size: 16px;
-}
-
-.expand-toggle:hover {
-    background: var(--primary-color);
-    color: white;
-    transform: scale(1.1);
+    transition: all 0.3s ease !important;
 }
 
 .expand-toggle.expanded {
@@ -1118,10 +1113,11 @@ body {
     padding: 0 20px 20px;
     border-top: 1px solid var(--border-color);
     background: rgba(110, 120, 255, 0.02);
+    animation: slideDown 0.3s ease;
 }
 
 .credit-note-item.expanded .credit-note-details {
-    display: block;
+    display: block !important;
     animation: slideDown 0.3s ease;
 }
 
@@ -1737,4 +1733,33 @@ body {
         font-size: 12px;
         margin: 0 15px;
     }
+}
+.credit-note-item.expanded .expand-toggle {
+    background: var(--primary-color) !important;
+    color: white !important;
+    transform: rotate(180deg) !important;
+    box-shadow: var(--shadow-md);
+}
+
+/* Cambio visual adicional para el header cuando está expandido */
+.credit-note-item.expanded .credit-note-header {
+    background: rgba(110, 120, 255, 0.05);
+    border-bottom: 1px solid var(--primary-light);
+}
+
+/* Efecto hover mejorado */
+.expand-toggle:hover {
+    background: var(--primary-color) !important;
+    color: white !important;
+    transform: scale(1.1);
+    box-shadow: var(--shadow-md);
+}
+
+/* Asegurar que el ícono rote correctamente */
+.expand-toggle i {
+    transition: transform 0.3s ease;
+}
+
+.expand-toggle.expanded i {
+    transform: rotate(180deg);
 }

@@ -8,6 +8,8 @@ let currentPage = 1;
 let pageSize = 25;
 let totalRecords = 0;
 let isLoading = false;
+let tipoModificacion, razonModificacion;
+let razonesModificacion = []; 
 
 // Elementos del DOM
 let filtersForm, fechaDesde, fechaHasta, tipoCambio, usuarioFiltro;
@@ -33,7 +35,8 @@ function initializeDOMElements() {
     fechaDesde = document.getElementById('fechaDesde');
     fechaHasta = document.getElementById('fechaHasta');
     tipoCambio = document.getElementById('tipoCambio');
-    usuarioFiltro = document.getElementById('usuarioFiltro');
+    tipoModificacion = document.getElementById('tipoModificacion');
+    razonModificacion = document.getElementById('razonModificacion');
     
     // Paneles principales
     resultsPanel = document.getElementById('resultsPanel');
@@ -135,7 +138,7 @@ function formatDateForInput(date) {
 function setupEventListeners() {
     // Formulario de filtros
     filtersForm.addEventListener('submit', handleSearch);
-    
+    tipoModificacion.addEventListener('change', handleTipoModificacionChange);
     // Botones de acción
     document.getElementById('limpiarFiltros').addEventListener('click', clearFilters);
     document.getElementById('nuevaBusqueda').addEventListener('click', showWelcomePanel);
@@ -158,7 +161,63 @@ function setupEventListeners() {
         }
     });
 }
-
+async function handleTipoModificacionChange() {
+    const tipo = tipoModificacion.value;
+    
+    // Limpiar y deshabilitar razón de modificación
+    razonModificacion.innerHTML = '<option value="">Seleccione una razón</option>';
+    razonModificacion.disabled = !tipo;
+    
+    if (!tipo) return;
+    
+    try {
+        // Cargar razones de modificación
+        const razones = await loadRazonesModificacion(tipo);
+        
+        razones.forEach(razon => {
+            const option = document.createElement('option');
+            option.value = razon.IdRazonModificacion;
+            option.textContent = razon.RazonModificacion;
+            razonModificacion.appendChild(option);
+        });
+        
+        razonModificacion.disabled = false;
+        
+    } catch (error) {
+        console.error('Error cargando razones:', error);
+        showErrorToast('Error al cargar las razones de modificación');
+    }
+}
+async function loadRazonesModificacion(motivo) {
+    let connection = null;
+    
+    try {
+        connection = await odbc.connect('DSN=facturas;charset=utf8');
+        
+        const query = `
+            SELECT
+                TiposModificacion_Refacturacion.IdRazonModificacion, 
+                TiposModificacion_Refacturacion.RazonModificacion
+            FROM
+                TiposModificacion_Refacturacion
+            WHERE
+                TiposModificacion_Refacturacion.Motivo = ?
+            ORDER BY TiposModificacion_Refacturacion.RazonModificacion
+        `;
+        
+        const result = await connection.query(query, [motivo]);
+        await connection.close();
+        return result;
+        
+    } catch (error) {
+        if (connection) {
+            try {
+                await connection.close();
+            } catch (closeError) {}
+        }
+        throw error;
+    }
+}
 // Manejar búsqueda
 async function handleSearch(e) {
     e.preventDefault();
@@ -229,7 +288,8 @@ function getFormData() {
         fechaDesde: fechaDesde.value,
         fechaHasta: fechaHasta.value,
         tipoCambio: tipoCambio.value || null,
-        usuario: usuarioFiltro.value.trim() || null
+        tipoModificacion: tipoModificacion.value || null,
+        razonModificacion: razonModificacion.value || null
     };
 }
 // Buscar en historial de cambios
@@ -258,9 +318,13 @@ async function searchChangesHistory(filters) {
                 facturas_compras.Serie as FacturaSerie,
                 facturas_compras.Numero as FacturaNumero,
                 facturas_compras.MontoFactura as FacturaMonto,
-                facturas_compras.FechaFactura as FacturaFecha
+                facturas_compras.FechaFactura as FacturaFecha,
+                CambiosFacturasHistorial.TipoModificacion,
+                CambiosFacturasHistorial.IdRazonModificacion,
+                razones.RazonModificacion
             FROM CambiosFacturasHistorial
             LEFT JOIN facturas_compras ON CambiosFacturasHistorial.IdFacturasCompras = facturas_compras.Id
+            LEFT JOIN TiposModificacion_Refacturacion as razones ON CambiosFacturasHistorial.IdRazonModificacion = razones.IdRazonModificacion
             WHERE CambiosFacturasHistorial.FechaCambio >= ? 
             AND CambiosFacturasHistorial.FechaCambio <= ?
         `;
@@ -272,12 +336,15 @@ async function searchChangesHistory(filters) {
             query += ` AND CambiosFacturasHistorial.IdTipoCambio = ?`;
             queryParams.push(filters.tipoCambio);
         }
-        
-        if (filters.usuario) {
-            query += ` AND CambiosFacturasHistorial.NombreUsuario LIKE ?`;
-            queryParams.push(`%${filters.usuario}%`);
+        if (filters.tipoModificacion) {
+            query += ` AND CambiosFacturasHistorial.TipoModificacion = ?`;
+            queryParams.push(filters.tipoModificacion);
         }
-        
+
+        if (filters.razonModificacion) {
+            query += ` AND CambiosFacturasHistorial.IdRazonModificacion = ?`;
+            queryParams.push(filters.razonModificacion);
+        }
         // Ordenar por fecha más reciente
         query += ` ORDER BY CambiosFacturasHistorial.FechaHoraCambio DESC`;
         
@@ -623,6 +690,14 @@ function showChangeDetail(record) {
                     <label>Sucursal:</label>
                     <span>${record.Sucursal || '-'}</span>
                 </div>
+                div class="detail-item">
+                    <label>Motivo de Modificación:</label>
+                    <span class="highlight">${record.TipoModificacion === 1 ? 'Modificación' : record.TipoModificacion === 2 ? 'Refacturación' : '-'}</span>
+                </div>
+                <div class="detail-item">
+                    <label>Razón de Modificación:</label>
+                    <span>${record.RazonModificacion || '-'}</span>
+                </div>
             </div>
         </div>
         
@@ -960,8 +1035,10 @@ function clearFilters() {
     
     // Limpiar otros filtros
     tipoCambio.value = '';
-    usuarioFiltro.value = '';
-    
+    tipoModificacion.value = '';
+    razonModificacion.value = '';
+    razonModificacion.disabled = true;
+    razonModificacion.innerHTML = '<option value="">Seleccione primero el motivo</option>';
     // Enfocar primer campo
     fechaDesde.focus();
     
