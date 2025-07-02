@@ -371,10 +371,13 @@ class SelectManager {
     }
     
     static async loadSocialReasons(currentIdRazon = null) {
+        // CAMBIO: Agregar filtro WHERE Estado = 'V'
         const data = await DatabaseManager.loadSelectOptions(
             'razonessociales', 
             'Id', 
-            'NombreRazon'
+            'NombreRazon',
+            "Estado = 'V'",  // <- NUEVA CONDICIÓN
+            'NombreRazon'    // <- ORDENAR POR NOMBRE
         );
         
         const select = document.createElement('select');
@@ -402,7 +405,83 @@ class SelectManager {
         return select;
     }
 }
-
+function updateActionButtonsState() {
+    const modificationBtn = document.getElementById('modificationBtn');
+    const refacturationBtn = document.getElementById('refacturationBtn');
+    const addCreditNoteBtn = document.getElementById('addCreditNoteBtn');
+    
+    if (isModificationMode) {
+        // Modo Modificación: Deshabilitar Refacturación y Nota de Crédito
+        if (refacturationBtn) {
+            refacturationBtn.disabled = true;
+            refacturationBtn.style.opacity = '0.5';
+            refacturationBtn.style.cursor = 'not-allowed';
+            refacturationBtn.title = 'No disponible durante modificación';
+        }
+        
+        if (addCreditNoteBtn) {
+            addCreditNoteBtn.disabled = true;
+            addCreditNoteBtn.style.opacity = '0.5';
+            addCreditNoteBtn.style.cursor = 'not-allowed';
+            addCreditNoteBtn.title = 'No disponible durante modificación';
+        }
+        
+        // Modificación sigue habilitado (para poder desactivar)
+        if (modificationBtn) {
+            modificationBtn.disabled = false;
+            modificationBtn.style.opacity = '1';
+            modificationBtn.style.cursor = 'pointer';
+            modificationBtn.title = 'Desactivar modo modificación';
+        }
+        
+    } else if (isRefacturingMode) {
+        // Modo Refacturación: Deshabilitar Modificación y Nota de Crédito
+        if (modificationBtn) {
+            modificationBtn.disabled = true;
+            modificationBtn.style.opacity = '0.5';
+            modificationBtn.style.cursor = 'not-allowed';
+            modificationBtn.title = 'No disponible durante refacturación';
+        }
+        
+        if (addCreditNoteBtn) {
+            addCreditNoteBtn.disabled = true;
+            addCreditNoteBtn.style.opacity = '0.5';
+            addCreditNoteBtn.style.cursor = 'not-allowed';
+            addCreditNoteBtn.title = 'No disponible durante refacturación';
+        }
+        
+        // Refacturación sigue habilitado (para poder desactivar)
+        if (refacturationBtn) {
+            refacturationBtn.disabled = false;
+            refacturationBtn.style.opacity = '1';
+            refacturationBtn.style.cursor = 'pointer';
+            refacturationBtn.title = 'Desactivar modo refacturación';
+        }
+        
+    } else {
+        // Ningún modo activo: Habilitar todos los botones
+        if (modificationBtn) {
+            modificationBtn.disabled = false;
+            modificationBtn.style.opacity = '1';
+            modificationBtn.style.cursor = 'pointer';
+            modificationBtn.title = 'Habilitar modo modificación';
+        }
+        
+        if (refacturationBtn) {
+            refacturationBtn.disabled = false;
+            refacturationBtn.style.opacity = '1';
+            refacturationBtn.style.cursor = 'pointer';
+            refacturationBtn.title = 'Habilitar modo refacturación';
+        }
+        
+        if (addCreditNoteBtn) {
+            addCreditNoteBtn.disabled = false;
+            addCreditNoteBtn.style.opacity = '1';
+            addCreditNoteBtn.style.cursor = 'pointer';
+            addCreditNoteBtn.title = 'Agregar nota de crédito';
+        }
+    }
+}
 // ===== GESTIÓN UNIVERSAL DE NOTIFICACIONES =====
 class NotificationManager {
     static showToast(type, message, duration = 3000) {
@@ -756,6 +835,10 @@ function loadUserInfo() {
 function hideAllResultPanels() {
     resultsPanel.style.display = 'none';
     notFoundPanel.style.display = 'none';
+    const restrictedPanel = document.getElementById('restrictedPanel');
+    if (restrictedPanel) {
+        restrictedPanel.style.display = 'none';
+    }
 }
 
 // ===== BÚSQUEDA DE FACTURAS =====
@@ -816,16 +899,28 @@ async function searchInvoice(connection, serie, numero) {
                 facturas_compras.FechaRecepcion, 
                 facturas_compras.FechaFactura, 
                 facturas_compras.IdInventory, 
-                facturas_compras.IdSucursalCori,
-                facturas_compras.NIT,
-                facturas_compras.IdRazon
+                facturas_compras.IdSucursalCori, 
+                facturas_compras.NIT, 
+                facturas_compras.IdRazon, 
+                facturas_compras.Estado, 
+                estado_facturas.Estado AS EstadoDescripcion
             FROM
                 facturas_compras
-                INNER JOIN proveedores_facturas
-                ON facturas_compras.IdProveedor = proveedores_facturas.Id
-                INNER JOIN razonessociales
-                ON facturas_compras.IdRazon = razonessociales.Id
-            WHERE facturas_compras.Serie = ? AND facturas_compras.Numero = ?
+                INNER JOIN
+                proveedores_facturas
+                ON 
+                    facturas_compras.IdProveedor = proveedores_facturas.Id
+                INNER JOIN
+                razonessociales
+                ON 
+                    facturas_compras.IdRazon = razonessociales.Id
+                INNER JOIN
+                estado_facturas
+                ON 
+                    facturas_compras.Estado = estado_facturas.IdEstado
+            WHERE
+                facturas_compras.Serie = ? AND
+                facturas_compras.Numero = ?
         `;
         
         const result = await connection.query(query, [serie, numero]);
@@ -857,6 +952,12 @@ async function searchInvoice(connection, serie, numero) {
 
 // Mostrar resultados de la factura
 function displayInvoiceResults(invoice) {
+    // NUEVA VALIDACIÓN: Verificar estado de la factura
+    if (invoice.Estado !== 0) {
+        showRestrictedInvoicePanel(invoice);
+        return;
+    }
+    
     // Ocultar otros paneles
     notFoundPanel.style.display = 'none';
     
@@ -887,7 +988,137 @@ function displayInvoiceResults(invoice) {
 
     NotificationManager.showToast('success', 'Factura encontrada exitosamente');
 }
+function createRestrictedPanel() {
+    const panel = document.createElement('div');
+    panel.id = 'restrictedPanel';
+    panel.className = 'results-panel';
+    panel.style.display = 'none';
+    
+    panel.innerHTML = `
+        <div class="panel-header">
+            <div class="panel-icon error">
+                <i class="fas fa-lock"></i>
+            </div>
+            <div class="panel-title">
+                <h2>Factura No Modificable</h2>
+                <p>Esta factura no puede ser modificada debido a su estado actual</p>
+            </div>
+        </div>
+        
+        <div class="invoice-details" id="restrictedInvoiceDetails">
+            <!-- Información básica -->
+            <div class="detail-section">
+                <div class="section-header">
+                    <i class="fas fa-info-circle"></i>
+                    <h3>Información de la Factura</h3>
+                </div>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <label>Serie:</label>
+                        <span id="restrictedInvoiceSerie">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Número:</label>
+                        <span id="restrictedInvoiceNumber">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Monto:</label>
+                        <span id="restrictedInvoiceAmount" class="amount">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Estado:</label>
+                        <span id="restrictedInvoiceState" class="state-restricted">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Proveedor:</label>
+                        <span id="restrictedProviderName">-</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Fecha:</label>
+                        <span id="restrictedInvoiceDate">-</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Mensaje de restricción -->
+            <div class="restriction-message">
+                <div class="restriction-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="restriction-content">
+                    <h3>⚠️ Modificación No Permitida</h3>
+                    <p>Solo se pueden modificar facturas con <strong>Estado = 0</strong>.</p>
+                    <p>Esta factura tiene un estado diferente y no puede ser editada.</p>
+                </div>
+            </div>
+        </div>
 
+        <!-- Botones de acción -->
+        <div class="action-buttons">
+            <div class="action-buttons-row">
+                <button class="action-button secondary" id="newSearchFromRestricted">
+                    <i class="fas fa-search"></i>
+                    Nueva Búsqueda
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Agregar event listener al botón
+    panel.querySelector('#newSearchFromRestricted').addEventListener('click', resetSearch);
+    
+    return panel;
+}
+function populateRestrictedInvoiceData(invoice) {
+    document.getElementById('restrictedInvoiceSerie').textContent = invoice.Serie || '-';
+    document.getElementById('restrictedInvoiceNumber').textContent = invoice.Numero || '-';
+    document.getElementById('restrictedInvoiceAmount').textContent = formatCurrency(invoice.MontoFactura) || '-';
+    document.getElementById('restrictedInvoiceState').textContent = `Estado: ${invoice.EstadoDescripcion}`;
+    document.getElementById('restrictedProviderName').textContent = invoice.Nombre || '-';
+    document.getElementById('restrictedInvoiceDate').textContent = formatDate(invoice.FechaFactura) || '-';
+    
+    // Guardar datos de la factura (solo para consulta)
+    window.currentInvoice = invoice;
+}
+function showRestrictedInvoicePanel(invoice) {
+    // Ocultar otros paneles
+    resultsPanel.style.display = 'none';
+    notFoundPanel.style.display = 'none';
+    
+    // Crear panel de restricción si no existe
+    let restrictedPanel = document.getElementById('restrictedPanel');
+    if (!restrictedPanel) {
+        restrictedPanel = createRestrictedPanel();
+        document.querySelector('.main-container').appendChild(restrictedPanel);
+    }
+    
+    // Llenar información básica de la factura
+    populateRestrictedInvoiceData(invoice);
+    
+    // Ocultar el panel de búsqueda
+    hideSearchPanel();
+    
+    // Mostrar panel de restricción con animación
+    setTimeout(() => {
+        restrictedPanel.style.display = 'block';
+        restrictedPanel.style.opacity = '0';
+        restrictedPanel.style.transform = 'translateY(30px)';
+        
+        setTimeout(() => {
+            restrictedPanel.style.opacity = '1';
+            restrictedPanel.style.transform = 'translateY(0)';
+            restrictedPanel.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            
+            // Hacer scroll hacia el panel
+            restrictedPanel.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start' 
+            });
+        }, 100);
+    }, 300);
+
+    NotificationManager.showToast('warning', 'Esta factura no puede ser modificada por su estado actual');
+}
 // Llenar los datos de la factura en el panel
 function populateInvoiceData(invoice) {
     document.getElementById('invoiceId').textContent = invoice.Id || '-';
@@ -1054,6 +1285,9 @@ function enableModificationMode() {
     NotificationManager.showToast('success', `Modo modificación habilitado: ${selectedModificationReason.text}`);
     showModificationBanner();
     makeFieldsImmediatelyEditable();
+    
+    // NUEVO: Actualizar estado de botones
+    updateActionButtonsState();
 }
 
 // Habilitar modo refacturación
@@ -1078,6 +1312,9 @@ function enableRefacturingMode() {
     
     NotificationManager.showToast('success', `Modo refacturación habilitado: ${selectedRefacturingReason.text}`);
     showRefacturingBanner();
+    
+    // NUEVO: Actualizar estado de botones
+    updateActionButtonsState();
 }
 
 // Configurar campos editables
@@ -2352,6 +2589,9 @@ function disableModificationMode() {
     }
     
     NotificationManager.showToast('info', 'Modo modificación desactivado');
+    
+    // NUEVO: Actualizar estado de botones
+    updateActionButtonsState();
 }
 
 // Desactivar modo refacturación
@@ -2391,6 +2631,9 @@ function disableRefacturingMode() {
     }
     
     NotificationManager.showToast('info', 'Modo refacturación desactivado');
+    
+    // NUEVO: Actualizar estado de botones
+    updateActionButtonsState();
 }
 
 function restoreOriginalFieldValues() {
@@ -2408,6 +2651,17 @@ async function handleAddCreditNote() {
         return;
     }
 
+    // NUEVA VALIDACIÓN: Verificar que no esté en modo modificación o refacturación
+    if (isModificationMode) {
+        NotificationManager.showToast('warning', 'No se pueden agregar notas de crédito durante el modo modificación. Desactive el modo modificación primero.');
+        return;
+    }
+    
+    if (isRefacturingMode) {
+        NotificationManager.showToast('warning', 'No se pueden agregar notas de crédito durante el modo refacturación. Desactive el modo refacturación primero.');
+        return;
+    }
+
     try {
         // Cargar tipos de nota de crédito
         await SelectManager.loadCreditNoteTypes();
@@ -2415,7 +2669,7 @@ async function handleAddCreditNote() {
         // Llenar información de la factura original
         fillOriginalInvoiceInfo();
         
-        // NUEVO: Verificar si existen notas de crédito para esta factura
+        // Verificar si existen notas de crédito para esta factura
         await checkExistingCreditNotes();
         
         // Mostrar el modal
@@ -3503,6 +3757,9 @@ function resetSearch() {
     window.currentInvoice = null;
     isEditing = false;
     currentEditingElement = null;
+    
+    // NUEVO: Asegurar que todos los botones estén habilitados
+    updateActionButtonsState();
 }
 
 function resetToInitialStateComplete() {

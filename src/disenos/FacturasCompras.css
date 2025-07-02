@@ -3499,3 +3499,46 @@ body {
         padding: 10px 15px;
     }
 }
+/* Estilos para estado restringido */
+.state-restricted {
+    color: var(--error-color) !important;
+    font-weight: 700 !important;
+    background: rgba(255, 94, 109, 0.1) !important;
+    border-color: var(--error-color) !important;
+}
+
+.restriction-message {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+    background: rgba(255, 152, 0, 0.1);
+    border: 2px solid rgba(255, 152, 0, 0.3);
+    border-radius: var(--border-radius-md);
+    margin: 20px 0;
+}
+
+.restriction-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--warning-color), #ffb74d);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.restriction-content h3 {
+    margin: 0 0 10px 0;
+    color: var(--warning-color);
+    font-size: 18px;
+}
+
+.restriction-content p {
+    margin: 5px 0;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
