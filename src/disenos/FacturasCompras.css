@@ -3542,3 +3542,30 @@ body {
     color: var(--text-primary);
     line-height: 1.4;
 }
+/* AGREGAR AL FINAL DEL CSS */
+.credit-note-fields-section {
+    margin-top: 20px;
+    padding: 15px;
+    background: rgba(41, 182, 246, 0.05);
+    border: 1px solid rgba(41, 182, 246, 0.2);
+    border-radius: var(--border-radius-md);
+    transition: all 0.3s ease;
+}
+
+.credit-note-fields-section .form-row {
+    margin-bottom: 0;
+}
+
+.credit-note-fields-section .form-group label {
+    color: var(--info-color);
+    font-weight: 600;
+}
+
+.credit-note-fields-section .form-group input {
+    border-color: rgba(41, 182, 246, 0.3);
+}
+
+.credit-note-fields-section .form-group input:focus {
+    border-color: var(--info-color);
+    box-shadow: 0 0 0 3px rgba(41, 182, 246, 0.1);
+}

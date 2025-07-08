@@ -16,6 +16,9 @@ let refacturingReasonModal, closeRefacturingReasonModal, refacturingReasonForm;
 let selectedRefacturingReason = null;
 let isRefacturingMode = false;
 let originalFieldValues = {};
+let selectedRefacturingMethod = null;
+let creditNoteSerieValue = '';
+let creditNoteNumberValue = '';
 
 // Variables para edición inline
 let isEditing = false;
@@ -783,8 +786,31 @@ function setupEventListeners() {
         });
     });
     if (updateRefacturingBtn) updateRefacturingBtn.addEventListener('click', handleRefacturingUpdate);
+    const refacturingMethod = document.getElementById('refacturingMethod');
+    if (refacturingMethod) {
+        refacturingMethod.addEventListener('change', handleRefacturingMethodChange);
+    }
 }
-
+function handleRefacturingMethodChange() {
+    const refacturingMethod = document.getElementById('refacturingMethod');
+    const creditNoteFieldsSection = document.getElementById('creditNoteFieldsSection');
+    const creditNoteSerie = document.getElementById('refacturingCreditNoteSerie'); // CAMBIO
+    const creditNoteNumber = document.getElementById('refacturingCreditNoteNumber'); // CAMBIO
+    
+    if (refacturingMethod.value === '2') {
+        // Mostrar campos de nota de crédito
+        creditNoteFieldsSection.style.display = 'block';
+        creditNoteSerie.required = true;
+        creditNoteNumber.required = true;
+    } else {
+        // Ocultar campos de nota de crédito
+        creditNoteFieldsSection.style.display = 'none';
+        creditNoteSerie.required = false;
+        creditNoteNumber.required = false;
+        creditNoteSerie.value = '';
+        creditNoteNumber.value = '';
+    }
+}
 // ===== INICIALIZACIÓN DE LA APLICACIÓN =====
 function initializeApp() {
     animatePageElements();
@@ -1229,16 +1255,52 @@ function handleRefacturingReasonSubmit(e) {
     
     const reasonId = document.getElementById('refacturingReason').value;
     const reasonText = document.getElementById('refacturingReason').selectedOptions[0]?.text;
+    const methodId = document.getElementById('refacturingMethod').value;
+    const methodText = document.getElementById('refacturingMethod').selectedOptions[0]?.text;
     
     if (!reasonId) {
         NotificationManager.showToast('error', 'Debe seleccionar un motivo de refacturación');
         return;
     }
     
-    // Guardar el motivo seleccionado
+    if (!methodId) {
+        NotificationManager.showToast('error', 'Debe seleccionar una manera de refacturación');
+        return;
+    }
+    
+    // Validar campos de nota de crédito si es necesario
+    if (methodId === '2') {
+        const serie = document.getElementById('refacturingCreditNoteSerie').value.trim(); // CAMBIO
+        const numero = document.getElementById('refacturingCreditNoteNumber').value.trim(); // CAMBIO
+        
+        if (!serie) {
+            NotificationManager.showToast('error', 'Debe ingresar la serie de la nota de crédito');
+            document.getElementById('refacturingCreditNoteSerie').focus(); // CAMBIO
+            return;
+        }
+        
+        if (!numero) {
+            NotificationManager.showToast('error', 'Debe ingresar el número de la nota de crédito');
+            document.getElementById('refacturingCreditNoteNumber').focus(); // CAMBIO
+            return;
+        }
+        
+        creditNoteSerieValue = serie;
+        creditNoteNumberValue = numero;
+    } else {
+        creditNoteSerieValue = '';
+        creditNoteNumberValue = '';
+    }
+    
+    // Guardar el motivo y manera seleccionados
     window.selectedRefacturingReason = {
         id: reasonId,
         text: reasonText
+    };
+    
+    selectedRefacturingMethod = {
+        id: methodId,
+        text: methodText
     };
     
     selectedRefacturingReason = window.selectedRefacturingReason;
@@ -2433,8 +2495,10 @@ async function logRefacturingFieldChange(connection, fieldConfig, oldValue, newV
             IdUsuario,
             NombreUsuario,
             TipoModificacion,
-            IdRazonModificacion
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            IdRazonModificacion,
+            ManeraRefacturacion,
+            SerieNumeroNotaCredito
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     // Usar selectedRefacturingReason en lugar de selectedModificationReason
@@ -2453,7 +2517,9 @@ async function logRefacturingFieldChange(connection, fieldConfig, oldValue, newV
             parseInt(userId),
             userName,
             '1', // TipoModificacion para refacturación
-            refacturingReason ? refacturingReason.id : null // IdRazonModificacion
+            refacturingReason ? refacturingReason.id : null,
+            selectedRefacturingMethod ? selectedRefacturingMethod.id : null, // NUEVO
+            getSerieNumeroNotaCredito() // NUEVO
         ]);
         return result;
         
@@ -2461,7 +2527,12 @@ async function logRefacturingFieldChange(connection, fieldConfig, oldValue, newV
         throw error;
     }
 }
-
+function getSerieNumeroNotaCredito() {
+    if (selectedRefacturingMethod && selectedRefacturingMethod.id === '2') {
+        return `${creditNoteSerieValue}-${creditNoteNumberValue}`;
+    }
+    return '0';
+}
 // Actualizar objeto currentInvoice
 function updateCurrentInvoiceObject(fieldConfig, newValue, newDisplayValue, selectedProvider = null) {
    switch (fieldConfig.fieldName) {

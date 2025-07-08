@@ -436,7 +436,33 @@
                             </div>
                         </div>
                     </div>
-                    
+                    <div class="form-group">
+                        <label for="refacturingMethod">Manera de Refacturación *</label>
+                        <div class="select-wrapper">
+                            <select id="refacturingMethod" required>
+                                <option value="">Seleccione una manera...</option>
+                                <option value="1">Anulación de Factura</option>
+                                <option value="2">Nota de Crédito</option>
+                            </select>
+                            <div class="select-icon">
+                                <i class="fas fa-chevron-down"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- NUEVO: Campos adicionales para Nota de Crédito -->
+                    <div class="credit-note-fields-section" id="creditNoteFieldsSection" style="display: none;">
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="refacturingCreditNoteSerie">Serie de la Nota de Crédito *</label>
+                                <input type="text" id="refacturingCreditNoteSerie" maxlength="20">
+                            </div>
+                            <div class="form-group half">
+                                <label for="refacturingCreditNoteNumber">Número de la Nota de Crédito *</label>
+                                <input type="text" id="refacturingCreditNoteNumber" maxlength="50">
+                            </div>
+                        </div>
+                    </div>
                     <div class="modal-actions">
                         <button type="button" class="btn-secondary" id="cancelRefacturingReason">
                             <i class="fas fa-times"></i>

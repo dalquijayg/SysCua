@@ -1695,3 +1695,91 @@ html {
     border-color: var(--border-color);
     box-shadow: none;
 }
+.refacturation-info {
+    background: linear-gradient(135deg, rgba(41, 182, 246, 0.05), rgba(79, 195, 247, 0.05));
+    border-left: 4px solid var(--info-color);
+}
+
+.refacturation-method {
+    background: linear-gradient(135deg, rgba(41, 182, 246, 0.1), rgba(79, 195, 247, 0.1));
+    border-color: var(--info-color);
+    color: var(--info-color);
+    padding: 8px 12px;
+    border-radius: var(--border-radius-sm);
+    font-weight: 700;
+}
+
+.credit-note-info {
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(129, 199, 132, 0.1));
+    border-color: var(--success-color);
+    color: var(--success-color);
+    padding: 8px 12px;
+    border-radius: var(--border-radius-sm);
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+}
+
+.refacturation-note {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    margin-top: 15px;
+    background: rgba(41, 182, 246, 0.05);
+    border: 1px solid rgba(41, 182, 246, 0.2);
+    border-radius: var(--border-radius-md);
+}
+
+.refacturation-note.anulacion {
+    background: rgba(255, 152, 0, 0.05);
+    border-color: rgba(255, 152, 0, 0.2);
+}
+
+.refacturation-note .note-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--info-color), #4fc3f7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.refacturation-note.anulacion .note-icon {
+    background: linear-gradient(135deg, var(--warning-color), #ffb74d);
+}
+
+.refacturation-note .note-content {
+    flex: 1;
+}
+
+.refacturation-note .note-content p {
+    margin: 2px 0;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+.refacturation-note .note-content p:first-child {
+    font-weight: 600;
+    color: var(--info-color);
+}
+
+.refacturation-note.anulacion .note-content p:first-child {
+    color: var(--warning-color);
+}
+
+/* Responsive para información de refacturación */
+@media (max-width: 768px) {
+    .refacturation-note {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+    }
+    
+    .refacturation-note .note-content p {
+        font-size: 14px;
+    }
+}

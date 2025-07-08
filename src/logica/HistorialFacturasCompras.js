@@ -314,6 +314,8 @@ async function searchChangesHistory(filters) {
                 CambiosFacturasHistorial.IdFacturasCompras,
                 CambiosFacturasHistorial.IdSucursal,
                 CambiosFacturasHistorial.IdUsuario,
+                CambiosFacturasHistorial.ManeraRefacturacion,
+                CambiosFacturasHistorial.SerieNumeroNotaCredito,
                 -- Datos de la factura
                 facturas_compras.Serie as FacturaSerie,
                 facturas_compras.Numero as FacturaNumero,
@@ -661,6 +663,14 @@ function showChangeDetail(record) {
     // Actualizar título
     subtitle.textContent = `${record.TipoCambio} - ${formatDateDisplay(record.FechaCambio)}`;
     
+    // NUEVA FUNCIÓN AUXILIAR para obtener texto de manera de refacturación
+    const getManeraRefacturacionText = (manera) => {
+        if (!manera) return '-';
+        return manera === 1 ? 'Anulación de Factura' : 
+               manera === 2 ? 'Nota de Crédito' : 
+               `Tipo ${manera}`;
+    };
+    
     // Generar contenido del modal
     content.innerHTML = `
         <div class="detail-section">
@@ -690,8 +700,8 @@ function showChangeDetail(record) {
                     <label>Sucursal:</label>
                     <span>${record.Sucursal || '-'}</span>
                 </div>
-                div class="detail-item">
-                    <label>Motivo de Modificación:</label>
+                <div class="detail-item">
+                    <label>Tipo de Modificación:</label>
                     <span class="highlight">${record.TipoModificacion === 1 ? 'Modificación' : record.TipoModificacion === 2 ? 'Refacturación' : '-'}</span>
                 </div>
                 <div class="detail-item">
@@ -700,6 +710,45 @@ function showChangeDetail(record) {
                 </div>
             </div>
         </div>
+        
+        ${record.TipoModificacion === 1 ? `
+        <!-- NUEVA SECCIÓN: Información de Refacturación -->
+        <div class="detail-section refacturation-info">
+            <h4><i class="fas fa-redo"></i> Información de Refacturación</h4>
+            <div class="detail-grid">
+                <div class="detail-item">
+                    <label>Manera de Refacturación:</label>
+                    <span class="highlight refacturation-method">${getManeraRefacturacionText(record.ManeraRefacturacion)}</span>
+                </div>
+                <div class="detail-item">
+                    <label>Serie-Número Nota de Crédito:</label>
+                    <span class="highlight credit-note-info">${record.SerieNumeroNotaCredito && record.SerieNumeroNotaCredito !== '0' ? record.SerieNumeroNotaCredito : 'No Aplica'}</span>
+                </div>
+            </div>
+            
+            ${record.ManeraRefacturacion === 2 && record.SerieNumeroNotaCredito && record.SerieNumeroNotaCredito !== '0' ? `
+            <div class="refacturation-note">
+                <div class="note-icon">
+                    <i class="fas fa-file-invoice"></i>
+                </div>
+                <div class="note-content">
+                    <p><strong>Refacturación por Nota de Crédito</strong></p>
+                    <p>Esta refacturación fue realizada utilizando la nota de crédito: <strong>${record.SerieNumeroNotaCredito}</strong></p>
+                </div>
+            </div>
+            ` : record.ManeraRefacturacion === 1 ? `
+            <div class="refacturation-note anulacion">
+                <div class="note-icon">
+                    <i class="fas fa-ban"></i>
+                </div>
+                <div class="note-content">
+                    <p><strong>Refacturación por Anulación</strong></p>
+                    <p>Esta refacturación fue realizada por anulación de la factura original</p>
+                </div>
+            </div>
+            ` : ''}
+        </div>
+        ` : ''}
         
         <div class="detail-section">
             <h4><i class="fas fa-exchange-alt"></i> Comparación de Valores</h4>
