@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte de Productos Globales</title>
+    <link rel="stylesheet" href="../disenos/Reportes/ReporteProductosGlobales.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="report-layout">
+    <!-- Header Compacto -->
+    <header class="header-compact">
+        <div class="header-content">
+            <div class="logo-compact">
+                <i class="fas fa-chart-line"></i>
+                <h1>Reporte de Productos Globales</h1>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-sm btn-success" id="btnExportExcel">
+                    <i class="fas fa-file-excel"></i>
+                    Excel
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Panel de Control Compacto -->
+    <section class="control-panel-compact">
+        <div class="filters-row">
+            <div class="filter-group">
+                <label>
+                    <i class="fas fa-building"></i>
+                    Razón Social
+                </label>
+                <select id="selectRazonSocial" class="form-control-sm">
+                    <option value="">Seleccione...</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label>
+                    <i class="fas fa-store"></i>
+                    Sucursales
+                </label>
+                <select id="selectSucursales" class="form-control-sm" disabled>
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            
+            <div class="actions-group">
+                <button class="btn btn-sm btn-outline" id="btnProbarConexiones">
+                    <i class="fas fa-plug"></i>
+                    Probar
+                </button>
+                <button class="btn btn-sm btn-primary" id="btnGenerarReporte">
+                    <i class="fas fa-play"></i>
+                    Generar
+                </button>
+                <button class="btn btn-xs btn-outline" id="btnCancelar" style="display: none;">
+                    <i class="fas fa-stop"></i>
+                    Cancelar
+                </button>
+                <button class="btn btn-sm btn-ghost" id="btnLimpiar">
+                    <i class="fas fa-eraser"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Barra de Progreso Compacta -->
+        <div class="progress-compact" id="progressCompact" style="display: none;">
+            <div class="progress-info">
+                <span class="progress-title">
+                    <i class="fas fa-cog fa-spin"></i>
+                    <span id="progressTitle">Procesando...</span>
+                </span>
+                <div class="progress-stats">
+                    <span id="progressDetails">Iniciando...</span>
+                    <span class="progress-percentage" id="progressPercentage">0%</span>
+                </div>
+            </div>
+            <div class="progress-bar-slim">
+                <div class="progress-fill-slim" id="progressFillSlim"></div>
+            </div>
+            <div class="sucursales-progress-list" id="sucursalesProgressList" style="display: none;">
+                <div class="progress-list-header">
+                    <span>Estado por Sucursal:</span>
+                </div>
+                <div class="sucursales-items" id="sucursalesItems">
+                    <!-- Se llenarán dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Área Principal de Resultados -->
+    <main class="results-main" id="resultsMain" style="display: none;">
+        <!-- Header de Resultados Compacto -->
+        <div class="results-header-compact">
+            <div class="results-summary">
+                <div class="summary-item">
+                    <i class="fas fa-cube text-primary"></i>
+                    <span class="summary-value" id="totalProductos">0</span>
+                    <span class="summary-label">Productos</span>
+                </div>
+                <div class="summary-item">
+                    <i class="fas fa-store text-success"></i>
+                    <span class="summary-value" id="sucursalesProcesadas">0</span>
+                    <span class="summary-label">Sucursales</span>
+                </div>
+                <div class="summary-item">
+                    <i class="fas fa-clock text-info"></i>
+                    <span class="summary-value" id="tiempoProceso">0s</span>
+                    <span class="summary-label">Tiempo</span>
+                </div>
+                <div class="summary-item">
+                    <i class="fas fa-calendar text-secondary"></i>
+                    <span class="summary-value" id="ultimaActualizacion">-</span>
+                    <span class="summary-label">Actualizado</span>
+                </div>
+            </div>
+            
+            <div class="table-toolbar">
+                <div class="search-container">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Buscar productos..." class="search-input-compact">
+                    <span class="search-counter" id="searchCounter"></span>
+                </div>
+                
+                <div class="toolbar-actions">
+                    <button class="btn btn-xs btn-ghost" id="btnToggleColumns" title="Configurar columnas">
+                        <i class="fas fa-columns"></i>
+                    </button>
+                    <button class="btn btn-xs btn-ghost" id="btnRefresh" title="Actualizar">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button class="btn btn-xs btn-ghost" id="btnFullscreen" title="Pantalla completa">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de Resultados (Área Principal) -->
+        <div class="table-viewport" id="tableViewport">
+            <div class="table-container-fixed" id="tableContainer">
+                <table class="results-table-optimized" id="resultsTable">
+                    <thead class="table-header-sticky">
+                        <tr id="tableHeaders">
+                            <!-- Los headers se generarán dinámicamente -->
+                        </tr>
+                    </thead>
+                    <tbody id="resultsTableBody" class="table-body-scrollable">
+                        <!-- Los datos se cargarán dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Loading de Tabla -->
+            <div class="table-loading" id="tableLoading" style="display: none;">
+                <div class="loading-content">
+                    <div class="spinner-small"></div>
+                    <span>Cargando datos...</span>
+                </div>
+            </div>
+            
+            <!-- Estado Vacío -->
+            <div class="empty-state" id="emptyState" style="display: none;">
+                <div class="empty-content">
+                    <i class="fas fa-inbox"></i>
+                    <h3>No hay datos</h3>
+                    <p>Selecciona una razón social y genera el reporte para ver los resultados.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer de Paginación Compacto -->
+        <div class="pagination-footer">
+            <div class="pagination-info-compact">
+                <span>
+                    <span id="showingFrom">0</span>-<span id="showingTo">0</span> 
+                    de <span id="totalRows">0</span>
+                </span>
+                <select id="pageSize" class="page-size-select">
+                    <option value="25">25</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                    <option value="250">250</option>
+                </select>
+            </div>
+            
+            <div class="pagination-controls-compact">
+                <button class="btn btn-xs btn-ghost" id="btnFirstPage" title="Primera página">
+                    <i class="fas fa-angle-double-left"></i>
+                </button>
+                <button class="btn btn-xs btn-ghost" id="btnPrevPage" title="Anterior">
+                    <i class="fas fa-angle-left"></i>
+                </button>
+                
+                <span class="page-display">
+                    <input type="number" id="currentPageInput" class="page-input" min="1" value="1">
+                    <span>de <span id="totalPages">1</span></span>
+                </span>
+                
+                <button class="btn btn-xs btn-ghost" id="btnNextPage" title="Siguiente">
+                    <i class="fas fa-angle-right"></i>
+                </button>
+                <button class="btn btn-xs btn-ghost" id="btnLastPage" title="Última página">
+                    <i class="fas fa-angle-double-right"></i>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal de Configuración de Columnas -->
+    <div class="modal-overlay" id="columnModal" style="display: none;">
+        <div class="modal-content-compact">
+            <div class="modal-header-compact">
+                <h4>
+                    <i class="fas fa-columns"></i>
+                    Configurar Columnas
+                </h4>
+                <button class="btn-close-compact" id="closeColumnModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body-compact">
+                <div class="columns-grid" id="columnsList">
+                    <!-- Las opciones de columnas se generarán dinámicamente -->
+                </div>
+            </div>
+            
+            <div class="modal-footer-compact">
+                <button class="btn btn-sm btn-ghost" id="btnCancelColumns">Cancelar</button>
+                <button class="btn btn-sm btn-primary" id="btnApplyColumns">Aplicar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Estadísticas -->
+    <div class="modal-overlay" id="statsModal" style="display: none;">
+        <div class="modal-content-stats">
+            <div class="modal-header-compact">
+                <h4>
+                    <i class="fas fa-chart-bar"></i>
+                    Estadísticas del Reporte
+                </h4>
+                <button class="btn-close-compact" id="closeStatsModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body-stats" id="statsContent">
+                <!-- El contenido de estadísticas se generará dinámicamente -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast de Notificaciones -->
+    <div class="toast-container" id="toastContainer">
+        <!-- Los toasts se generarán dinámicamente -->
+    </div>
+
+    <!-- Loading Global Minimalista -->
+    <div class="loading-global" id="loadingGlobal" style="display: none;">
+        <div class="loading-backdrop"></div>
+        <div class="loading-spinner-global">
+            <div class="spinner-ring"></div>
+            <p id="loadingMessage">Cargando...</p>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="../logica/Reportes/ReporteProductosGlobales..js"></script>
+</body>
+</html>

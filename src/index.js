@@ -25,6 +25,7 @@ let NotasBodegonaAntigua = null;
 let UpdateFacturas = null;
 let ReporteNCT = null;
 let HitorialFacCompras = null;
+let ExistenciasGlobalesProductos = null;
 
 app.on('ready',  createWindow)
 
@@ -357,6 +358,32 @@ ipcMain.on('open-NBodegonaAntigua-window', () => {
       // Manejar el evento de cierre de la ventana
       NotasBodegonaAntigua.on('closed', () => {
         NotasBodegonaAntigua = null; // Limpiar la referencia cuando se cierre la ventana
+      });
+  }
+});
+ipcMain.on('open-ExistenciasGlobales-window', () => {
+  if (ExistenciasGlobalesProductos) {
+      // Si la ventana ya está abierta, enfócala
+      ExistenciasGlobalesProductos.focus();
+  } else {
+      // Si no está abierta, crea una nueva ventana
+      ExistenciasGlobalesProductos = new BrowserWindow({
+          webPreferences: {
+              nodeIntegration: true,
+              contextIsolation: false,
+              webSecurity: false,
+              enableRemoteModule: true
+          },
+          icon: path.join(__dirname, 'ingresos.ico'),  // Asegúrate de tener este ícono
+          autoHideMenuBar: true
+      });
+
+      ExistenciasGlobalesProductos.maximize();
+      ExistenciasGlobalesProductos.loadFile(path.join(__dirname, 'vistas/ReporteProductosGlobales.html'));
+
+      // Manejar el evento de cierre de la ventana
+      ExistenciasGlobalesProductos.on('closed', () => {
+        ExistenciasGlobalesProductos = null; // Limpiar la referencia cuando se cierre la ventana
       });
   }
 });
