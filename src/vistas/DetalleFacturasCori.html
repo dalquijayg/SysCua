@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte de Facturas de Cori</title>
+    <link rel="stylesheet" href="../disenos/DetalleFacturasCori.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1><i class="fas fa-file-invoice"></i> Reporte de Facturas de Cori</h1>
+        </div>
+
+        <!-- Filtros -->
+        <div class="filters-section">
+            <div class="filters-container">
+                <div class="filter-group">
+                    <label for="fechaInicio">
+                        <i class="fas fa-calendar-alt"></i> Fecha Inicio:
+                    </label>
+                    <input type="date" id="fechaInicio" name="fechaInicio" required>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="fechaFin">
+                        <i class="fas fa-calendar-alt"></i> Fecha Fin:
+                    </label>
+                    <input type="date" id="fechaFin" name="fechaFin" required>
+                </div>
+                
+                <div class="filter-actions">
+                    <button type="button" id="btnBuscar" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                    <button type="button" id="btnExportar" class="btn btn-success" disabled>
+                        <i class="fas fa-file-excel"></i> Exportar Excel
+                    </button>
+                    <button type="button" id="btnLimpiar" class="btn btn-secondary">
+                        <i class="fas fa-broom"></i> Limpiar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información de resultados -->
+        <div class="results-info" id="resultsInfo" style="display: none;">
+            <div class="info-card">
+                <span id="totalRegistros">0</span> registros encontrados
+            </div>
+        </div>
+
+        <!-- Tabla de resultados -->
+        <div class="table-section">
+            <div class="table-container" id="tableContainer">
+                <div class="no-data" id="noData">
+                    <i class="fas fa-search"></i>
+                    <p>Seleccione un rango de fechas y haga clic en "Buscar" para ver los resultados</p>
+                </div>
+                
+                <table id="tablaFacturas" class="data-table" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Caja</th>
+                            <th>Usuario</th>
+                            <th>Empresa</th>
+                            <th>Cliente</th>
+                            <th>Serie</th>
+                            <th>Número</th>
+                            <th>UID</th>
+                            <th>Total Costo</th>
+                            <th>Total Precio</th>
+                            <th>Fecha Certificación</th>
+                            <th>Sucursal Genera</th>
+                            <th>Sucursal Cliente</th>
+                            <th>Sucursal Certifica</th>
+                            <th>Estado</th>
+                            <th>UPC</th>
+                            <th>Descripción</th>
+                            <th>Cantidad</th>
+                            <th>Costo</th>
+                            <th>Precio</th>
+                            <th>SubTotal Costo</th>
+                            <th>SubTotal Precio</th>
+                            <th>SubTotal Precio Sin IVA</th>
+                            <th>SubTotal IVA</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Cargando datos...</p>
+        </div>
+    </div>
+
+    <script src="../logica/DetalleFacturasCori.js"></script>
+</body>
+</html>

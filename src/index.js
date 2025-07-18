@@ -26,6 +26,7 @@ let UpdateFacturas = null;
 let ReporteNCT = null;
 let HitorialFacCompras = null;
 let ExistenciasGlobalesProductos = null;
+let facturasCoriDetalles = null;
 
 app.on('ready',  createWindow)
 
@@ -462,6 +463,32 @@ ipcMain.on('open-HisotrialFC-window', () => {
       // Manejar el evento de cierre de la ventana
       HitorialFacCompras.on('closed', () => {
         HitorialFacCompras = null; // Limpiar la referencia cuando se cierre la ventana
+      });
+  }
+});
+ipcMain.on('open-FacturasCori-window', () => {
+  if (facturasCoriDetalles) {
+      // Si la ventana ya está abierta, enfócala
+      facturasCoriDetalles.focus();
+  } else {
+      // Si no está abierta, crea una nueva ventana
+      facturasCoriDetalles = new BrowserWindow({
+          webPreferences: {
+              nodeIntegration: true,
+              contextIsolation: false,
+              webSecurity: false,
+              enableRemoteModule: true
+          },
+          icon: path.join(__dirname, 'ingresos.ico'),  // Asegúrate de tener este ícono
+          autoHideMenuBar: true
+      });
+
+      facturasCoriDetalles.maximize();
+      facturasCoriDetalles.loadFile(path.join(__dirname, 'vistas/DetalleFacturasCori.html'));
+
+      // Manejar el evento de cierre de la ventana
+      facturasCoriDetalles.on('closed', () => {
+        facturasCoriDetalles = null; // Limpiar la referencia cuando se cierre la ventana
       });
   }
 });

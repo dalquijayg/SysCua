@@ -221,6 +221,10 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         ipcRenderer.send('open-NBodegonaAntigua-window');
     });
+    document.getElementById('FacturasCori').addEventListener('click', (e) => {
+        e.preventDefault();
+        ipcRenderer.send('open-FacturasCori-window');
+    });
     document.getElementById('ExistenciasGlobales').addEventListener('click', async (e) => {
         e.preventDefault();
         
