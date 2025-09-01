@@ -318,7 +318,7 @@ async function obtenerSucursales() {
         
         // Ejecutar la consulta para obtener las sucursales Bodegona Antigua
         const query = `
-            SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd
+            SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd, Puerto
             FROM sucursales
             WHERE RazonSocial = 1 AND Activo = 1
         `;
@@ -349,6 +349,12 @@ async function obtenerSucursales() {
             const option = document.createElement('option');
             option.value = sucursal.idSucursal;  // Usamos el ID como valor
             option.textContent = sucursal.NombreSucursal;
+            // Agregar todos los datos de conexión como data attributes, incluyendo el puerto
+            option.dataset.serverr = sucursal.serverr;
+            option.dataset.databasee = sucursal.databasee;
+            option.dataset.uid = sucursal.Uid;
+            option.dataset.pwd = sucursal.Pwd;
+            option.dataset.puerto = sucursal.Puerto; // Agregar el puerto
             selectSucursal.appendChild(option);
         });
         
@@ -591,7 +597,7 @@ async function reintentarConsultaSucursal(sucursal) {
         // Mostrar el overlay de carga
         mostrarCargando(true, `Reintentando consulta para: ${sucursal.NombreSucursal}`);
         
-        // Consultar los datos de esta sucursal
+        // Consultar los datos de esta sucursal (ya usa el puerto gracias a consultarVentasSucursal actualizada)
         const sucursalData = await consultarVentasSucursal(sucursal, fechaInicio, fechaFin);
         
         // Recopilar facturas únicas de esta sucursal
@@ -709,11 +715,86 @@ function recalcularEstadisticasTotales() {
 }
 
 // Consultar ventas de una sucursal específica
+// Obtener las sucursales de la base de datos principal
+async function obtenerSucursales() {
+    mostrarCargando(true, 'Conectando a la base de datos principal...');
+    
+    try {
+        // Conectar a la base de datos usando ODBC
+        const connection = await odbc.connect(conexiondbsucursal);
+        
+        // Ejecutar la consulta para obtener las sucursales Bodegona Antigua
+        const query = `
+            SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd, Puerto
+            FROM sucursales
+            WHERE RazonSocial = 1 AND Activo = 1
+        `;
+        
+        const result = await connection.query(query);
+        
+        // Cerrar la conexión ODBC
+        await connection.close();
+        
+        // Almacenar las sucursales y actualizar la interfaz
+        sucursales = result;
+        stats.totalSucursales = sucursales.length;
+        
+        // Inicializar el estado de cada sucursal
+        sucursales.forEach(sucursal => {
+            sucursalesEstado[sucursal.idSucursal] = 'pendiente';
+            sucursalStats[sucursal.idSucursal] = { ventas: 0, facturas: 0 };
+        });
+        
+        actualizarContadores();
+        
+        // Llenar el selector de sucursales
+        const selectSucursal = document.getElementById('filtraSucursal');
+        // Limpiar opciones existentes (excepto la primera)
+        selectSucursal.innerHTML = '<option value="todas">Todas las sucursales</option>';
+        
+        sucursales.forEach(sucursal => {
+            const option = document.createElement('option');
+            option.value = sucursal.idSucursal;  // Usamos el ID como valor
+            option.textContent = sucursal.NombreSucursal;
+            // Agregar todos los datos de conexión como data attributes, incluyendo el puerto
+            option.dataset.serverr = sucursal.serverr;
+            option.dataset.databasee = sucursal.databasee;
+            option.dataset.uid = sucursal.Uid;
+            option.dataset.pwd = sucursal.Pwd;
+            option.dataset.puerto = sucursal.Puerto; // Agregar el puerto
+            selectSucursal.appendChild(option);
+        });
+        
+        // Mostrar las sucursales en el panel lateral
+        mostrarSucursalesEnPanel();
+        
+        Swal.fire({
+            icon: 'success',
+            title: 'Conexión exitosa',
+            text: `Se han encontrado ${sucursales.length} sucursales disponibles`,
+            confirmButtonColor: '#d32f2f'
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener sucursales:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error de conexión',
+            text: 'No se pudieron obtener las sucursales. ' + error.message,
+            confirmButtonColor: '#d32f2f'
+        });
+    } finally {
+        mostrarCargando(false);
+    }
+}
+
+// Consultar ventas de una sucursal específica (actualizada para usar puerto)
 async function consultarVentasSucursal(sucursal, fechaInicio, fechaFin) {
     try {
-        // Crear la conexión a MySQL para esta sucursal
+        // Crear la conexión a MySQL para esta sucursal incluyendo el puerto
         const connection = await mysql.createConnection({
             host: sucursal.serverr,
+            port: sucursal.Puerto || 3306, // Usar el puerto de la sucursal o 3306 por defecto
             user: sucursal.Uid,
             password: sucursal.Pwd,
             database: sucursal.databasee

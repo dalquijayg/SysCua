@@ -318,7 +318,7 @@ async function obtenerSucursales() {
         
         // Ejecutar la consulta para obtener las sucursales SurtiMayoreo (RazonSocial = 3)
         const query = `
-            SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd
+            SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd, Puerto
             FROM sucursales
             WHERE RazonSocial = 3 AND Activo = 1
         `;
@@ -349,6 +349,12 @@ async function obtenerSucursales() {
             const option = document.createElement('option');
             option.value = sucursal.idSucursal;  // Usamos el ID como valor
             option.textContent = sucursal.NombreSucursal;
+            // Agregar todos los datos de conexión como data attributes, incluyendo el puerto
+            option.dataset.serverr = sucursal.serverr;
+            option.dataset.databasee = sucursal.databasee;
+            option.dataset.uid = sucursal.Uid;
+            option.dataset.pwd = sucursal.Pwd;
+            option.dataset.puerto = sucursal.Puerto; // Agregar el puerto
             selectSucursal.appendChild(option);
         });
         
@@ -555,6 +561,138 @@ async function iniciarConsulta() {
 }
 
 // Función para reintentar la consulta de una sucursal específica
+// Obtener las sucursales de la base de datos principal
+async function obtenerSucursales() {
+    mostrarCargando(true, 'Conectando a la base de datos principal...');
+    
+    try {
+        // Conectar a la base de datos usando ODBC
+        const connection = await odbc.connect(conexiondbsucursal);
+        
+        // Ejecutar la consulta para obtener las sucursales SurtiMayoreo (RazonSocial = 3)
+        const query = `
+            SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd, Puerto
+            FROM sucursales
+            WHERE RazonSocial = 3 AND Activo = 1
+        `;
+        
+        const result = await connection.query(query);
+        
+        // Cerrar la conexión ODBC
+        await connection.close();
+        
+        // Almacenar las sucursales y actualizar la interfaz
+        sucursales = result;
+        stats.totalSucursales = sucursales.length;
+        
+        // Inicializar el estado de cada sucursal
+        sucursales.forEach(sucursal => {
+            sucursalesEstado[sucursal.idSucursal] = 'pendiente';
+            sucursalStats[sucursal.idSucursal] = { devoluciones: 0, notas: 0 };
+        });
+        
+        actualizarContadores();
+        
+        // Llenar el selector de sucursales
+        const selectSucursal = document.getElementById('filtraSucursal');
+        // Limpiar opciones existentes (excepto la primera)
+        selectSucursal.innerHTML = '<option value="todas">Todas las sucursales</option>';
+        
+        sucursales.forEach(sucursal => {
+            const option = document.createElement('option');
+            option.value = sucursal.idSucursal;  // Usamos el ID como valor
+            option.textContent = sucursal.NombreSucursal;
+            // Agregar todos los datos de conexión como data attributes, incluyendo el puerto
+            option.dataset.serverr = sucursal.serverr;
+            option.dataset.databasee = sucursal.databasee;
+            option.dataset.uid = sucursal.Uid;
+            option.dataset.pwd = sucursal.Pwd;
+            option.dataset.puerto = sucursal.Puerto; // Agregar el puerto
+            selectSucursal.appendChild(option);
+        });
+        
+        // Mostrar las sucursales en el panel lateral
+        mostrarSucursalesEnPanel();
+        
+        Swal.fire({
+            icon: 'success',
+            title: 'Conexión exitosa',
+            text: `Se han encontrado ${sucursales.length} sucursales disponibles`,
+            confirmButtonColor: '#7b1fa2'
+        });
+        
+    } catch (error) {
+        console.error('Error al obtener sucursales:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error de conexión',
+            text: 'No se pudieron obtener las sucursales. ' + error.message,
+            confirmButtonColor: '#7b1fa2'
+        });
+    } finally {
+        mostrarCargando(false);
+    }
+}
+
+// Consultar notas de crédito de una sucursal específica (actualizada para usar puerto)
+async function consultarNotasCreditoSucursal(sucursal, fechaInicio, fechaFin) {
+    try {
+        // Crear la conexión a MySQL para esta sucursal incluyendo el puerto
+        const connection = await mysql.createConnection({
+            host: sucursal.serverr,
+            port: sucursal.Puerto || 3306, // Usar el puerto de la sucursal o 3306 por defecto
+            user: sucursal.Uid,
+            password: sucursal.Pwd,
+            database: sucursal.databasee
+        });
+        
+        // Consulta SQL para notas de crédito de SurtiMayoreo
+        const query = `
+            SELECT
+                notascredito.Id,
+                notascredito.IdCajas, 
+                detallenotascredito.Upc, 
+                COALESCE(productos.DescLarga, detallenotascredito.DescCorta) AS DescLarga,
+                detallenotascredito.CostoUnitario, 
+                detallenotascredito.PrecioUnitario, 
+                detallenotascredito.Cantidad, 
+                notascredito.Fecha, 
+                notascredito.NIT, 
+                notascredito.NombreCliente, 
+                notascredito.DireccionCliente, 
+                notascredito.Serie, 
+                notascredito.NoDocumento, 
+                notascredito.UUID
+            FROM
+                notascredito
+                INNER JOIN
+                detallenotascredito
+                ON 
+                    notascredito.Id = detallenotascredito.Idtransacciones
+                LEFT JOIN
+                productos
+                ON 
+                    detallenotascredito.Upc = productos.Upc
+            WHERE
+                notascredito.Fecha BETWEEN ? AND ? AND
+                notascredito.Estado = 1
+        `;
+        
+        // Ejecutar la consulta
+        const [rows] = await connection.execute(query, [fechaInicio, fechaFin]);
+        
+        // Cerrar la conexión
+        await connection.end();
+        
+        return rows;
+        
+    } catch (error) {
+        console.error(`Error al consultar la sucursal ${sucursal.NombreSucursal}:`, error);
+        throw error;
+    }
+}
+
+// Función para reintentar la consulta de una sucursal específica (actualizada para usar puerto)
 async function reintentarConsultaSucursal(sucursal) {
     // Evitar múltiples reintentos simultáneos
     if (procesandoSucursal) {
@@ -591,7 +729,7 @@ async function reintentarConsultaSucursal(sucursal) {
         // Mostrar el overlay de carga
         mostrarCargando(true, `Reintentando consulta para: ${sucursal.NombreSucursal}`);
         
-        // Consultar los datos de esta sucursal
+        // Consultar los datos de esta sucursal (ya usa el puerto gracias a consultarNotasCreditoSucursal actualizada)
         const sucursalData = await consultarNotasCreditoSucursal(sucursal, fechaInicio, fechaFin);
         
         // Recopilar notas únicas de esta sucursal
@@ -711,9 +849,10 @@ function recalcularEstadisticasTotales() {
 // Consultar notas de crédito de una sucursal específica
 async function consultarNotasCreditoSucursal(sucursal, fechaInicio, fechaFin) {
     try {
-        // Crear la conexión a MySQL para esta sucursal
+        // Crear la conexión a MySQL para esta sucursal incluyendo el puerto
         const connection = await mysql.createConnection({
             host: sucursal.serverr,
+            port: sucursal.Puerto || 3306, // Usar el puerto de la sucursal o 3306 por defecto
             user: sucursal.Uid,
             password: sucursal.Pwd,
             database: sucursal.databasee

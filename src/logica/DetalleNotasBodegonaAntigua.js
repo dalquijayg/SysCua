@@ -318,7 +318,7 @@ async function obtenerSucursales() {
         
         // Ejecutar la consulta para obtener las sucursales Bodegona Antigua (RazonSocial = 1)
         const query = `
-            SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd
+            SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd, Puerto
             FROM sucursales
             WHERE RazonSocial = 1 AND Activo = 1
         `;
@@ -349,6 +349,12 @@ async function obtenerSucursales() {
             const option = document.createElement('option');
             option.value = sucursal.idSucursal;  // Usamos el ID como valor
             option.textContent = sucursal.NombreSucursal;
+            // Agregar todos los datos de conexión como data attributes, incluyendo el puerto
+            option.dataset.serverr = sucursal.serverr;
+            option.dataset.databasee = sucursal.databasee;
+            option.dataset.uid = sucursal.Uid;
+            option.dataset.pwd = sucursal.Pwd;
+            option.dataset.puerto = sucursal.Puerto; // Agregar el puerto
             selectSucursal.appendChild(option);
         });
         
@@ -711,9 +717,10 @@ function recalcularEstadisticasTotales() {
 // Consultar notas de crédito de una sucursal específica
 async function consultarNotasCreditoSucursal(sucursal, fechaInicio, fechaFin) {
     try {
-        // Crear la conexión a MySQL para esta sucursal
+        // Crear la conexión a MySQL para esta sucursal incluyendo el puerto
         const connection = await mysql.createConnection({
             host: sucursal.serverr,
+            port: sucursal.Puerto || 3306,
             user: sucursal.Uid,
             password: sucursal.Pwd,
             database: sucursal.databasee

@@ -318,7 +318,7 @@ async function obtenerSucursales() {
         
         // Ejecutar la consulta para obtener las sucursales (RazonSocial = 3)
         const query = `
-            SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd
+            SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd, Puerto
             FROM sucursales
             WHERE RazonSocial = 3 AND Activo = 1
         `;
@@ -349,6 +349,12 @@ async function obtenerSucursales() {
             const option = document.createElement('option');
             option.value = sucursal.idSucursal;  // Usamos el ID como valor
             option.textContent = sucursal.NombreSucursal;
+            // Agregar todos los datos de conexión como data attributes, incluyendo el puerto
+            option.dataset.serverr = sucursal.serverr;
+            option.dataset.databasee = sucursal.databasee;
+            option.dataset.uid = sucursal.Uid;
+            option.dataset.pwd = sucursal.Pwd;
+            option.dataset.puerto = sucursal.Puerto; // Agregar el puerto
             selectSucursal.appendChild(option);
         });
         
@@ -594,7 +600,7 @@ async function reintentarConsultaSucursal(sucursal) {
         // Mostrar el overlay de carga
         mostrarCargando(true, `Reintentando consulta para: ${sucursal.NombreSucursal}`);
         
-        // Consultar los datos de esta sucursal
+        // Consultar los datos de esta sucursal (ya usa el puerto gracias a consultarFacturasBonificacionesSucursal actualizada)
         const sucursalData = await consultarFacturasBonificacionesSucursal(sucursal, fechaInicio, fechaFin);
         
         // Recopilar facturas únicas de esta sucursal
@@ -720,9 +726,10 @@ function recalcularEstadisticasTotales() {
 // Consultar facturas de bonificaciones de una sucursal específica
 async function consultarFacturasBonificacionesSucursal(sucursal, fechaInicio, fechaFin) {
     try {
-        // Crear la conexión a MySQL para esta sucursal
+        // Crear la conexión a MySQL para esta sucursal incluyendo el puerto
         const connection = await mysql.createConnection({
             host: sucursal.serverr,
+            port: sucursal.Puerto || 3306, // Usar el puerto de la sucursal o 3306 por defecto
             user: sucursal.Uid,
             password: sucursal.Pwd,
             database: sucursal.databasee

@@ -82,7 +82,8 @@ async function loadSucursales() {
                 sucursales.serverr, 
                 sucursales.databasee, 
                 sucursales.Uid, 
-                sucursales.Pwd
+                sucursales.Pwd,
+                sucursales.Puerto
             FROM
                 sucursales
             WHERE
@@ -102,6 +103,7 @@ async function loadSucursales() {
             option.dataset.databasee = row.databasee;
             option.dataset.uid = row.Uid;
             option.dataset.pwd = row.Pwd;
+            option.dataset.puerto = row.Puerto; // Agregar el puerto como data attribute
             select.appendChild(option);
         });
 
@@ -239,6 +241,7 @@ async function obtenerInventario(sucursalData, idInventario) {
     try {
         connection = await mysql.createConnection({
             host: sucursalData.serverr,
+            port: sucursalData.puerto || 3306, // Usar puerto personalizado o 3306 por defecto
             user: sucursalData.uid,
             database: sucursalData.databasee,
             password: sucursalData.pwd
@@ -433,6 +436,7 @@ async function buscarProducto(upc, sucursalData) {
             // Primero buscar en la base principal
             connection = await mysql.createConnection({
                 host: sucursalData.serverr,
+                port: sucursalData.puerto || 3306, // Usar puerto personalizado o 3306 por defecto
                 user: sucursalData.uid,
                 database: sucursalData.databasee,
                 password: sucursalData.pwd
@@ -471,6 +475,7 @@ async function buscarProducto(upc, sucursalData) {
             // Si no se encuentra, buscar en la base normal
             connection = await mysql.createConnection({
                 host: sucursalData.serverr,
+                port: sucursalData.puerto || 3306, // Usar puerto personalizado o 3306 por defecto
                 user: sucursalData.uid,
                 database: sucursalData.databasee,
                 password: sucursalData.pwd
@@ -488,6 +493,7 @@ async function buscarProducto(upc, sucursalData) {
             // Para sucursales tipo 1 o cualquier otro tipo
             connection = await mysql.createConnection({
                 host: sucursalData.serverr,
+                port: sucursalData.puerto || 3306, // Usar puerto personalizado o 3306 por defecto
                 user: sucursalData.uid,
                 database: sucursalData.databasee,
                 password: sucursalData.pwd

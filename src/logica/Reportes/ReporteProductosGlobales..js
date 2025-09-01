@@ -370,9 +370,9 @@ class ReporteProductosGlobales {
             
             const connection = await odbc.connect(conexiondbsucursal);
             
-            // MODIFICAR: Agregar TipoSucursal y RazonSocial a la query
+            // MODIFICAR: Agregar Puerto, TipoSucursal y RazonSocial a la query
             const query = `
-                SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd, TipoSucursal, RazonSocial
+                SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd, Puerto, TipoSucursal, RazonSocial
                 FROM sucursales 
                 WHERE (RazonSocial = ? OR (RazonSocial = 0 AND TipoSucursal = 3))
                 AND Activo = 1 
@@ -391,6 +391,16 @@ class ReporteProductosGlobales {
                 // Determinar tipo basado en TipoSucursal
                 const esBodega = sucursal.TipoSucursal === 3 || sucursal.TipoSucursal === '3';
                 option.textContent = esBodega ? `🏭 ${sucursal.NombreSucursal}` : `🏪 ${sucursal.NombreSucursal}`;
+                
+                // Agregar datos de conexión como data attributes, incluyendo el puerto
+                option.dataset.serverr = sucursal.serverr;
+                option.dataset.databasee = sucursal.databasee;
+                option.dataset.uid = sucursal.Uid;
+                option.dataset.pwd = sucursal.Pwd;
+                option.dataset.puerto = sucursal.Puerto; // Agregar el puerto
+                option.dataset.tipoSucursal = sucursal.TipoSucursal;
+                option.dataset.razonSocial = sucursal.RazonSocial;
+                
                 selectSucursales.appendChild(option);
             });
 
@@ -786,7 +796,7 @@ ReporteProductosGlobales.prototype.procesarSucursalOptimizada = async function(s
             database: sucursal.databasee,
             user: sucursal.Uid,
             password: sucursal.Pwd,
-            port: 3306,
+            port: sucursal.Puerto || 3306, // Usar el puerto de la sucursal o 3306 por defecto
             connectTimeout: CONFIG.TIMEOUT_CONNECTION,
             acquireTimeout: CONFIG.TIMEOUT_CONNECTION,
             timeout: CONFIG.TIMEOUT_QUERY,
@@ -1031,7 +1041,7 @@ ReporteProductosGlobales.prototype.validarConexionSucursal = async function(sucu
             database: sucursal.databasee,
             user: sucursal.Uid,
             password: sucursal.Pwd,
-            port: 3306,
+            port: sucursal.Puerto || 3306, // Usar el puerto de la sucursal o 3306 por defecto
             connectTimeout: 10000,
             acquireTimeout: 10000,
             timeout: 15000
