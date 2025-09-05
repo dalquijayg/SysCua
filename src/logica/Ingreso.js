@@ -299,9 +299,9 @@ async function obtenerSucursales() {
         // Conectar a la base de datos usando ODBC
         const connection = await conectar();
         
-        // Ejecutar la consulta para obtener las sucursales
+        // Ejecutar la consulta para obtener las sucursales (incluyendo Puerto)
         const query = `
-            SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd
+            SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd, Puerto
             FROM sucursales
             WHERE TipoSucursal IN (1, 2, 3) AND Activo = 1
         `;
@@ -712,15 +712,20 @@ function recalcularEstadisticasTotales() {
 // Consultar inventario de una sucursal específica
 async function consultarInventarioSucursal(sucursal, fechaInicio, fechaFin) {
     try {
-        // Crear la conexión a MySQL para esta sucursal
-        const connection = await mysql.createConnection({
+        // Crear la configuración de conexión MySQL incluyendo el puerto
+        const connectionConfig = {
             host: sucursal.serverr,
             user: sucursal.Uid,
             password: sucursal.Pwd,
             database: sucursal.databasee
-        });
-        
-        // Consulta SQL (la que proporcionaste)
+        };
+
+        // Agregar el puerto si está definido y no es nulo/vacío
+        if (sucursal.Puerto && sucursal.Puerto !== '' && sucursal.Puerto !== 0) {
+            connectionConfig.port = parseInt(sucursal.Puerto);
+        }
+        // Crear la conexión a MySQL para esta sucursal
+        const connection = await mysql.createConnection(connectionConfig);
         const query = `
             SELECT
                 inventarios.idInventarios, 
@@ -770,6 +775,13 @@ async function consultarInventarioSucursal(sucursal, fechaInicio, fechaFin) {
         
     } catch (error) {
         console.error(`Error al consultar la sucursal ${sucursal.NombreSucursal}:`, error);
+        
+        // Agregar información específica del puerto en el error si fue un problema de conexión
+        if (error.code === 'ECONNREFUSED' && sucursal.Puerto) {
+            console.error(`Puerto configurado: ${sucursal.Puerto}`);
+            error.message += ` (Puerto: ${sucursal.Puerto})`;
+        }
+        
         throw error;
     }
 }
