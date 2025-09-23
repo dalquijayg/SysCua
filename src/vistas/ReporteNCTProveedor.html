@@ -9,14 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
-    <div class="background">
-        <div class="shape shape1"></div>
-        <div class="shape shape2"></div>
-        <div class="shape shape3"></div>
-        <div class="shape shape4"></div>
-    </div>
-    
-    <!-- Header de navegación -->
+    <!-- Header de navegación fijo -->
     <header class="header">
         <div class="header-content">
             <div class="header-left">
@@ -34,25 +27,25 @@
         </div>
     </header>
 
-    <!-- Contenedor principal -->
+    <!-- Contenedor principal que ocupa toda la pantalla -->
     <div class="main-container">
-        <!-- Panel de filtros y búsqueda -->
+        
+        <!-- Panel de filtros compacto y fijo en la parte superior -->
         <div class="search-panel">
             <div class="panel-header">
                 <div class="panel-icon">
                     <i class="fas fa-filter"></i>
                 </div>
                 <div class="panel-title">
-                    <h2>Búsqueda de Notas de Crédito</h2>
-                    <p>Filtre y encuentre las notas que necesita</p>
+                    <h2>Filtros de Búsqueda</h2>
+                    <p>Configure los criterios de búsqueda</p>
                 </div>
-                <!-- El botón de toggle se agregará automáticamente via JavaScript -->
+                <!-- Botón de toggle se agregará automáticamente -->
             </div>
             
             <form id="searchForm" class="search-form">
-                <!-- TODO EN UNA LÍNEA -->
                 <div class="search-main-row">
-                    <!-- Tipo de búsqueda COMPACTO -->
+                    <!-- Tipo de búsqueda -->
                     <div class="search-type-section">
                         <div class="search-type-buttons">
                             <button type="button" class="search-type-btn active" data-type="all" id="searchAll">
@@ -97,7 +90,7 @@
                         </div>
                     </div>
 
-                    <!-- Campos de entrada EN LÍNEA -->
+                    <!-- Campos de entrada -->
                     <div class="search-fields-inline">
                         <div class="search-inputs-inline">
                             <!-- Campos para TODAS (fechas) -->
@@ -130,7 +123,7 @@
                         </div>
                     </div>
                     
-                    <!-- Botones de acción EN LÍNEA -->
+                    <!-- Botones de acción -->
                     <div class="search-actions-inline">
                         <button type="submit" class="search-button-inline">
                             <span class="button-text">Buscar</span>
@@ -146,45 +139,42 @@
                         </button>
                     </div>
                 </div>
-
-                <!-- Información contextual (oculta por defecto) -->
-                <div class="search-info-inline" id="searchInfoInline">
-                    <i class="fas fa-info-circle"></i>
-                    <span>Seleccione fechas para filtrar o deje vacío para mostrar todas las notas.</span>
-                </div>
-
-                <!-- Mantener campos originales ocultos para compatibilidad -->
-                <div class="search-fields" id="searchFields" style="display: none;">
-                    <!-- Los campos se cargarán dinámicamente según el tipo seleccionado -->
-                </div>
-                
-                <div class="search-actions" style="display: none;">
-                    <button type="submit" class="search-button">
-                        <span class="button-text">Buscar Notas de Crédito</span>
-                        <span class="button-icon">
-                            <i class="fas fa-search"></i>
-                        </span>
-                    </button>
-                    <button type="button" class="clear-button" id="clearFilters">
-                        <span class="button-text">Limpiar Filtros</span>
-                        <span class="button-icon">
-                            <i class="fas fa-eraser"></i>
-                        </span>
-                    </button>
-                </div>
             </form>
         </div>
 
-        <!-- Panel de resultados -->
+        <!-- Panel de resultados con tabla que ocupa todo el espacio disponible -->
         <div class="results-panel" id="resultsPanel" style="display: none;">
-            <div class="panel-header">
-                <div class="panel-icon success">
-                    <i class="fas fa-list-alt"></i>
+            
+            <!-- Header de resultados con estadísticas y acciones -->
+            <div class="results-header">
+                <div class="results-info">
+                    <div class="results-count">
+                        <h2>Notas de Crédito Encontradas</h2>
+                        <p id="resultsCount">0 registros encontrados</p>
+                    </div>
+                    
+                    <!-- Resumen estadístico en línea -->
+                    <div class="results-summary" id="resultsSummary">
+                        <div class="summary-item">
+                            <div class="summary-label">Total Notas</div>
+                            <div class="summary-value">0</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">Monto Total</div>
+                            <div class="summary-value">Q 0.00</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">Mercadería</div>
+                            <div class="summary-value">0</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">Otros Conceptos</div>
+                            <div class="summary-value">0</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="panel-title">
-                    <h2>Notas de Crédito Encontradas</h2>
-                    <p id="resultsCount">0 registros encontrados</p>
-                </div>
+                
+                <!-- Acciones de exportación e impresión -->
                 <div class="results-actions">
                     <button class="action-btn export-btn" id="exportBtn">
                         <i class="fas fa-file-excel"></i>
@@ -197,38 +187,45 @@
                 </div>
             </div>
             
-            <div class="results-content">
-                <div class="results-summary" id="resultsSummary">
-                    <!-- Resumen de resultados -->
-                </div>
-                
-                <div class="credit-notes-container" id="creditNotesContainer">
-                    <!-- Las notas de crédito se cargarán aquí -->
-                </div>
-                
-                <div class="pagination-container" id="paginationContainer">
-                    <!-- Paginación -->
-                </div>
+            <!-- Contenedor de tabla que ocupa todo el espacio disponible -->
+            <div class="table-container">
+                <table class="credit-notes-table" id="creditNotesTable">
+                    <thead>
+                        <tr>
+                            <th class="col-expand">
+                                <i class="fas fa-eye"></i>
+                            </th>
+                            <th class="col-nota">Nota de Crédito</th>
+                            <th class="col-proveedor">Proveedor</th>
+                            <th class="col-tipo">Tipo Nota</th>
+                            <th class="col-monto">Monto</th>
+                            <th class="col-fecha">Fecha</th>
+                            <th class="col-factura">Factura Original</th>
+                            <th class="col-concepto">Concepto</th>
+                            <th class="col-usuario">Usuario</th>
+                        </tr>
+                    </thead>
+                    <tbody id="creditNotesTableBody">
+                        <!-- Las filas se generarán dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Paginación en la parte inferior -->
+            <div class="pagination-container" id="paginationContainer">
+                <!-- La paginación se generará dinámicamente -->
             </div>
         </div>
 
         <!-- Panel de sin resultados -->
         <div class="no-results-panel" id="noResultsPanel" style="display: none;">
-            <div class="panel-header">
-                <div class="panel-icon warning">
-                    <i class="fas fa-search-minus"></i>
-                </div>
-                <div class="panel-title">
-                    <h2>Sin Resultados</h2>
-                    <p>No se encontraron notas de crédito con los criterios especificados</p>
-                </div>
-            </div>
-            
             <div class="no-results-content">
                 <div class="no-results-icon">
-                    <i class="fas fa-inbox"></i>
+                    <i class="fas fa-search-minus"></i>
                 </div>
-                <p>Intente ajustar los criterios de búsqueda para obtener resultados.</p>
+                <h2>Sin Resultados</h2>
+                <p>No se encontraron notas de crédito con los criterios especificados</p>
+                <p class="suggestion">Intente ajustar los criterios de búsqueda para obtener resultados.</p>
                 
                 <button class="action-button secondary" id="adjustFiltersBtn">
                     <i class="fas fa-search"></i>
@@ -259,6 +256,16 @@
                     <!-- El contenido del detalle se cargará aquí -->
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Loading overlay para operaciones pesadas -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="loading-content">
+            <div class="loading-spinner">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <p class="loading-text">Cargando datos...</p>
         </div>
     </div>
 

@@ -1,5 +1,6 @@
 const odbc = require('odbc');
 const Swal = require('sweetalert2');
+const XLSX = require('xlsx');
 
 // Variables globales
 let currentData = [];
@@ -8,13 +9,12 @@ let currentPage = 1;
 let pageSize = 25;
 let totalRecords = 0;
 let isLoading = false;
-let tipoModificacion, razonModificacion;
-let razonesModificacion = []; 
 
 // Elementos del DOM
-let filtersForm, fechaDesde, fechaHasta, tipoCambio, usuarioFiltro;
-let resultsPanel, changesTable, changesTableBody;
-let tableLoading, tableEmpty, paginationContainer;
+let filtersForm, fechaDesde, fechaHasta, tipoCambio, tipoModificacion, razonModificacion;
+let serieFactura, numeroFactura;
+let resultsContainer, resultsHeader, changesTable, changesTableBody;
+let tableLoading, tableEmpty, welcomeState, paginationContainer;
 let totalChanges, resultsCount, resultsPeriod;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -37,15 +37,19 @@ function initializeDOMElements() {
     tipoCambio = document.getElementById('tipoCambio');
     tipoModificacion = document.getElementById('tipoModificacion');
     razonModificacion = document.getElementById('razonModificacion');
+    serieFactura = document.getElementById('serieFactura');
+    numeroFactura = document.getElementById('numeroFactura');
     
-    // Paneles principales
-    resultsPanel = document.getElementById('resultsPanel');
+    // Contenedores principales
+    resultsContainer = document.getElementById('resultsContainer');
+    resultsHeader = document.getElementById('resultsHeader');
     
     // Tabla y estados
     changesTable = document.getElementById('changesTable');
     changesTableBody = document.getElementById('changesTableBody');
     tableLoading = document.getElementById('tableLoading');
     tableEmpty = document.getElementById('tableEmpty');
+    welcomeState = document.getElementById('welcomeState');
     paginationContainer = document.getElementById('paginationContainer');
     
     // Elementos de información
@@ -64,7 +68,6 @@ function initializeDOMElements() {
 
 // Inicializar la aplicación
 function initializeApp() {
-    
     // Animar elementos de entrada
     animatePageElements();
     
@@ -74,27 +77,70 @@ function initializeApp() {
     // Establecer fechas por defecto
     setDefaultDates();
     
-    // Mostrar panel de bienvenida
-    showWelcomePanel();
+    // Asegurar que los filtros sean visibles
+    ensureFiltersVisible();
+    
+    // Mostrar estado de bienvenida
+    showWelcomeState();
+}
+
+// Asegurar que los filtros sean visibles
+function ensureFiltersVisible() {
+    const filtersPanel = document.querySelector('.filters-panel-compact');
+    const filtersHeader = document.querySelector('.filters-header');
+    const filtersForm = document.querySelector('.filters-form-inline');
+    const filtersGrid = document.querySelector('.filters-grid');
+    
+    if (filtersPanel) {
+        filtersPanel.style.display = 'block';
+        filtersPanel.style.visibility = 'visible';
+        filtersPanel.style.height = 'auto';
+        filtersPanel.style.minHeight = '70px';
+    }
+    
+    if (filtersHeader) {
+        filtersHeader.style.display = 'flex';
+        filtersHeader.style.visibility = 'visible';
+    }
+    
+    if (filtersForm) {
+        filtersForm.style.display = 'block';
+        filtersForm.style.visibility = 'visible';
+    }
+    
+    if (filtersGrid) {
+        filtersGrid.style.display = 'grid';
+        filtersGrid.style.visibility = 'visible';
+        filtersGrid.style.opacity = '1';
+    }
+    
+    // Asegurar que todos los filter-items sean visibles
+    const filterItems = document.querySelectorAll('.filter-item');
+    filterItems.forEach(item => {
+        item.style.display = 'flex';
+        item.style.visibility = 'visible';
+    });
+    
+    console.log('✅ Filtros forzados a ser visibles');
 }
 
 // Animar elementos de la página
 function animatePageElements() {
     const elements = [
-        document.querySelector('.filters-panel'),
-        document.querySelector('.welcome-panel')
+        document.querySelector('.filters-panel-compact'),
+        document.querySelector('.results-container')
     ];
 
     elements.forEach((element, index) => {
         if (element) {
             element.style.opacity = '0';
-            element.style.transform = 'translateY(30px)';
+            element.style.transform = 'translateY(20px)';
             element.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
             
             setTimeout(() => {
                 element.style.opacity = '1';
                 element.style.transform = 'translateY(0)';
-            }, 200 + (index * 100));
+            }, 100 + (index * 50));
         }
     });
 }
@@ -120,13 +166,11 @@ function setDefaultDates() {
 
 // Formatear fecha para input
 function formatDateForInput(date) {
-    // Si viene como string, convertir a Date
     if (typeof date === 'string') {
         const [year, month, day] = date.split('T')[0].split('-').map(Number);
         date = new Date(year, month - 1, day);
     }
     
-    // Obtener componentes locales
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -139,9 +183,11 @@ function setupEventListeners() {
     // Formulario de filtros
     filtersForm.addEventListener('submit', handleSearch);
     tipoModificacion.addEventListener('change', handleTipoModificacionChange);
+    
     // Botones de acción
     document.getElementById('limpiarFiltros').addEventListener('click', clearFilters);
-    document.getElementById('nuevaBusqueda').addEventListener('click', showWelcomePanel);
+    document.getElementById('nuevaBusqueda').addEventListener('click', showWelcomeState);
+    document.getElementById('exportExcel').addEventListener('click', exportToExcel);
     
     // Paginación
     document.getElementById('pageSize').addEventListener('change', handlePageSizeChange);
@@ -150,17 +196,11 @@ function setupEventListeners() {
     document.getElementById('nextPage').addEventListener('click', () => goToPage(currentPage + 1));
     document.getElementById('lastPage').addEventListener('click', () => goToPage(Math.ceil(totalRecords / pageSize)));
     
-    // Modal de detalles
-    document.getElementById('closeChangeDetailModal').addEventListener('click', closeChangeDetailModal);
-    document.getElementById('closeDetailModal').addEventListener('click', closeChangeDetailModal);
-    
-    // Cerrar modal al hacer clic fuera
-    document.getElementById('changeDetailModal').addEventListener('click', (e) => {
-        if (e.target.id === 'changeDetailModal') {
-            closeChangeDetailModal();
-        }
-    });
+    // Teclas de acceso rápido
+    document.addEventListener('keydown', handleKeyboardShortcuts);
 }
+
+// Manejar cambio de tipo de modificación
 async function handleTipoModificacionChange() {
     const tipo = tipoModificacion.value;
     
@@ -188,6 +228,8 @@ async function handleTipoModificacionChange() {
         showErrorToast('Error al cargar las razones de modificación');
     }
 }
+
+// Cargar razones de modificación
 async function loadRazonesModificacion(motivo) {
     let connection = null;
     
@@ -218,6 +260,7 @@ async function loadRazonesModificacion(motivo) {
         throw error;
     }
 }
+
 // Manejar búsqueda
 async function handleSearch(e) {
     e.preventDefault();
@@ -236,7 +279,6 @@ async function handleSearch(e) {
     showLoading();
     
     try {
-        
         // Realizar búsqueda en base de datos
         const data = await searchChangesHistory(formData);
         
@@ -273,7 +315,7 @@ function validateDates() {
         return false;
     }
     
-    // Validar rango máximo (ej: 1 año)
+    // Validar rango máximo (1 año)
     const daysDiff = Math.ceil((hasta - desde) / (1000 * 60 * 60 * 24));
     if (daysDiff > 365) {
         showWarningToast('El rango de fechas es muy amplio. Se recomienda un período menor a 1 año.');
@@ -289,9 +331,12 @@ function getFormData() {
         fechaHasta: fechaHasta.value,
         tipoCambio: tipoCambio.value || null,
         tipoModificacion: tipoModificacion.value || null,
-        razonModificacion: razonModificacion.value || null
+        razonModificacion: razonModificacion.value || null,
+        serieFactura: serieFactura.value.trim() || null,
+        numeroFactura: numeroFactura.value.trim() || null
     };
 }
+
 // Buscar en historial de cambios
 async function searchChangesHistory(filters) {
     let connection = null;
@@ -299,7 +344,6 @@ async function searchChangesHistory(filters) {
     try {
         connection = await odbc.connect('DSN=facturas;charset=utf8');
         
-        // Query mejorada con JOIN a facturas_compras
         let query = `
             SELECT
                 CambiosFacturasHistorial.IdTipoCambio, 
@@ -316,13 +360,14 @@ async function searchChangesHistory(filters) {
                 CambiosFacturasHistorial.IdUsuario,
                 CambiosFacturasHistorial.ManeraRefacturacion,
                 CambiosFacturasHistorial.SerieNumeroNotaCredito,
+                CambiosFacturasHistorial.TipoModificacion,
+                CambiosFacturasHistorial.IdRazonModificacion,
                 -- Datos de la factura
                 facturas_compras.Serie as FacturaSerie,
                 facturas_compras.Numero as FacturaNumero,
                 facturas_compras.MontoFactura as FacturaMonto,
                 facturas_compras.FechaFactura as FacturaFecha,
-                CambiosFacturasHistorial.TipoModificacion,
-                CambiosFacturasHistorial.IdRazonModificacion,
+                -- Razón de modificación
                 razones.RazonModificacion
             FROM CambiosFacturasHistorial
             LEFT JOIN facturas_compras ON CambiosFacturasHistorial.IdFacturasCompras = facturas_compras.Id
@@ -342,11 +387,21 @@ async function searchChangesHistory(filters) {
             query += ` AND CambiosFacturasHistorial.TipoModificacion = ?`;
             queryParams.push(filters.tipoModificacion);
         }
-
         if (filters.razonModificacion) {
             query += ` AND CambiosFacturasHistorial.IdRazonModificacion = ?`;
             queryParams.push(filters.razonModificacion);
         }
+        
+        // Filtros por factura
+        if (filters.serieFactura) {
+            query += ` AND facturas_compras.Serie LIKE ?`;
+            queryParams.push(`%${filters.serieFactura}%`);
+        }
+        if (filters.numeroFactura) {
+            query += ` AND facturas_compras.Numero LIKE ?`;
+            queryParams.push(`%${filters.numeroFactura}%`);
+        }
+        
         // Ordenar por fecha más reciente
         query += ` ORDER BY CambiosFacturasHistorial.FechaHoraCambio DESC`;
         
@@ -377,6 +432,9 @@ function processSearchResults(data, filters) {
     // Actualizar estadísticas
     updateStats(data.length);
     
+    // Actualizar estado del botón de exportación
+    updateExportButtonState();
+    
     if (data.length === 0) {
         showEmptyResults();
     } else {
@@ -392,9 +450,12 @@ function updateStats(count) {
     resultsCount.textContent = count.toLocaleString();
 }
 
-// Mostrar panel de bienvenida
-function showWelcomePanel() {
-    hideAllPanels();
+// Mostrar estado de bienvenida
+function showWelcomeState() {
+    hideAllStates();
+    welcomeState.style.display = 'flex';
+    resultsHeader.style.display = 'none';
+    paginationContainer.style.display = 'none';
     
     // Limpiar datos
     currentData = [];
@@ -404,12 +465,22 @@ function showWelcomePanel() {
     
     // Actualizar stats
     updateStats(0);
+    
+    // Ocultar botón de exportación
+    updateExportButtonState();
+    
+    // Animar entrada
+    welcomeState.style.opacity = '0';
+    setTimeout(() => {
+        welcomeState.style.opacity = '1';
+        welcomeState.style.transition = 'opacity 0.5s ease';
+    }, 100);
 }
 
 // Mostrar resultados
 function showResults(filters) {
-    hideAllPanels();
-    resultsPanel.style.display = 'flex';
+    hideAllStates();
+    resultsHeader.style.display = 'flex';
     
     // Actualizar período mostrado
     const desde = formatDateDisplay(filters.fechaDesde);
@@ -417,26 +488,24 @@ function showResults(filters) {
     resultsPeriod.textContent = `${desde} - ${hasta}`;
     
     // Animar entrada
-    resultsPanel.style.opacity = '0';
-    resultsPanel.style.transform = 'translateY(20px)';
-    
+    resultsHeader.style.opacity = '0';
     setTimeout(() => {
-        resultsPanel.style.opacity = '1';
-        resultsPanel.style.transform = 'translateY(0)';
-        resultsPanel.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        resultsHeader.style.opacity = '1';
+        resultsHeader.style.transition = 'opacity 0.5s ease';
     }, 100);
 }
 
 // Mostrar resultados vacíos
 function showEmptyResults() {
-    hideAllPanels();
-    resultsPanel.style.display = 'flex';
+    hideAllStates();
     tableEmpty.style.display = 'flex';
+    resultsHeader.style.display = 'flex';
+    paginationContainer.style.display = 'none';
 }
 
-// Ocultar todos los paneles
-function hideAllPanels() {
-    resultsPanel.style.display = 'none';
+// Ocultar todos los estados
+function hideAllStates() {
+    welcomeState.style.display = 'none';
     tableEmpty.style.display = 'none';
     tableLoading.style.display = 'none';
 }
@@ -444,6 +513,7 @@ function hideAllPanels() {
 // Mostrar loading
 function showLoading() {
     isLoading = true;
+    hideAllStates();
     tableLoading.style.display = 'flex';
     
     // Deshabilitar formulario
@@ -451,12 +521,15 @@ function showLoading() {
     formElements.forEach(el => el.disabled = true);
     
     // Cambiar botón de búsqueda
-    const searchBtn = filtersForm.querySelector('.search-button');
-    const buttonText = searchBtn.querySelector('.button-text');
-    const buttonIcon = searchBtn.querySelector('.button-icon');
+    const searchBtn = filtersForm.querySelector('.btn-search');
+    const buttonText = searchBtn.querySelector('.search-text');
+    const buttonIcon = searchBtn.querySelector('.search-icon');
     
-    buttonText.textContent = 'Buscando...';
-    buttonIcon.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    if (buttonText) buttonText.textContent = 'Buscando...';
+    if (buttonIcon) buttonIcon.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    
+    // Agregar clase de loading
+    document.body.classList.add('loading');
 }
 
 // Ocultar loading
@@ -469,15 +542,53 @@ function hideLoading() {
     formElements.forEach(el => el.disabled = false);
     
     // Restaurar botón de búsqueda
-    const searchBtn = filtersForm.querySelector('.search-button');
-    const buttonText = searchBtn.querySelector('.button-text');
-    const buttonIcon = searchBtn.querySelector('.button-icon');
+    const searchBtn = filtersForm.querySelector('.btn-search');
+    const buttonText = searchBtn.querySelector('.search-text');
+    const buttonIcon = searchBtn.querySelector('.search-icon');
     
-    buttonText.textContent = 'Buscar Cambios';
-    buttonIcon.innerHTML = '<i class="fas fa-search"></i>';
+    if (buttonText) buttonText.textContent = 'Buscar';
+    if (buttonIcon) buttonIcon.innerHTML = '<i class="fas fa-search"></i>';
+    
+    // Remover clase de loading
+    document.body.classList.remove('loading');
 }
 
-// Mostrar datos en tabla
+// Eliminar funciones de vista compacta/expandida ya que no se necesitan
+
+// Manejar atajos de teclado
+function handleKeyboardShortcuts(e) {
+    // Ctrl/Cmd + Enter para buscar
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (!isLoading) {
+            filtersForm.dispatchEvent(new Event('submit'));
+        }
+    }
+    
+    // F5 para nueva búsqueda
+    if (e.key === 'F5') {
+        e.preventDefault();
+        showWelcomeState();
+    }
+    
+    // Ctrl + R para limpiar filtros
+    if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+        e.preventDefault();
+        clearFilters();
+    }
+    
+    // Teclas de navegación de páginas
+    if (totalRecords > pageSize) {
+        if (e.key === 'ArrowLeft' && e.altKey) {
+            e.preventDefault();
+            goToPage(currentPage - 1);
+        }
+        if (e.key === 'ArrowRight' && e.altKey) {
+            e.preventDefault();
+            goToPage(currentPage + 1);
+        }
+    }
+}
 function displayTableData() {
     const startIndex = (currentPage - 1) * pageSize;
     const endIndex = startIndex + pageSize;
@@ -495,43 +606,49 @@ function displayTableData() {
         changesTableBody.appendChild(row);
     });
     
+    // Mostrar tabla
+    hideAllStates();
+    changesTable.style.display = 'table';
+    
+    // Configurar paginación
+    setupPagination();
+    
     // Actualizar información de paginación
     updatePaginationInfo();
 }
-// Crear fila de tabla
+
+// Crear fila de tabla expandida
 function createTableRow(record) {
     const row = document.createElement('tr');
-    
-    // Crear el botón de acción sin onclick inline
-    const actionButton = document.createElement('button');
-    actionButton.className = 'action-btn';
-    actionButton.title = 'Ver detalles';
-    actionButton.innerHTML = '<i class="fas fa-eye"></i>';
-    
-    // Agregar event listener directamente
-    actionButton.addEventListener('click', () => {
-        showChangeDetail(record);
-    });
     
     row.innerHTML = `
         <td class="col-tipo">
             <span class="change-type type-${record.IdTipoCambio}">
                 ${getChangeTypeIcon(record.IdTipoCambio)}
-                ${record.TipoCambio}
+                ${escapeHtml(record.TipoCambio)}
             </span>
         </td>
         <td class="col-anterior">
-            <div class="value-display value-old" title="${escapeHtml(record.ValorAnterior)}">
+            <div class="value-old" title="${escapeHtml(record.ValorAnterior)}">
                 ${escapeHtml(record.ValorAnterior)}
             </div>
         </td>
         <td class="col-nuevo">
-            <div class="value-display value-new" title="${escapeHtml(record.ValorNuevo)}">
+            <div class="value-new" title="${escapeHtml(record.ValorNuevo)}">
                 ${escapeHtml(record.ValorNuevo)}
             </div>
         </td>
         <td class="col-inventario">
             <span class="inventory-id">${record.IdInventario || '-'}</span>
+        </td>
+        <td class="col-factura">
+            <div class="factura-info">
+                <div class="factura-serie">${formatFacturaSerieNumero(record.FacturaSerie, record.FacturaNumero)}</div>
+                <div class="factura-fecha">${formatDateDisplay(record.FacturaFecha)}</div>
+            </div>
+        </td>
+        <td class="col-monto text-right">
+            <span class="monto-factura">${formatCurrency(record.FacturaMonto)}</span>
         </td>
         <td class="col-sucursal">
             <span title="${escapeHtml(record.Sucursal)}">${escapeHtml(record.Sucursal) || '-'}</span>
@@ -547,14 +664,24 @@ function createTableRow(record) {
                 <div class="time">${formatTimeDisplay(record.FechaHoraCambio)}</div>
             </div>
         </td>
-        <td class="col-acciones">
-            <!-- El botón se agregará después -->
+        <td class="col-motivo">
+            <div class="motivo-info">
+                <div class="motivo-tipo">${getTipoModificacionText(record.TipoModificacion)}</div>
+                <div class="motivo-razon">${escapeHtml(record.RazonModificacion) || '-'}</div>
+            </div>
+        </td>
+        <td class="col-refacturacion">
+            <div class="refacturacion-info">
+                <div class="refacturacion-manera ${getManeraRefacturacionClass(record.ManeraRefacturacion)}">
+                    ${getManeraRefacturacionText(record.ManeraRefacturacion)}
+                </div>
+                ${record.SerieNumeroNotaCredito && record.SerieNumeroNotaCredito !== '0' ? 
+                    `<div class="refacturacion-nota">${escapeHtml(record.SerieNumeroNotaCredito)}</div>` : 
+                    ''
+                }
+            </div>
         </td>
     `;
-    
-    // Agregar el botón de acción a la última celda
-    const actionCell = row.querySelector('.col-acciones');
-    actionCell.appendChild(actionButton);
     
     return row;
 }
@@ -572,6 +699,56 @@ function getChangeTypeIcon(typeId) {
     return icons[typeId] || '<i class="fas fa-edit"></i>';
 }
 
+// Formatear serie y número de factura
+function formatFacturaSerieNumero(serie, numero) {
+    if (!serie && !numero) return '-';
+    if (!serie) return numero;
+    if (!numero) return serie;
+    return `${serie}-${numero}`;
+}
+
+// Formatear moneda
+function formatCurrency(amount) {
+    if (!amount && amount !== 0) return '-';
+    
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount)) return '-';
+    
+    return new Intl.NumberFormat('es-GT', {
+        style: 'currency',
+        currency: 'GTQ',
+        minimumFractionDigits: 2
+    }).format(numericAmount);
+}
+
+// Obtener texto de tipo de modificación
+function getTipoModificacionText(tipo) {
+    switch(tipo) {
+        case 1: return 'Modificación';
+        case 2: return 'Refacturación';
+        default: return '-';
+    }
+}
+
+// Obtener texto de manera de refacturación
+function getManeraRefacturacionText(manera) {
+    if (!manera) return '-';
+    switch(manera) {
+        case 1: return 'Anulación';
+        case 2: return 'Nota de Crédito';
+        default: return `Tipo ${manera}`;
+    }
+}
+
+// Obtener clase CSS para manera de refacturación
+function getManeraRefacturacionClass(manera) {
+    switch(manera) {
+        case 1: return 'anulacion';
+        case 2: return 'nota-credito';
+        default: return '';
+    }
+}
+
 // Escapar HTML para prevenir XSS
 function escapeHtml(text) {
     if (!text && text !== 0) return '';
@@ -587,28 +764,22 @@ function formatDateDisplay(dateString) {
     try {
         let date;
         
-        // Si la fecha viene como string YYYY-MM-DD (común en SQL)
         if (typeof dateString === 'string' && dateString.includes('-')) {
-            // Dividir la fecha manualmente para evitar problemas de zona horaria
             const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
-            // Crear fecha local sin conversión UTC
-            date = new Date(year, month - 1, day); // month - 1 porque los meses en JS empiezan en 0
+            date = new Date(year, month - 1, day);
         } else {
-            // Para otros formatos, usar Date normal
             date = new Date(dateString);
         }
         
-        // Verificar que la fecha es válida
         if (isNaN(date.getTime())) {
-            return dateString; // Devolver el string original si no es válida
+            return dateString;
         }
         
-        // Formatear usando Intl.DateTimeFormat con zona horaria específica
         return new Intl.DateTimeFormat('es-GT', {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
-            timeZone: 'America/Guatemala' // Forzar zona horaria de Guatemala
+            timeZone: 'America/Guatemala'
         }).format(date);
         
     } catch (error) {
@@ -623,20 +794,16 @@ function formatTimeDisplay(dateTimeString) {
     try {
         let date;
         
-        // Manejar diferentes formatos de fecha/hora
         if (typeof dateTimeString === 'string') {
-            // Si viene con fecha y hora completa
             if (dateTimeString.includes('T') || dateTimeString.includes(' ')) {
                 date = new Date(dateTimeString);
             } else {
-                // Si es solo fecha, agregar tiempo por defecto
                 date = new Date(dateTimeString + 'T00:00:00');
             }
         } else {
             date = new Date(dateTimeString);
         }
         
-        // Verificar validez
         if (isNaN(date.getTime())) {
             return '';
         }
@@ -646,349 +813,12 @@ function formatTimeDisplay(dateTimeString) {
             minute: '2-digit',
             second: '2-digit',
             hour12: false,
-            timeZone: 'America/Guatemala' // Forzar zona horaria de Guatemala
+            timeZone: 'America/Guatemala'
         }).format(date);
         
     } catch (error) {
         return '';
     }
-}
-
-// Mostrar detalles del cambio
-function showChangeDetail(record) {
-    const modal = document.getElementById('changeDetailModal');
-    const content = document.getElementById('changeDetailContent');
-    const subtitle = document.getElementById('changeDetailSubtitle');
-    
-    // Actualizar título
-    subtitle.textContent = `${record.TipoCambio} - ${formatDateDisplay(record.FechaCambio)}`;
-    
-    // NUEVA FUNCIÓN AUXILIAR para obtener texto de manera de refacturación
-    const getManeraRefacturacionText = (manera) => {
-        if (!manera) return '-';
-        return manera === 1 ? 'Anulación de Factura' : 
-               manera === 2 ? 'Nota de Crédito' : 
-               `Tipo ${manera}`;
-    };
-    
-    // Generar contenido del modal
-    content.innerHTML = `
-        <div class="detail-section">
-            <h4><i class="fas fa-info-circle"></i> Información del Cambio</h4>
-            <div class="detail-grid">
-                <div class="detail-item">
-                    <label>Tipo de Cambio:</label>
-                    <span class="highlight">${record.TipoCambio}</span>
-                </div>
-                <div class="detail-item">
-                    <label>Usuario:</label>
-                    <span>${record.NombreUsuario}</span>
-                </div>
-                <div class="detail-item">
-                    <label>Fecha:</label>
-                    <span>${formatDateDisplay(record.FechaCambio)}</span>
-                </div>
-                <div class="detail-item">
-                    <label>Hora:</label>
-                    <span>${formatTimeDisplay(record.FechaHoraCambio)}</span>
-                </div>
-                <div class="detail-item">
-                    <label>ID Inventario:</label>
-                    <span>${record.IdInventario || '-'}</span>
-                </div>
-                <div class="detail-item">
-                    <label>Sucursal:</label>
-                    <span>${record.Sucursal || '-'}</span>
-                </div>
-                <div class="detail-item">
-                    <label>Tipo de Modificación:</label>
-                    <span class="highlight">${record.TipoModificacion === 1 ? 'Modificación' : record.TipoModificacion === 2 ? 'Refacturación' : '-'}</span>
-                </div>
-                <div class="detail-item">
-                    <label>Razón de Modificación:</label>
-                    <span>${record.RazonModificacion || '-'}</span>
-                </div>
-            </div>
-        </div>
-        
-        ${record.TipoModificacion === 1 ? `
-        <!-- NUEVA SECCIÓN: Información de Refacturación -->
-        <div class="detail-section refacturation-info">
-            <h4><i class="fas fa-redo"></i> Información de Refacturación</h4>
-            <div class="detail-grid">
-                <div class="detail-item">
-                    <label>Manera de Refacturación:</label>
-                    <span class="highlight refacturation-method">${getManeraRefacturacionText(record.ManeraRefacturacion)}</span>
-                </div>
-                <div class="detail-item">
-                    <label>Serie-Número Nota de Crédito:</label>
-                    <span class="highlight credit-note-info">${record.SerieNumeroNotaCredito && record.SerieNumeroNotaCredito !== '0' ? record.SerieNumeroNotaCredito : 'No Aplica'}</span>
-                </div>
-            </div>
-            
-            ${record.ManeraRefacturacion === 2 && record.SerieNumeroNotaCredito && record.SerieNumeroNotaCredito !== '0' ? `
-            <div class="refacturation-note">
-                <div class="note-icon">
-                    <i class="fas fa-file-invoice"></i>
-                </div>
-                <div class="note-content">
-                    <p><strong>Refacturación por Nota de Crédito</strong></p>
-                    <p>Esta refacturación fue realizada utilizando la nota de crédito: <strong>${record.SerieNumeroNotaCredito}</strong></p>
-                </div>
-            </div>
-            ` : record.ManeraRefacturacion === 1 ? `
-            <div class="refacturation-note anulacion">
-                <div class="note-icon">
-                    <i class="fas fa-ban"></i>
-                </div>
-                <div class="note-content">
-                    <p><strong>Refacturación por Anulación</strong></p>
-                    <p>Esta refacturación fue realizada por anulación de la factura original</p>
-                </div>
-            </div>
-            ` : ''}
-        </div>
-        ` : ''}
-        
-        <div class="detail-section">
-            <h4><i class="fas fa-exchange-alt"></i> Comparación de Valores</h4>
-            <div class="change-comparison">
-                <div class="comparison-before">
-                    <h5>Valor Anterior</h5>
-                    <div class="comparison-value">${record.ValorAnterior}</div>
-                </div>
-                <div class="comparison-arrow">
-                    <i class="fas fa-arrow-right"></i>
-                </div>
-                <div class="comparison-after">
-                    <h5>Valor Nuevo</h5>
-                    <div class="comparison-value">${record.ValorNuevo}</div>
-                </div>
-            </div>
-        </div>
-        
-        ${record.IdFacturasCompras ? `
-        <div class="detail-section">
-            <h4><i class="fas fa-file-invoice"></i> Información de la Factura</h4>
-            <div class="detail-grid">
-                <div class="detail-item">
-                    <label>ID Factura:</label>
-                    <span class="highlight">${record.IdFacturasCompras}</span>
-                </div>
-                <div class="detail-item">
-                    <label>Serie-Número:</label>
-                    <span class="highlight">${formatFacturaSerieNumero(record.FacturaSerie, record.FacturaNumero)}</span>
-                </div>
-                <div class="detail-item">
-                    <label>Monto Factura:</label>
-                    <span class="highlight">${formatCurrency(record.FacturaMonto)}</span>
-                </div>
-                <div class="detail-item">
-                    <label>Fecha Factura:</label>
-                    <span>${formatDateDisplay(record.FacturaFecha)}</span>
-                </div>
-            </div>
-            
-            ${generateFacturaActions(record.IdFacturasCompras, record.FacturaSerie, record.FacturaNumero)}
-        </div>
-        ` : `
-        <div class="detail-section">
-            <h4><i class="fas fa-exclamation-triangle"></i> Sin Información de Factura</h4>
-            <p style="color: var(--text-secondary); font-style: italic;">
-                No se encontró información de factura asociada a este cambio.
-            </p>
-        </div>
-        `}
-    `;
-    
-    // Mostrar modal
-    modal.style.display = 'flex';
-    setTimeout(() => {
-        modal.classList.add('show');
-    }, 10);
-}
-function generateFacturaActions(facturaId, serie, numero) {
-    const serieNumero = formatFacturaSerieNumero(serie, numero);
-    
-    return `
-        <div class="factura-actions" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color);">
-            <h5 style="margin-bottom: 10px; color: var(--text-secondary);">
-                <i class="fas fa-tools"></i> Acciones Disponibles
-            </h5>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button class="btn-action-small" onclick="copyFacturaInfo('${serieNumero}')" title="Copiar información">
-                    <i class="fas fa-copy"></i>
-                    Copiar Info
-                </button>
-                <button class="btn-action-small" onclick="searchFacturaChanges(${facturaId})" title="Ver todos los cambios de esta factura">
-                    <i class="fas fa-history"></i>
-                    Ver Cambios
-                </button>
-            </div>
-        </div>
-    `;
-}
-function searchFacturaChanges(facturaId) {
-    // Cerrar el modal actual
-    closeChangeDetailModal();
-    
-    // Mostrar confirmación
-    Swal.fire({
-        title: '¿Buscar cambios de esta factura?',
-        text: `Se mostrarán todos los cambios registrados para la factura ID: ${facturaId}`,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#6e78ff',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Sí, buscar',
-        cancelButtonText: 'Cancelar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            performFacturaSpecificSearch(facturaId);
-        }
-    });
-}
-async function performFacturaSpecificSearch(facturaId) {
-    try {
-        showLoading();
-        
-        // Establecer un rango amplio de fechas
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setFullYear(startDate.getFullYear() - 2); // 2 años atrás
-        
-        fechaDesde.value = formatDateForInput(startDate);
-        fechaHasta.value = formatDateForInput(endDate);
-        
-        // Limpiar otros filtros
-        tipoCambio.value = '';
-        usuarioFiltro.value = '';
-        
-        // Buscar cambios para esta factura específica
-        const data = await searchFacturaSpecificChanges(facturaId);
-        
-        // Procesar resultados
-        currentData = data;
-        filteredData = data;
-        totalRecords = data.length;
-        currentPage = 1;
-        
-        updateStats(data.length);
-        
-        if (data.length === 0) {
-            showWarningToast('No se encontraron cambios para esta factura');
-            showEmptyResults();
-        } else {
-            showResults({
-                fechaDesde: fechaDesde.value,
-                fechaHasta: fechaHasta.value
-            });
-            displayTableData();
-            setupPagination();
-            showSuccessToast(`Se encontraron ${data.length} cambios para esta factura`);
-        }
-        
-    } catch (error) {
-        handleSearchError(error);
-    } finally {
-        hideLoading();
-    }
-}
-async function searchFacturaSpecificChanges(facturaId) {
-    let connection = null;
-    
-    try {
-        connection = await odbc.connect('DSN=facturas;charset=utf8');
-        
-        const query = `
-            SELECT
-                CambiosFacturasHistorial.IdTipoCambio, 
-                CambiosFacturasHistorial.TipoCambio, 
-                CambiosFacturasHistorial.ValorAnterior, 
-                CambiosFacturasHistorial.ValorNuevo, 
-                CambiosFacturasHistorial.IdInventario, 
-                CambiosFacturasHistorial.Sucursal, 
-                CambiosFacturasHistorial.NombreUsuario, 
-                CambiosFacturasHistorial.FechaCambio, 
-                CambiosFacturasHistorial.FechaHoraCambio,
-                CambiosFacturasHistorial.IdFacturasCompras,
-                CambiosFacturasHistorial.IdSucursal,
-                CambiosFacturasHistorial.IdUsuario,
-                -- Datos de la factura
-                facturas_compras.Serie as FacturaSerie,
-                facturas_compras.Numero as FacturaNumero,
-                facturas_compras.MontoFactura as FacturaMonto,
-                facturas_compras.FechaFactura as FacturaFecha
-            FROM CambiosFacturasHistorial
-            LEFT JOIN facturas_compras ON CambiosFacturasHistorial.IdFacturasCompras = facturas_compras.Id
-            WHERE CambiosFacturasHistorial.IdFacturasCompras = ?
-            ORDER BY CambiosFacturasHistorial.FechaHoraCambio DESC
-        `;
-        
-        const result = await connection.query(query, [facturaId]);
-        await connection.close();
-        
-        return result;
-        
-    } catch (error) {
-        if (connection) {
-            try {
-                await connection.close();
-            } catch (closeError) {
-            }
-        }
-        throw error;
-    }
-}
-function copyFacturaInfo(serieNumero) {
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(serieNumero).then(() => {
-            showSuccessToast('Información copiada al portapapeles');
-        }).catch(() => {
-            showErrorToast('No se pudo copiar la información');
-        });
-    } else {
-        // Fallback para navegadores antiguos
-        const textArea = document.createElement('textarea');
-        textArea.value = serieNumero;
-        document.body.appendChild(textArea);
-        textArea.select();
-        try {
-            document.execCommand('copy');
-            showSuccessToast('Información copiada al portapapeles');
-        } catch (err) {
-            showErrorToast('No se pudo copiar la información');
-        }
-        document.body.removeChild(textArea);
-    }
-}
-
-function formatFacturaSerieNumero(serie, numero) {
-    if (!serie && !numero) return '-';
-    if (!serie) return numero;
-    if (!numero) return serie;
-    return `${serie}-${numero}`;
-}
-function formatCurrency(amount) {
-    if (!amount && amount !== 0) return '-';
-    
-    const numericAmount = parseFloat(amount);
-    if (isNaN(numericAmount)) return '-';
-    
-    return new Intl.NumberFormat('es-GT', {
-        style: 'currency',
-        currency: 'GTQ',
-        minimumFractionDigits: 2
-    }).format(numericAmount);
-}
-// Cerrar modal de detalles
-function closeChangeDetailModal() {
-    const modal = document.getElementById('changeDetailModal');
-    modal.classList.remove('show');
-    
-    setTimeout(() => {
-        modal.style.display = 'none';
-    }, 300);
 }
 
 // ===== PAGINACIÓN =====
@@ -1059,7 +889,6 @@ function goToPage(page) {
     
     currentPage = page;
     displayTableData();
-    updatePaginationControls(totalPages);
 }
 
 // Cambiar tamaño de página
@@ -1072,7 +901,6 @@ function handlePageSizeChange(e) {
     currentPage = 1;
     
     displayTableData();
-    setupPagination();
 }
 
 // ===== FUNCIONES DE UTILIDAD =====
@@ -1088,6 +916,11 @@ function clearFilters() {
     razonModificacion.value = '';
     razonModificacion.disabled = true;
     razonModificacion.innerHTML = '<option value="">Seleccione primero el motivo</option>';
+    
+    // Limpiar filtros de factura
+    serieFactura.value = '';
+    numeroFactura.value = '';
+    
     // Enfocar primer campo
     fechaDesde.focus();
     
@@ -1096,371 +929,678 @@ function clearFilters() {
 
 // Manejar errores de búsqueda
 function handleSearchError(error) {
-   
-   let errorMessage = 'Error al buscar en el historial. ';
-   
-   if (error.message && error.message.includes('connection')) {
-       errorMessage += 'Verifique la conexión a la base de datos.';
-   } else if (error.message && error.message.includes('timeout')) {
-       errorMessage += 'La consulta tardó demasiado tiempo. Intente con un rango menor.';
-   } else if (error.message && error.message.includes('syntax')) {
-       errorMessage += 'Error en la consulta SQL. Contacte al administrador.';
-   } else {
-       errorMessage += 'Por favor intente nuevamente.';
-   }
-   
-   Swal.fire({
-       icon: 'error',
-       title: 'Error en la búsqueda',
-       text: errorMessage,
-       confirmButtonColor: '#6e78ff',
-       backdrop: `
-           rgba(255, 94, 109, 0.2)
-           url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ff5e6d' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0l8 6 8-6v4l-8 6-8-6zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0l8 6 8-6v4l-8 6-8-6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
-           left center/contain no-repeat
-       `
-   });
-   
-   // Mostrar panel de bienvenida si no hay datos
-   if (currentData.length === 0) {
-       showWelcomePanel();
-   }
+    console.error('❌ Error en búsqueda:', error);
+    
+    let errorMessage = 'Error al buscar en el historial. ';
+    
+    if (error.message && error.message.includes('connection')) {
+        errorMessage += 'Verifique la conexión a la base de datos.';
+    } else if (error.message && error.message.includes('timeout')) {
+        errorMessage += 'La consulta tardó demasiado tiempo. Intente con un rango menor.';
+    } else if (error.message && error.message.includes('syntax')) {
+        errorMessage += 'Error en la consulta SQL. Contacte al administrador.';
+    } else {
+        errorMessage += 'Por favor intente nuevamente.';
+    }
+    
+    Swal.fire({
+        icon: 'error',
+        title: 'Error en la búsqueda',
+        text: errorMessage,
+        confirmButtonColor: '#6e78ff',
+        backdrop: `
+            rgba(255, 94, 109, 0.2)
+            url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ff5e6d' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0l8 6 8-6v4l-8 6-8-6zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0l8 6 8-6v4l-8 6-8-6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
+            left center/contain no-repeat
+        `
+    });
+    
+    // Mostrar estado de bienvenida si no hay datos
+    if (currentData.length === 0) {
+        showWelcomeState();
+    }
 }
+
 // ===== FUNCIONES DE ANÁLISIS =====
 
 // Generar estadísticas de los cambios
 function generateChangeStats() {
-   if (currentData.length === 0) return null;
-   
-   const stats = {
-       totalChanges: currentData.length,
-       changesByType: {},
-       changesByUser: {},
-       changesByDay: {},
-       topUsers: [],
-       topTypes: []
-   };
-   
-   // Análisis por tipo de cambio
-   currentData.forEach(record => {
-       // Por tipo
-       if (!stats.changesByType[record.TipoCambio]) {
-           stats.changesByType[record.TipoCambio] = 0;
-       }
-       stats.changesByType[record.TipoCambio]++;
-       
-       // Por usuario
-       if (!stats.changesByUser[record.NombreUsuario]) {
-           stats.changesByUser[record.NombreUsuario] = 0;
-       }
-       stats.changesByUser[record.NombreUsuario]++;
-       
-       // Por día
-       const day = record.FechaCambio;
-       if (!stats.changesByDay[day]) {
-           stats.changesByDay[day] = 0;
-       }
-       stats.changesByDay[day]++;
-   });
-   
-   // Top usuarios (top 5)
-   stats.topUsers = Object.entries(stats.changesByUser)
-       .sort((a, b) => b[1] - a[1])
-       .slice(0, 5)
-       .map(([user, count]) => ({ user, count }));
-   
-   // Top tipos (top 5)
-   stats.topTypes = Object.entries(stats.changesByType)
-       .sort((a, b) => b[1] - a[1])
-       .slice(0, 5)
-       .map(([type, count]) => ({ type, count }));
-   
-   return stats;
+    if (currentData.length === 0) return null;
+    
+    const stats = {
+        totalChanges: currentData.length,
+        changesByType: {},
+        changesByUser: {},
+        changesByDay: {},
+        topUsers: [],
+        topTypes: []
+    };
+    
+    // Análisis por tipo de cambio
+    currentData.forEach(record => {
+        // Por tipo
+        if (!stats.changesByType[record.TipoCambio]) {
+            stats.changesByType[record.TipoCambio] = 0;
+        }
+        stats.changesByType[record.TipoCambio]++;
+        
+        // Por usuario
+        if (!stats.changesByUser[record.NombreUsuario]) {
+            stats.changesByUser[record.NombreUsuario] = 0;
+        }
+        stats.changesByUser[record.NombreUsuario]++;
+        
+        // Por día
+        const day = record.FechaCambio;
+        if (!stats.changesByDay[day]) {
+            stats.changesByDay[day] = 0;
+        }
+        stats.changesByDay[day]++;
+    });
+    
+    // Top usuarios (top 5)
+    stats.topUsers = Object.entries(stats.changesByUser)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([user, count]) => ({ user, count }));
+    
+    // Top tipos (top 5)
+    stats.topTypes = Object.entries(stats.changesByType)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([type, count]) => ({ type, count }));
+    
+    return stats;
 }
 
 // Mostrar estadísticas en modal
 function showStatsModal() {
-   const stats = generateChangeStats();
-   
-   if (!stats) {
-       showWarningToast('No hay datos para generar estadísticas');
-       return;
-   }
-   
-   Swal.fire({
-       title: 'Estadísticas del Período',
-       html: `
-           <div style="text-align: left;">
-               <h4 style="color: #6e78ff; margin-bottom: 15px;">📊 Resumen General</h4>
-               <p><strong>Total de cambios:</strong> ${stats.totalChanges.toLocaleString()}</p>
-               <p><strong>Usuarios activos:</strong> ${Object.keys(stats.changesByUser).length}</p>
-               <p><strong>Días con actividad:</strong> ${Object.keys(stats.changesByDay).length}</p>
-               
-               <h4 style="color: #6e78ff; margin: 20px 0 15px;">🏆 Top Usuarios</h4>
-               ${stats.topUsers.map((item, index) => `
-                   <p style="margin: 5px 0;">
-                       ${index + 1}. <strong>${item.user}</strong> - ${item.count} cambios
-                   </p>
-               `).join('')}
-               
-               <h4 style="color: #6e78ff; margin: 20px 0 15px;">📈 Tipos de Cambio Más Frecuentes</h4>
-               ${stats.topTypes.map((item, index) => `
-                   <p style="margin: 5px 0;">
-                       ${index + 1}. <strong>${item.type}</strong> - ${item.count} cambios
-                   </p>
-               `).join('')}
-           </div>
-       `,
-       icon: 'info',
-       confirmButtonColor: '#6e78ff',
-       confirmButtonText: 'Cerrar',
-       width: '600px'
-   });
+    const stats = generateChangeStats();
+    
+    if (!stats) {
+        showWarningToast('No hay datos para generar estadísticas');
+        return;
+    }
+    
+    Swal.fire({
+        title: 'Estadísticas del Período',
+        html: `
+            <div style="text-align: left;">
+                <h4 style="color: #6e78ff; margin-bottom: 15px;">📊 Resumen General</h4>
+                <p><strong>Total de cambios:</strong> ${stats.totalChanges.toLocaleString()}</p>
+                <p><strong>Usuarios activos:</strong> ${Object.keys(stats.changesByUser).length}</p>
+                <p><strong>Días con actividad:</strong> ${Object.keys(stats.changesByDay).length}</p>
+                
+                <h4 style="color: #6e78ff; margin: 20px 0 15px;">🏆 Top Usuarios</h4>
+                ${stats.topUsers.map((item, index) => `
+                    <p style="margin: 5px 0;">
+                        ${index + 1}. <strong>${item.user}</strong> - ${item.count} cambios
+                    </p>
+                `).join('')}
+                
+                <h4 style="color: #6e78ff; margin: 20px 0 15px;">📈 Tipos de Cambio Más Frecuentes</h4>
+                ${stats.topTypes.map((item, index) => `
+                    <p style="margin: 5px 0;">
+                        ${index + 1}. <strong>${item.type}</strong> - ${item.count} cambios
+                    </p>
+                `).join('')}
+            </div>
+        `,
+        icon: 'info',
+        confirmButtonColor: '#6e78ff',
+        confirmButtonText: 'Cerrar',
+        width: '600px'
+    });
+}
+
+// ===== ATAJOS DE TECLADO =====
+
+// Manejar atajos de teclado
+function handleKeyboardShortcuts(e) {
+    // Ctrl/Cmd + Enter para buscar
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (!isLoading) {
+            filtersForm.dispatchEvent(new Event('submit'));
+        }
+    }
+    
+    // F5 para nueva búsqueda
+    if (e.key === 'F5') {
+        e.preventDefault();
+        showWelcomeState();
+    }
+    
+    // Ctrl + R para limpiar filtros
+    if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+        e.preventDefault();
+        clearFilters();
+    }
+    
+    // Teclas de navegación de páginas
+    if (totalRecords > pageSize) {
+        if (e.key === 'ArrowLeft' && e.altKey) {
+            e.preventDefault();
+            goToPage(currentPage - 1);
+        }
+        if (e.key === 'ArrowRight' && e.altKey) {
+            e.preventDefault();
+            goToPage(currentPage + 1);
+        }
+    }
+    
+    // Toggle vista compacta/expandida
+    if (e.key === 'v' && e.ctrlKey) {
+        e.preventDefault();
+        setTableView(currentView === 'compact' ? 'expanded' : 'compact');
+    }
+}
+
+// ===== FUNCIONES DE EXPORTACIÓN =====
+
+// Exportar datos a Excel
+async function exportToExcel() {
+    if (currentData.length === 0) {
+        showWarningToast('No hay datos para exportar');
+        return;
+    }
+    
+    try {
+        // Mostrar mensaje de preparación
+        showInfoToast('Preparando archivo Excel...');
+        
+        // Preparar los datos para Excel
+        const excelData = prepareDataForExcel(currentData);
+        
+        // Crear libro de trabajo
+        const workbook = XLSX.utils.book_new();
+        
+        // Crear hoja de trabajo con los datos
+        const worksheet = XLSX.utils.json_to_sheet(excelData, {
+            header: [
+                'TipoCambio',
+                'ValorAnterior',
+                'ValorNuevo',
+                'IdInventario',
+                'FacturaSerie',
+                'FacturaNumero',
+                'SerieNumeroCompleto',
+                'MontoFactura',
+                'FechaFactura',
+                'Sucursal',
+                'Usuario',
+                'FechaCambio',
+                'HoraCambio',
+                'TipoModificacion',
+                'RazonModificacion',
+                'ManeraRefacturacion',
+                'NotaCredito',
+                'IdFacturasCompras'
+            ]
+        });
+        
+        // Establecer anchos de columna
+        const columnWidths = [
+            { wch: 20 }, // Tipo de Cambio
+            { wch: 25 }, // Valor Anterior
+            { wch: 25 }, // Valor Nuevo
+            { wch: 15 }, // ID Inventario
+            { wch: 12 }, // Serie
+            { wch: 15 }, // Número
+            { wch: 20 }, // Serie-Número Completo
+            { wch: 15 }, // Monto
+            { wch: 15 }, // Fecha Factura
+            { wch: 25 }, // Sucursal
+            { wch: 25 }, // Usuario
+            { wch: 15 }, // Fecha Cambio
+            { wch: 12 }, // Hora
+            { wch: 18 }, // Tipo Modificación
+            { wch: 30 }, // Razón
+            { wch: 20 }, // Manera Refacturación
+            { wch: 20 }, // Nota Crédito
+            { wch: 15 }  // ID Facturas
+        ];
+        
+        worksheet['!cols'] = columnWidths;
+        
+        // Agregar formato a los encabezados
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        for (let col = range.s.c; col <= range.e.c; col++) {
+            const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+            if (!worksheet[cellAddress]) continue;
+            
+            worksheet[cellAddress].s = {
+                font: { bold: true, color: { rgb: "FFFFFF" } },
+                fill: { fgColor: { rgb: "6e78ff" } },
+                alignment: { horizontal: "center" },
+                border: {
+                    top: { style: "thin" },
+                    bottom: { style: "thin" },
+                    left: { style: "thin" },
+                    right: { style: "thin" }
+                }
+            };
+        }
+        
+        // Agregar la hoja al libro
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Historial de Cambios');
+        
+        // Crear hoja de resumen
+        const summaryData = generateSummaryData(currentData);
+        const summaryWorksheet = XLSX.utils.json_to_sheet(summaryData);
+        XLSX.utils.book_append_sheet(workbook, summaryWorksheet, 'Resumen');
+        
+        // Generar nombre de archivo sugerido
+        const suggestedFileName = generateExcelFileName();
+        
+        // Verificar si el navegador soporta la API de File System Access
+        if ('showSaveFilePicker' in window) {
+            try {
+                // Usar la API moderna de File System Access
+                const fileHandle = await window.showSaveFilePicker({
+                    suggestedName: suggestedFileName,
+                    types: [
+                        {
+                            description: 'Archivos Excel',
+                            accept: {
+                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
+                            }
+                        }
+                    ]
+                });
+                
+                // Crear el archivo Excel como buffer
+                const excelBuffer = XLSX.write(workbook, { 
+                    bookType: 'xlsx', 
+                    type: 'array' 
+                });
+                
+                // Escribir el archivo en la ubicación seleccionada
+                const writable = await fileHandle.createWritable();
+                await writable.write(excelBuffer);
+                await writable.close();
+                
+                showSuccessToast(`Archivo Excel guardado exitosamente`);
+                
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    showInfoToast('Exportación cancelada por el usuario');
+                } else {
+                    console.error('Error con File System Access API:', error);
+                    // Fallback al método tradicional
+                    downloadExcelFile(workbook, suggestedFileName);
+                }
+            }
+        } else {
+            // Fallback para navegadores que no soportan File System Access API
+            downloadExcelFile(workbook, suggestedFileName);
+        }
+        
+    } catch (error) {
+        console.error('Error exportando a Excel:', error);
+        showErrorToast('Error al exportar a Excel. Intente nuevamente.');
+    }
+}
+
+// Función de fallback para descargar archivo Excel
+function downloadExcelFile(workbook, fileName) {
+    try {
+        // Escribir archivo usando el método tradicional
+        XLSX.writeFile(workbook, fileName);
+        showSuccessToast(`Archivo Excel descargado: ${fileName}`);
+        showInfoToast('Su navegador no soporta selector de ubicación. El archivo se descargó en la carpeta predeterminada.');
+    } catch (error) {
+        console.error('Error en descarga tradicional:', error);
+        showErrorToast('Error al descargar el archivo Excel');
+    }
+}
+
+// Preparar datos para Excel
+function prepareDataForExcel(data) {
+    return data.map(record => ({
+        TipoCambio: record.TipoCambio || '',
+        ValorAnterior: record.ValorAnterior || '',
+        ValorNuevo: record.ValorNuevo || '',
+        IdInventario: record.IdInventario || '',
+        FacturaSerie: record.FacturaSerie || '',
+        FacturaNumero: record.FacturaNumero || '',
+        SerieNumeroCompleto: formatFacturaSerieNumero(record.FacturaSerie, record.FacturaNumero),
+        MontoFactura: record.FacturaMonto || 0,
+        FechaFactura: formatDateForExcel(record.FacturaFecha),
+        Sucursal: record.Sucursal || '',
+        Usuario: record.NombreUsuario || '',
+        FechaCambio: formatDateForExcel(record.FechaCambio),
+        HoraCambio: formatTimeForExcel(record.FechaHoraCambio),
+        TipoModificacion: getTipoModificacionText(record.TipoModificacion),
+        RazonModificacion: record.RazonModificacion || '',
+        ManeraRefacturacion: getManeraRefacturacionText(record.ManeraRefacturacion),
+        NotaCredito: record.SerieNumeroNotaCredito || '',
+        IdFacturasCompras: record.IdFacturasCompras || ''
+    }));
+}
+
+// Generar datos de resumen para Excel
+function generateSummaryData(data) {
+    const stats = generateChangeStats();
+    
+    if (!stats) return [];
+    
+    const summary = [
+        { Concepto: 'RESUMEN GENERAL', Valor: '' },
+        { Concepto: 'Total de cambios', Valor: stats.totalChanges },
+        { Concepto: 'Usuarios activos', Valor: Object.keys(stats.changesByUser).length },
+        { Concepto: 'Días con actividad', Valor: Object.keys(stats.changesByDay).length },
+        { Concepto: '', Valor: '' },
+        { Concepto: 'TOP USUARIOS', Valor: '' }
+    ];
+    
+    stats.topUsers.forEach((user, index) => {
+        summary.push({
+            Concepto: `${index + 1}. ${user.user}`,
+            Valor: `${user.count} cambios`
+        });
+    });
+    
+    summary.push({ Concepto: '', Valor: '' });
+    summary.push({ Concepto: 'TIPOS DE CAMBIO MÁS FRECUENTES', Valor: '' });
+    
+    stats.topTypes.forEach((type, index) => {
+        summary.push({
+            Concepto: `${index + 1}. ${type.type}`,
+            Valor: `${type.count} cambios`
+        });
+    });
+    
+    return summary;
+}
+
+// Formatear fecha para Excel
+function formatDateForExcel(dateString) {
+    if (!dateString) return '';
+    
+    try {
+        let date;
+        if (typeof dateString === 'string' && dateString.includes('-')) {
+            const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
+            date = new Date(year, month - 1, day);
+        } else {
+            date = new Date(dateString);
+        }
+        
+        if (isNaN(date.getTime())) return dateString;
+        
+        return date.toLocaleDateString('es-GT');
+    } catch (error) {
+        return dateString;
+    }
+}
+
+// Formatear hora para Excel
+function formatTimeForExcel(dateTimeString) {
+    if (!dateTimeString) return '';
+    
+    try {
+        const date = new Date(dateTimeString);
+        if (isNaN(date.getTime())) return '';
+        
+        return date.toLocaleTimeString('es-GT', { 
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    } catch (error) {
+        return '';
+    }
+}
+
+// Generar nombre de archivo Excel
+function generateExcelFileName() {
+    const now = new Date();
+    const timestamp = now.toISOString().slice(0, 19).replace(/[:.]/g, '-');
+    const dateRange = `${fechaDesde.value}_al_${fechaHasta.value}`;
+    return `Historial_Cambios_Facturas_${dateRange}_${timestamp}.xlsx`;
+}
+
+// Actualizar estado del botón de exportación
+function updateExportButtonState() {
+    const exportBtn = document.getElementById('exportExcel');
+    if (exportBtn) {
+        exportBtn.disabled = currentData.length === 0;
+        exportBtn.style.display = currentData.length === 0 ? 'none' : 'flex';
+    }
 }
 
 // ===== FUNCIONES DE TOAST =====
 
 // Mostrar toast de éxito
 function showSuccessToast(message) {
-   Swal.mixin({
-       toast: true,
-       position: 'top-end',
-       showConfirmButton: false,
-       timer: 3000,
-       timerProgressBar: true,
-       customClass: {
-           popup: 'success-toast'
-       },
-       didOpen: (toast) => {
-           toast.addEventListener('mouseenter', Swal.stopTimer);
-           toast.addEventListener('mouseleave', Swal.resumeTimer);
-       }
-   }).fire({
-       icon: 'success',
-       title: message
-   });
+    Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        customClass: {
+            popup: 'success-toast'
+        },
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer);
+            toast.addEventListener('mouseleave', Swal.resumeTimer);
+        }
+    }).fire({
+        icon: 'success',
+        title: message
+    });
 }
 
 // Mostrar toast de error
 function showErrorToast(message) {
-   Swal.mixin({
-       toast: true,
-       position: 'top-end',
-       showConfirmButton: false,
-       timer: 4000,
-       timerProgressBar: true,
-       customClass: {
-           popup: 'error-toast'
-       },
-       didOpen: (toast) => {
-           toast.addEventListener('mouseenter', Swal.stopTimer);
-           toast.addEventListener('mouseleave', Swal.resumeTimer);
-       }
-   }).fire({
-       icon: 'error',
-       title: message
-   });
+    Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 4000,
+        timerProgressBar: true,
+        customClass: {
+            popup: 'error-toast'
+        },
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer);
+            toast.addEventListener('mouseleave', Swal.resumeTimer);
+        }
+    }).fire({
+        icon: 'error',
+        title: message
+    });
 }
 
 // Mostrar toast de advertencia
 function showWarningToast(message) {
-   Swal.mixin({
-       toast: true,
-       position: 'top-end',
-       showConfirmButton: false,
-       timer: 3500,
-       timerProgressBar: true,
-       customClass: {
-           popup: 'warning-toast'
-       },
-       didOpen: (toast) => {
-           toast.addEventListener('mouseenter', Swal.stopTimer);
-           toast.addEventListener('mouseleave', Swal.resumeTimer);
-       }
-   }).fire({
-       icon: 'warning',
-       title: message
-   });
+    Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3500,
+        timerProgressBar: true,
+        customClass: {
+            popup: 'warning-toast'
+        },
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer);
+            toast.addEventListener('mouseleave', Swal.resumeTimer);
+        }
+    }).fire({
+        icon: 'warning',
+        title: message
+    });
 }
 
 // Mostrar toast informativo
 function showInfoToast(message) {
-   Swal.mixin({
-       toast: true,
-       position: 'top-end',
-       showConfirmButton: false,
-       timer: 2500,
-       timerProgressBar: true,
-       customClass: {
-           popup: 'info-toast'
-       },
-       didOpen: (toast) => {
-           toast.addEventListener('mouseenter', Swal.stopTimer);
-           toast.addEventListener('mouseleave', Swal.resumeTimer);
-       }
-   }).fire({
-       icon: 'info',
-       title: message
-   });
+    Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 2500,
+        timerProgressBar: true,
+        customClass: {
+            popup: 'info-toast'
+        },
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer);
+            toast.addEventListener('mouseleave', Swal.resumeTimer);
+        }
+    }).fire({
+        icon: 'info',
+        title: message
+    });
 }
-
-// ===== FUNCIONES DE TECLADO =====
-
-// Atajos de teclado
-document.addEventListener('keydown', (e) => {
-   // Ctrl/Cmd + Enter para buscar
-   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-       e.preventDefault();
-       if (!isLoading) {
-           filtersForm.dispatchEvent(new Event('submit'));
-       }
-   }
-   
-   // Escape para cerrar modales
-   if (e.key === 'Escape') {
-       const modal = document.getElementById('changeDetailModal');
-       if (modal.classList.contains('show')) {
-           closeChangeDetailModal();
-       }
-   }
-   
-   // F5 para nueva búsqueda
-   if (e.key === 'F5') {
-       e.preventDefault();
-       showWelcomePanel();
-   }
-});
 
 // ===== FUNCIONES DE INICIALIZACIÓN ADICIONALES =====
 
 // Verificar conexión a base de datos al cargar
 async function checkDatabaseConnection() {
-   try {
-       
-       const connection = await odbc.connect('DSN=facturas;charset=utf8');
-       await connection.query('SELECT 1 as test');
-       await connection.close();
-       return true;
-       
-   } catch (error) {
-       console.error('❌ Error de conexión a base de datos:', error);
-       
-       Swal.fire({
-           icon: 'error',
-           title: 'Error de Conexión',
-           text: 'No se pudo conectar a la base de datos. Verifique la configuración.',
-           confirmButtonColor: '#6e78ff',
-           backdrop: 'rgba(255, 94, 109, 0.2)'
-       });
-       
-       return false;
-   }
+    try {
+        const connection = await odbc.connect('DSN=facturas;charset=utf8');
+        await connection.query('SELECT 1 as test');
+        await connection.close();
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Error de conexión a base de datos:', error);
+        
+        Swal.fire({
+            icon: 'error',
+            title: 'Error de Conexión',
+            text: 'No se pudo conectar a la base de datos. Verifique la configuración.',
+            confirmButtonColor: '#6e78ff',
+            backdrop: 'rgba(255, 94, 109, 0.2)'
+        });
+        
+        return false;
+    }
 }
 
 // Cargar configuración de usuario
 function loadUserPreferences() {
-   try {
-       // Cargar tamaño de página preferido
-       const savedPageSize = localStorage.getItem('historial_pageSize');
-       if (savedPageSize && document.getElementById('pageSize')) {
-           document.getElementById('pageSize').value = savedPageSize;
-           pageSize = parseInt(savedPageSize);
-       }
-       
-       // Cargar filtros guardados
-       const savedFilters = localStorage.getItem('historial_filters');
-       if (savedFilters) {
-           const filters = JSON.parse(savedFilters);
-           if (filters.tipoCambio) tipoCambio.value = filters.tipoCambio;
-           if (filters.usuario) usuarioFiltro.value = filters.usuario;
-       }
-       
-   } catch (error) {
-   }
+    try {
+        // Cargar tamaño de página preferido
+        const savedPageSize = localStorage.getItem('historial_pageSize');
+        if (savedPageSize && document.getElementById('pageSize')) {
+            document.getElementById('pageSize').value = savedPageSize;
+            pageSize = parseInt(savedPageSize);
+        }
+        
+        // Cargar filtros guardados
+        const savedFilters = localStorage.getItem('historial_filters');
+        if (savedFilters) {
+            const filters = JSON.parse(savedFilters);
+            if (filters.tipoCambio) tipoCambio.value = filters.tipoCambio;
+            if (filters.tipoModificacion) tipoModificacion.value = filters.tipoModificacion;
+        }
+        
+    } catch (error) {
+        console.warn('Error cargando preferencias:', error);
+    }
 }
 
 // Guardar configuración de usuario
 function saveUserPreferences() {
-   try {
-       // Guardar tamaño de página
-       localStorage.setItem('historial_pageSize', pageSize.toString());
-       
-       // Guardar filtros actuales
-       const filters = {
-           tipoCambio: tipoCambio.value,
-           usuario: usuarioFiltro.value
-       };
-       localStorage.setItem('historial_filters', JSON.stringify(filters));
-       
-   } catch (error) {
-   }
+    try {
+        // Guardar tamaño de página
+        localStorage.setItem('historial_pageSize', pageSize.toString());
+        
+        // Guardar filtros actuales
+        const filters = {
+            tipoCambio: tipoCambio.value,
+            tipoModificacion: tipoModificacion.value
+        };
+        localStorage.setItem('historial_filters', JSON.stringify(filters));
+        
+    } catch (error) {
+        console.warn('Error guardando preferencias:', error);
+    }
 }
 
 // Event listener para guardar preferencias antes de salir
 window.addEventListener('beforeunload', () => {
-   saveUserPreferences();
+    saveUserPreferences();
 });
 
-// Monitor de rendimiento
+// Monitor de rendimiento (solo en modo desarrollo)
 function performanceMonitor() {
-   if (performance && performance.memory) {
-       const memory = performance.memory;
-   }
+    if (performance && performance.memory && localStorage.getItem('debug_mode') === 'true') {
+        const memory = performance.memory;
+        console.log('📊 Memory usage:', {
+            used: Math.round(memory.usedJSHeapSize / 1048576) + ' MB',
+            total: Math.round(memory.totalJSHeapSize / 1048576) + ' MB',
+            limit: Math.round(memory.jsHeapSizeLimit / 1048576) + ' MB'
+        });
+    }
 }
 
 // Ejecutar monitor cada 30 segundos en modo desarrollo
 if (localStorage.getItem('debug_mode') === 'true') {
-   setInterval(performanceMonitor, 30000);
+    setInterval(performanceMonitor, 30000);
 }
 
 // ===== INICIALIZACIÓN FINAL =====
 
-// Verificar si todos los elementos se inicializaron correctamente
+// Validar que todos los elementos se inicializaron correctamente
 function validateInitialization() {
-   const requiredElements = [
-       'filtersForm', 'fechaDesde', 'fechaHasta', 'resultsPanel', 
-       'changesTable', 'paginationContainer'
-   ];
-   
-   for (const elementId of requiredElements) {
-       if (!document.getElementById(elementId)) {
-           return false;
-       }
-   }
-   return true;
+    const requiredElements = [
+        'filtersForm', 'fechaDesde', 'fechaHasta', 'resultsContainer', 
+        'changesTable', 'paginationContainer'
+    ];
+    
+    for (const elementId of requiredElements) {
+        if (!document.getElementById(elementId)) {
+            console.error(`❌ Elemento requerido no encontrado: ${elementId}`);
+            return false;
+        }
+    }
+    return true;
 }
 
 // Configuración final al cargar
 document.addEventListener('DOMContentLoaded', () => {
-   // Validar inicialización
-   if (!validateInitialization()) {
-       showErrorToast('Error en la inicialización de la aplicación');
-       return;
-   }
-   
-   // Cargar preferencias
-   loadUserPreferences();
-   
-   // Verificar conexión (opcional, en background)
-   setTimeout(() => {
-       checkDatabaseConnection();
-   }, 1000);
+    // Validar inicialización
+    if (!validateInitialization()) {
+        showErrorToast('Error en la inicialización de la aplicación');
+        return;
+    }
+    
+    // Cargar preferencias
+    loadUserPreferences();
+    
+    // Verificar conexión (opcional, en background)
+    setTimeout(() => {
+        checkDatabaseConnection();
+    }, 1000);
+    
+    console.log('✅ Aplicación inicializada correctamente');
 });
 
 // ===== FUNCIONES GLOBALES EXPUESTAS =====
 
-// Hacer funciones disponibles globalmente para onclick handlers
-window.showChangeDetail = showChangeDetail;
+// Hacer funciones disponibles globalmente
 window.goToPage = goToPage;
 window.showStatsModal = showStatsModal;
+window.exportToExcel = exportToExcel;
 
 // Exportar funciones principales para testing
 if (typeof module !== 'undefined' && module.exports) {
-   module.exports = {
-       searchChangesHistory,
-       generateChangeStats,
-       formatDateDisplay,
-       formatTimeDisplay,
-       escapeHtml
-   };
+    module.exports = {
+        searchChangesHistory,
+        generateChangeStats,
+        formatDateDisplay,
+        formatTimeDisplay,
+        formatCurrency,
+        escapeHtml,
+        validateDates,
+        getTipoModificacionText,
+        getManeraRefacturacionText,
+        exportToExcel
+    };
 }

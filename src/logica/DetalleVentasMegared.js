@@ -19,6 +19,10 @@ let sucursalesEstado = {}; // Almacena el estado de cada sucursal: 'pendiente', 
 let sucursalStats = {}; // Estadísticas por sucursal: {ventas, facturas}
 let procesandoSucursal = false; // Control para evitar múltiples reintento simultáneos
 
+// Nuevas variables para búsqueda por UPC
+let upcList = []; // Lista de UPCs procesados para búsqueda
+let upcSearchActive = false; // Indica si hay una búsqueda por UPC activa
+
 // Objeto para mantener estadísticas
 const stats = {
     totalVentas: 0,
@@ -26,6 +30,17 @@ const stats = {
     totalSucursales: 0,
     totalFacturas: new Set()
 };
+
+async function conectar() {
+    try {
+        const connection = await odbc.connect(conexiondbsucursal);
+        await connection.query('SET NAMES utf8mb4');
+        return connection;
+    } catch (error) {
+        console.error('Error al conectar a la base de datos:', error);
+        throw error;
+    }
+}
 
 // Inicializar la aplicación cuando el DOM esté cargado
 document.addEventListener('DOMContentLoaded', () => {
@@ -46,6 +61,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Inicializar el panel de sucursales
     initializeSucursalesPanel();
+    
+    // Inicializar funcionalidad de UPC
+    initializeUPCSearch();
 });
 
 // Función para inicializar los selectores de fecha
@@ -61,6 +79,187 @@ function initializeDatePickers() {
     
     flatpickr('#fechaInicio', dateConfig);
     flatpickr('#fechaFin', dateConfig);
+}
+
+// Inicializar funcionalidad de búsqueda por UPC
+function initializeUPCSearch() {
+    const upcInput = document.getElementById('busquedaUPC');
+    const btnLimpiarUPC = document.getElementById('btnLimpiarUPC');
+    const btnValidarUPC = document.getElementById('btnValidarUPC');
+    
+    // Event listener para el textarea de UPC con debounce
+    upcInput.addEventListener('input', debounce(function() {
+        processUPCInput(this.value);
+    }, 300));
+    
+    // Event listener para limpiar UPCs
+    btnLimpiarUPC.addEventListener('click', function() {
+        clearUPCSearch();
+    });
+    
+    // Event listener para validar UPCs
+    btnValidarUPC.addEventListener('click', function() {
+        showUPCList();
+    });
+}
+
+// Procesar la entrada de UPCs
+function processUPCInput(inputValue) {
+    const upcCount = document.getElementById('upcCount');
+    const upcStatus = document.getElementById('upcStatus');
+    
+    if (!inputValue.trim()) {
+        upcList = [];
+        upcSearchActive = false;
+        upcCount.textContent = '0 UPCs ingresados';
+        upcStatus.textContent = '';
+        upcStatus.className = 'upc-status';
+        return;
+    }
+    
+    // Procesar y limpiar los UPCs
+    const rawUPCs = inputValue
+        .split(/[,\s\n\r]+/) // Dividir por comas, espacios, saltos de línea
+        .map(upc => upc.trim()) // Eliminar espacios
+        .filter(upc => upc.length > 0); // Filtrar vacíos
+    
+    // Validar UPCs (deben ser numéricos y tener longitud razonable)
+    const validUPCs = [];
+    const invalidUPCs = [];
+    
+    rawUPCs.forEach(upc => {
+        if (/^\d+$/.test(upc) && upc.length >= 4 && upc.length <= 20) {
+            validUPCs.push(upc);
+        } else {
+            invalidUPCs.push(upc);
+        }
+    });
+    
+    // Remover duplicados
+    upcList = [...new Set(validUPCs)];
+    upcSearchActive = upcList.length > 0;
+    
+    // Actualizar la interfaz
+    updateUPCStatus(upcList.length, invalidUPCs.length);
+}
+
+// Actualizar el estado de la búsqueda de UPC
+function updateUPCStatus(validCount, invalidCount) {
+    const upcCount = document.getElementById('upcCount');
+    const upcStatus = document.getElementById('upcStatus');
+    
+    upcCount.textContent = `${validCount} UPCs válidos`;
+    
+    if (invalidCount > 0) {
+        upcStatus.textContent = `${invalidCount} UPCs inválidos encontrados`;
+        upcStatus.className = 'upc-status warning';
+    } else if (validCount > 0) {
+        upcStatus.textContent = 'Listos para buscar';
+        upcStatus.className = 'upc-status valid';
+    } else {
+        upcStatus.textContent = '';
+        upcStatus.className = 'upc-status';
+    }
+}
+
+// Limpiar la búsqueda de UPC
+function clearUPCSearch() {
+    document.getElementById('busquedaUPC').value = '';
+    upcList = [];
+    upcSearchActive = false;
+    updateUPCStatus(0, 0);
+    
+    // Mostrar confirmación
+    Swal.fire({
+        icon: 'success',
+        title: 'UPCs limpiados',
+        text: 'Se ha limpiado la lista de UPCs para búsqueda',
+        timer: 1500,
+        showConfirmButton: false,
+        toast: true,
+        position: 'top-end'
+    });
+}
+
+// Mostrar la lista de UPCs en un modal
+function showUPCList() {
+    if (upcList.length === 0) {
+        Swal.fire({
+            icon: 'info',
+            title: 'Sin UPCs',
+            text: 'No hay UPCs válidos para mostrar',
+            confirmButtonColor: '#d32f2f'
+        });
+        return;
+    }
+    
+    // Clonar el template
+    const template = document.getElementById('listaUPCTemplate');
+    const modalHTML = template.innerHTML;
+    
+    Swal.fire({
+        title: 'Lista de UPCs para Búsqueda',
+        html: modalHTML,
+        width: 700,
+        showCancelButton: true,
+        confirmButtonText: 'Cerrar',
+        cancelButtonText: 'Buscar Ahora',
+        confirmButtonColor: '#d32f2f',
+        cancelButtonColor: '#388e3c',
+        didOpen: () => {
+            // Llenar el modal con los UPCs
+            document.getElementById('totalUPCsModal').textContent = upcList.length;
+            
+            const listaContainer = document.getElementById('listaUPCsModal');
+            listaContainer.innerHTML = '';
+            
+            upcList.forEach(upc => {
+                const upcItem = document.createElement('div');
+                upcItem.className = 'upc-item';
+                upcItem.textContent = upc;
+                listaContainer.appendChild(upcItem);
+            });
+            
+            // Event listener para copiar la lista
+            document.getElementById('btnCopiarUPCs').addEventListener('click', function() {
+                const upcText = upcList.join(', ');
+                navigator.clipboard.writeText(upcText).then(() => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Copiado',
+                        text: 'Lista de UPCs copiada al portapapeles',
+                        timer: 1500,
+                        showConfirmButton: false,
+                        toast: true,
+                        position: 'top-end'
+                    });
+                }).catch(() => {
+                    // Fallback para navegadores que no soportan clipboard API
+                    const textArea = document.createElement('textarea');
+                    textArea.value = upcText;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Copiado',
+                        text: 'Lista de UPCs copiada al portapapeles',
+                        timer: 1500,
+                        showConfirmButton: false,
+                        toast: true,
+                        position: 'top-end'
+                    });
+                });
+            });
+        }
+    }).then((result) => {
+        if (result.dismiss === Swal.DismissReason.cancel) {
+            // El usuario hizo clic en "Buscar Ahora"
+            iniciarConsulta();
+        }
+    });
 }
 
 // Inicializar el panel de sucursales 
@@ -124,26 +323,6 @@ function setupEventListeners() {
             currentPage++;
             mostrarPagina();
         }
-    });
-    
-    // Tabs
-    document.querySelectorAll('.tab-btn').forEach(button => {
-        button.addEventListener('click', () => {
-            const tabId = button.getAttribute('data-tab');
-            
-            // Desactivar todos los tabs y contenidos
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            
-            // Activar el tab seleccionado
-            button.classList.add('active');
-            document.getElementById(tabId).classList.add('active');
-            
-            // Si seleccionó la pestaña de resúmenes, actualizar gráficos
-            if (tabId === 'resumenes' && allData.length > 0) {
-                actualizarGraficos();
-            }
-        });
     });
     
     // Filtros
@@ -308,15 +487,16 @@ function mostrarDetalleVenta(item) {
         }
     });
 }
+
 // Obtener las sucursales de la base de datos principal
 async function obtenerSucursales() {
     mostrarCargando(true, 'Conectando a la base de datos principal...');
     
     try {
         // Conectar a la base de datos usando ODBC
-        const connection = await odbc.connect(conexiondbsucursal);
+        const connection = await conectar();
         
-        // Ejecutar la consulta para obtener las sucursales Megared
+        // Ejecutar la consulta para obtener las sucursales Megared (incluyendo Puerto)
         const query = `
             SELECT idSucursal, NombreSucursal, serverr, databasee, Uid, Pwd, Puerto
             FROM sucursales
@@ -349,12 +529,6 @@ async function obtenerSucursales() {
             const option = document.createElement('option');
             option.value = sucursal.idSucursal;  // Usamos el ID como valor
             option.textContent = sucursal.NombreSucursal;
-            // Agregar todos los datos de conexión como data attributes, incluyendo el puerto
-            option.dataset.serverr = sucursal.serverr;
-            option.dataset.databasee = sucursal.databasee;
-            option.dataset.uid = sucursal.Uid;
-            option.dataset.pwd = sucursal.Pwd;
-            option.dataset.puerto = sucursal.Puerto; // Agregar el puerto
             selectSucursal.appendChild(option);
         });
         
@@ -381,7 +555,7 @@ async function obtenerSucursales() {
     }
 }
 
-// Iniciar la consulta de datos
+// Iniciar la consulta de datos (modificada para incluir búsqueda por UPC)
 async function iniciarConsulta() {
     // Validar las fechas
     const fechaInicio = document.getElementById('fechaInicio').value;
@@ -408,6 +582,15 @@ async function iniciarConsulta() {
         return;
     }
     
+    // Determinar si es búsqueda por UPC
+    const searchMode = upcSearchActive ? 'UPC' : 'general';
+    
+    // Mostrar información sobre el tipo de búsqueda
+    let searchInfo = `Iniciando búsqueda ${searchMode}...`;
+    if (searchMode === 'UPC') {
+        searchInfo = `Buscando ventas de ${upcList.length} productos específicos...`;
+    }
+    
     // Reiniciar variables
     allData = [];
     filteredData = [];
@@ -430,10 +613,10 @@ async function iniciarConsulta() {
     const progressBar = document.getElementById('progressBar');
     const progressInfo = document.getElementById('progressInfo');
     progressBar.style.width = '0%';
-    progressInfo.textContent = 'Iniciando consulta...';
+    progressInfo.textContent = searchInfo;
     
     // Mostrar el overlay de carga
-    mostrarCargando(true, 'Consultando datos de ventas...');
+    mostrarCargando(true, searchInfo);
     
     try {
         // Para cada sucursal, hacer la consulta
@@ -454,7 +637,12 @@ async function iniciarConsulta() {
             
             try {
                 // Consultar los datos de esta sucursal
-                const sucursalData = await consultarVentasSucursal(sucursal, fechaInicio, fechaFin);
+                const sucursalData = await consultarVentasSucursal(
+                    sucursal, 
+                    fechaInicio, 
+                    fechaFin, 
+                    searchMode === 'UPC' ? upcList : null
+                );
                 
                 // Recopilar facturas únicas de esta sucursal
                 const facturasSet = new Set();
@@ -511,7 +699,7 @@ async function iniciarConsulta() {
         
         // Completar la barra de progreso
         progressBar.style.width = '100%';
-        progressInfo.textContent = `Consulta finalizada. Se encontraron ${allData.length} registros en total.`;
+        progressInfo.textContent = `Consulta ${searchMode} finalizada. Se encontraron ${allData.length} registros en total.`;
         
         // Actualizar contadores
         actualizarContadores();
@@ -523,26 +711,27 @@ async function iniciarConsulta() {
         filteredData = [...allData];
         mostrarPagina();
         
-        // Inicializar gráficos
-        if (typeof Chart !== 'undefined') {
-            inicializarGraficos();
-        } else {
-            console.error('Error: Chart.js no está disponible');
-        }
-        
         // Mensaje de éxito
         if (allData.length > 0) {
+            const mensaje = searchMode === 'UPC' 
+                ? `Se encontraron ${allData.length} ventas para ${upcList.length} UPCs en ${sucursales.length} sucursales`
+                : `Se encontraron ${allData.length} registros en ${sucursales.length} sucursales`;
+                
             Swal.fire({
                 icon: 'success',
                 title: 'Consulta exitosa',
-                text: `Se encontraron ${allData.length} registros en ${sucursales.length} sucursales`,
+                text: mensaje,
                 confirmButtonColor: '#d32f2f'
             });
         } else {
+            const mensaje = searchMode === 'UPC' 
+                ? 'No se encontraron ventas para los UPCs especificados en el periodo seleccionado'
+                : 'No se encontraron registros para el periodo seleccionado';
+                
             Swal.fire({
                 icon: 'info',
                 title: 'Sin resultados',
-                text: 'No se encontraron registros para el periodo seleccionado',
+                text: mensaje,
                 confirmButtonColor: '#d32f2f'
             });
         }
@@ -589,16 +778,27 @@ async function reintentarConsultaSucursal(sucursal) {
         return;
     }
     
+    const searchMode = upcSearchActive ? 'UPC' : 'general';
+    
     try {
         // Actualizar estado de la sucursal a 'cargando'
         sucursalesEstado[sucursal.idSucursal] = 'cargando';
         mostrarSucursalesEnPanel();
         
         // Mostrar el overlay de carga
-        mostrarCargando(true, `Reintentando consulta para: ${sucursal.NombreSucursal}`);
+        const mensaje = searchMode === 'UPC' 
+            ? `Reintentando búsqueda de ${upcList.length} UPCs para: ${sucursal.NombreSucursal}`
+            : `Reintentando consulta para: ${sucursal.NombreSucursal}`;
+            
+        mostrarCargando(true, mensaje);
         
-        // Consultar los datos de esta sucursal (ya usa el puerto gracias a consultarVentasSucursal actualizada)
-        const sucursalData = await consultarVentasSucursal(sucursal, fechaInicio, fechaFin);
+        // Consultar los datos de esta sucursal
+        const sucursalData = await consultarVentasSucursal(
+            sucursal, 
+            fechaInicio, 
+            fechaFin, 
+            searchMode === 'UPC' ? upcList : null
+        );
         
         // Recopilar facturas únicas de esta sucursal
         const facturasSet = new Set();
@@ -644,17 +844,17 @@ async function reintentarConsultaSucursal(sucursal) {
             // Actualizar la visualización
             mostrarPagina();
             
-            if (document.getElementById('resumenes').classList.contains('active')) {
-                actualizarGraficos();
-            }
-            
             // Marcar la sucursal como completada
             sucursalesEstado[sucursal.idSucursal] = 'completo';
             
+            const mensaje = searchMode === 'UPC' 
+                ? `Se encontraron ${sucursalData.length} ventas para los UPCs especificados en ${sucursal.NombreSucursal}`
+                : `Se encontraron ${sucursalData.length} registros en ${sucursal.NombreSucursal}`;
+                
             Swal.fire({
                 icon: 'success',
                 title: 'Reintentar exitoso',
-                text: `Se encontraron ${sucursalData.length} registros en ${sucursal.NombreSucursal}`,
+                text: mensaje,
                 confirmButtonColor: '#d32f2f'
             });
         } else {
@@ -667,10 +867,14 @@ async function reintentarConsultaSucursal(sucursal) {
             // Marcar la sucursal como completada
             sucursalesEstado[sucursal.idSucursal] = 'completo';
             
+            const mensaje = searchMode === 'UPC' 
+                ? `No se encontraron ventas para los UPCs especificados en ${sucursal.NombreSucursal} para el periodo seleccionado`
+                : `No se encontraron registros en ${sucursal.NombreSucursal} para el periodo seleccionado`;
+                
             Swal.fire({
                 icon: 'info',
                 title: 'Sin resultados',
-                text: `No se encontraron registros en ${sucursal.NombreSucursal} para el periodo seleccionado`,
+                text: mensaje,
                 confirmButtonColor: '#d32f2f'
             });
         }
@@ -714,20 +918,27 @@ function recalcularEstadisticasTotales() {
     actualizarContadores();
 }
 
-// Consultar ventas de una sucursal específica
-async function consultarVentasSucursal(sucursal, fechaInicio, fechaFin) {
+// Consultar ventas de una sucursal específica (modificada para incluir búsqueda por UPC)
+async function consultarVentasSucursal(sucursal, fechaInicio, fechaFin, upcList = null) {
     try {
-        // Crear la conexión a MySQL para esta sucursal incluyendo el puerto
-        const connection = await mysql.createConnection({
+        // Crear la configuración de conexión MySQL incluyendo el puerto
+        const connectionConfig = {
             host: sucursal.serverr,
-            port: sucursal.Puerto || 3306, // Usar el puerto de la sucursal o 3306 por defecto
             user: sucursal.Uid,
             password: sucursal.Pwd,
             database: sucursal.databasee
-        });
+        };
+
+        // Agregar el puerto si está definido y no es nulo/vacío
+        if (sucursal.Puerto && sucursal.Puerto !== '' && sucursal.Puerto !== 0) {
+            connectionConfig.port = parseInt(sucursal.Puerto);
+        }
         
-        // Consulta SQL para ventas Megared
-        const query = `
+        // Crear la conexión a MySQL para esta sucursal
+        const connection = await mysql.createConnection(connectionConfig);
+        
+        // Construir la consulta SQL base
+        let query = `
             SELECT
                 transaccionesnitido.Id, 
                 transaccionesnitido.IdCajas, 
@@ -759,8 +970,18 @@ async function consultarVentasSucursal(sucursal, fechaInicio, fechaFin) {
                 transaccionesnitido.Estado = 1
         `;
         
+        // Preparar los parámetros de la consulta
+        const queryParams = [fechaInicio, fechaFin];
+        
+        // Si hay búsqueda por UPC, agregar la condición
+        if (upcList && upcList.length > 0) {
+            const placeholders = upcList.map(() => '?').join(',');
+            query += ` AND detalletransaccionesnitido.Upc IN (${placeholders})`;
+            queryParams.push(...upcList);
+        }
+        
         // Ejecutar la consulta
-        const [rows] = await connection.execute(query, [fechaInicio, fechaFin]);
+        const [rows] = await connection.execute(query, queryParams);
         
         // Cerrar la conexión
         await connection.end();
@@ -769,18 +990,21 @@ async function consultarVentasSucursal(sucursal, fechaInicio, fechaFin) {
         
     } catch (error) {
         console.error(`Error al consultar la sucursal ${sucursal.NombreSucursal}:`, error);
+        
+        // Agregar información específica del puerto en el error si fue un problema de conexión
+        if (error.code === 'ECONNREFUSED' && sucursal.Puerto) {
+            console.error(`Puerto configurado: ${sucursal.Puerto}`);
+            error.message += ` (Puerto: ${sucursal.Puerto})`;
+        }
+        
         throw error;
     }
 }
+
 // Mostrar una página de datos
 function mostrarPagina() {
     const tbody = document.getElementById('datosVentas');
     tbody.innerHTML = '';
-    
-    // Asegurarnos de que filteredData contiene los datos correctos
-    if (filteredData.length === 0 && allData.length > 0) {
-        filteredData = [...allData];
-    }
     
     const start = (currentPage - 1) * itemsPerPage;
     const end = Math.min(start + itemsPerPage, filteredData.length);
@@ -810,18 +1034,11 @@ function mostrarPagina() {
     
     // Actualizar la información de paginación
     const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-    
-    // Asegurarse de que totalPages nunca sea cero
-    const displayTotalPages = totalPages || 1;
-    document.getElementById('paginaActual').textContent = `Página ${currentPage} de ${displayTotalPages}`;
+    document.getElementById('paginaActual').textContent = `Página ${currentPage} de ${totalPages || 1}`;
     
     // Habilitar/deshabilitar botones de navegación
     document.getElementById('btnAnterior').disabled = currentPage <= 1;
-    document.getElementById('btnSiguiente').disabled = currentPage >= totalPages || totalPages === 0;
-    
-    // Depuración para identificar problemas
-    console.log(`Mostrando página ${currentPage} de ${totalPages}`);
-    console.log(`Total registros: ${filteredData.length}, Items por página: ${itemsPerPage}`);
+    document.getElementById('btnSiguiente').disabled = currentPage >= totalPages;
 }
 
 // Actualizar los contadores de estadísticas
@@ -902,173 +1119,9 @@ function aplicarFiltros() {
     // Resetear la paginación y mostrar resultados
     currentPage = 1;
     mostrarPagina();
-    
-    // Actualizar gráficos si corresponde
-    if (document.getElementById('resumenes').classList.contains('active')) {
-        actualizarGraficos();
-    }
 }
 
-// Inicializar los gráficos
-function inicializarGraficos() {
-    // Comprobar si Chart está disponible
-    if (typeof Chart === 'undefined') {
-        console.error('Error: Chart.js no está disponible');
-        return; // Salir de la función
-    }
-    
-    // Destruir gráficos existentes si los hay
-    Object.values(charts).forEach(chart => {
-        if (chart) chart.destroy();
-    });
-    
-    try {
-        // Crear gráficos vacíos
-        const ctxProductos = document.getElementById('chartProductos');
-        if (ctxProductos) {
-            charts.productos = new Chart(ctxProductos, {
-                type: 'bar',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Cantidad',
-                        data: [],
-                        backgroundColor: '#d32f2f'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        title: {
-                            display: true,
-                            text: 'Top 5 Productos por Cantidad'
-                        }
-                    }
-                }
-            });
-        }
-        
-        const ctxClientes = document.getElementById('chartClientes');
-        if (ctxClientes) {
-            charts.clientes = new Chart(ctxClientes, {
-                type: 'doughnut',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        data: [],
-                        backgroundColor: [
-                            '#d32f2f', '#388e3c', '#ffa000', '#8e24aa', '#0288d1',
-                            '#f44336', '#4caf50', '#ffb300', '#9c27b0', '#03a9f4'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'right'
-                        },
-                        title: {
-                            display: true,
-                            text: 'Distribución por Cliente'
-                        }
-                    }
-                }
-            });
-        }
-        
-        const ctxSucursales = document.getElementById('chartSucursales');
-        if (ctxSucursales) {
-            charts.sucursales = new Chart(ctxSucursales, {
-                type: 'bar',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Ventas',
-                        data: [],
-                        backgroundColor: '#388e3c'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Cantidad de Ventas por Sucursal'
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Actualizar los gráficos con datos
-        actualizarGraficos();
-        
-    } catch (error) {
-        console.error('Error al inicializar gráficos:', error);
-    }
-}
-
-// Actualizar gráficos con los datos actuales
-function actualizarGraficos() {
-    if (filteredData.length === 0) return;
-    
-    // Gráfico de top 5 productos
-    const productosCount = {};
-    filteredData.forEach(item => {
-        const producto = item.DescLarga || `UPC: ${item.Upc}`;
-        productosCount[producto] = (productosCount[producto] || 0) + item.Cantidad;
-    });
-    
-    // Ordenar y obtener top 5
-    const topProductos = Object.entries(productosCount)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5);
-    
-    charts.productos.data.labels = topProductos.map(p => {
-        // Acortar nombres muy largos
-        const nombre = p[0];
-        return nombre.length > 20 ? nombre.substring(0, 20) + '...' : nombre;
-    });
-    charts.productos.data.datasets[0].data = topProductos.map(p => p[1]);
-    charts.productos.update();
-    
-    // Gráfico de distribución por cliente
-    const clientesCount = {};
-    filteredData.forEach(item => {
-        const cliente = item.NombreCliente || 'Cliente Final';
-        clientesCount[cliente] = (clientesCount[cliente] || 0) + 1;
-    });
-    
-    // Ordenar y obtener top 10
-    const topClientes = Object.entries(clientesCount)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10);
-    
-    charts.clientes.data.labels = topClientes.map(c => {
-        const nombre = c[0];
-        return nombre.length > 15 ? nombre.substring(0, 15) + '...' : nombre;
-    });
-    charts.clientes.data.datasets[0].data = topClientes.map(c => c[1]);
-    charts.clientes.update();
-    
-    // Gráfico por sucursal
-    const sucursalesCount = {};
-    filteredData.forEach(item => {
-        sucursalesCount[item.NombreSucursal] = (sucursalesCount[item.NombreSucursal] || 0) + 1;
-    });
-    
-    const sucursalesData = Object.entries(sucursalesCount).sort((a, b) => b[1] - a[1]);
-    
-    charts.sucursales.data.labels = sucursalesData.map(s => s[0]);
-    charts.sucursales.data.datasets[0].data = sucursalesData.map(s => s[1]);
-    charts.sucursales.update();
-}
-
-// Exportar los datos a Excel
+// Exportar los datos a Excel (modificada para incluir información de búsqueda UPC)
 async function exportarExcel() {
     if (filteredData.length === 0) {
         Swal.fire({
@@ -1189,7 +1242,7 @@ async function exportarExcel() {
                 estadoCell.fill = {
                     type: 'pattern',
                     pattern: 'solid',
-                    fgColor: { argb: '388E3C' } // Verde
+                    fgColor: { argb: '2ECC71' } // Verde
                 };
             } else if (estado === 'error') {
                 estadoCell.fill = {
@@ -1199,6 +1252,75 @@ async function exportarExcel() {
                 };
             }
         });
+        
+        // Si hay búsqueda por UPC, crear hoja adicional con la información de búsqueda
+        if (upcSearchActive && upcList.length > 0) {
+            const worksheetUPC = workbook.addWorksheet('Búsqueda por UPC');
+            
+            // Información de la búsqueda
+            worksheetUPC.columns = [
+                { header: 'UPC Buscado', key: 'upc', width: 15 },
+                { header: 'Encontrado', key: 'encontrado', width: 12 },
+                { header: 'Ventas', key: 'ventas', width: 10 }
+            ];
+            
+            // Dar formato a la fila de encabezados
+            worksheetUPC.getRow(1).font = { bold: true };
+            worksheetUPC.getRow(1).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FFA000' }
+            };
+            
+            // Analizar cuáles UPCs se encontraron
+            const upcResults = {};
+            upcList.forEach(upc => {
+                upcResults[upc] = filteredData.filter(item => item.Upc === upc).length;
+            });
+            
+            // Agregar resultados de búsqueda UPC
+            Object.entries(upcResults).forEach(([upc, count]) => {
+                worksheetUPC.addRow({
+                    upc: upc,
+                    encontrado: count > 0 ? 'Sí' : 'No',
+                    ventas: count
+                });
+                
+                // Colorear según si se encontró o no
+                const lastRow = worksheetUPC.lastRow;
+                const encontradoCell = lastRow.getCell(2);
+                
+                if (count > 0) {
+                    encontradoCell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: '2ECC71' } // Verde
+                    };
+                } else {
+                    encontradoCell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'D32F2F' } // Rojo
+                    };
+                }
+            });
+            
+            // Agregar resumen de la búsqueda UPC
+            worksheetUPC.addRow({});
+            worksheetUPC.addRow({ upc: 'RESUMEN:' });
+            worksheetUPC.addRow({ 
+                upc: 'Total UPCs buscados:', 
+                encontrado: upcList.length 
+            });
+            worksheetUPC.addRow({ 
+                upc: 'UPCs encontrados:', 
+                encontrado: Object.values(upcResults).filter(count => count > 0).length 
+            });
+            worksheetUPC.addRow({ 
+                upc: 'Total ventas:', 
+                encontrado: filteredData.length 
+            });
+        }
         
         // Generar el archivo
         const buffer = await workbook.xlsx.writeBuffer();
@@ -1210,9 +1332,16 @@ async function exportarExcel() {
         const fechaInicio = document.getElementById('fechaInicio').value;
         const fechaFin = document.getElementById('fechaFin').value;
         
+        // Nombre del archivo según el tipo de búsqueda
+        let fileName = `VentasMegared_${fechaInicio}_a_${fechaFin}`;
+        if (upcSearchActive && upcList.length > 0) {
+            fileName += `_UPC_${upcList.length}productos`;
+        }
+        fileName += '.xlsx';
+        
         const a = document.createElement('a');
         a.href = url;
-        a.download = `VentasMegared_${fechaInicio}_a_${fechaFin}.xlsx`;
+        a.download = fileName;
         document.body.appendChild(a);
         a.click();
         
@@ -1220,10 +1349,14 @@ async function exportarExcel() {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
         
+        const mensaje = upcSearchActive 
+            ? `El archivo Excel ha sido generado con ${filteredData.length} ventas para ${upcList.length} UPCs`
+            : `El archivo Excel ha sido generado con ${filteredData.length} registros`;
+            
         Swal.fire({
             icon: 'success',
             title: 'Exportación exitosa',
-            text: 'El archivo Excel ha sido generado correctamente',
+            text: mensaje,
             confirmButtonColor: '#d32f2f'
         });
         
@@ -1350,6 +1483,9 @@ if (typeof module !== 'undefined' && module.exports) {
         iniciarConsulta,
         obtenerSucursales,
         exportarExcel,
-        reintentarConsultaSucursal
+        reintentarConsultaSucursal,
+        processUPCInput,
+        clearUPCSearch,
+        showUPCList
     };
 }

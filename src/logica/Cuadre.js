@@ -545,8 +545,7 @@ async function verificarExistenciaInventario(idInventario, idSucursal) {
     }
 }
 
-// Mostrar información del inventario en la interfaz
-// Función corregida para mostrar el inventario con coherencia en el cálculo de descuentos
+// Función actualizada para mostrar el inventario con la nueva columna
 function mostrarInventario(inventario) {
     // Mostrar la información general del inventario
     document.getElementById('fecha').textContent = formatearFecha(inventario.info.Fecha);
@@ -598,8 +597,9 @@ function mostrarInventario(inventario) {
                 <td class="bonificacion-column"><input type="number" value="${detalle.Bonificacion}" class="bonificacion-input"></td>
                 <td class="precio-column"><input type="text" value="${detalle.PrecioFacturado || ''}" class="precio-facturado-input"></td>
                 <td class="descuento-column"><input type="number" value="${detalle.Descuento || '0'}" class="descuento-input"></td>
-                <td class="costo-facturado-column costo-facturado-cell"></td>
-                <td class="diferencia-column diferencia-cell"></td>
+                <td class="costo-sin-descuento-column costo-sin-descuento-cell">0.00</td>
+                <td class="costo-facturado-column costo-facturado-cell">0.00</td>
+                <td class="diferencia-column diferencia-cell">0.00</td>
             `;
             tbody.appendChild(tr);
 
@@ -640,7 +640,7 @@ function mostrarInventario(inventario) {
         });
     } else {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td colspan="${tipoSucursal === '2' ? '10' : '9'}" class="no-data">No hay detalles disponibles</td>`;
+        tr.innerHTML = `<td colspan="${tipoSucursal === '2' ? '11' : '10'}" class="no-data">No hay detalles disponibles</td>`;
         tbody.appendChild(tr);
     }
     
@@ -662,7 +662,6 @@ function mostrarInventario(inventario) {
         tablaContainer.style.opacity = "1";
     }, 100);
 }
-
 // Actualizar total de la factura
 function actualizarTotalFactura() {
     const preciosFacturados = document.querySelectorAll('.precio-facturado-input');
@@ -1044,8 +1043,13 @@ function aplicarDescuentoGlobal() {
         return;
     }
     
+    // Verificar si el descuento sin IVA está activado
+    const descuentoSinIvaCheckbox = document.getElementById('descuento-sin-iva');
+    const esSinIva = descuentoSinIvaCheckbox && descuentoSinIvaCheckbox.checked;
+    
     // Mostrar indicador de carga
-    mostrarCargando('Aplicando descuentos...');
+    const mensajeCarga = esSinIva ? 'Aplicando descuentos sin IVA...' : 'Aplicando descuentos...';
+    mostrarCargando(mensajeCarga);
     
     // Procesar cada fila
     rows.forEach(row => {
@@ -1054,12 +1058,14 @@ function aplicarDescuentoGlobal() {
         const cantidadInput = row.querySelector('.cantidad-input');
         const bonificacionInput = row.querySelector('.bonificacion-input');
         const costoInput = row.querySelector('.costo-input');
+        const costoSinDescuentoCell = row.querySelector('.costo-sin-descuento-cell');
         const costoFacturadoCell = row.querySelector('.costo-facturado-cell');
         const diferenciaCell = row.querySelector('.diferencia-cell');
         
         // Verificar que existan los elementos necesarios y que tengan valores
         if (descuentoInput && precioFacturadoInput && cantidadInput && 
-            bonificacionInput && costoInput && costoFacturadoCell && diferenciaCell) {
+            bonificacionInput && costoInput && costoSinDescuentoCell && 
+            costoFacturadoCell && diferenciaCell) {
             
             const descuentoPorcentaje = parseFloat(descuentoInput.value) || 0;
             const precioFacturado = parseFloat(precioFacturadoInput.value) || 0;
@@ -1069,19 +1075,43 @@ function aplicarDescuentoGlobal() {
             const cantidadTotal = cantidad + bonificacion;
             
             if (descuentoPorcentaje > 0 && precioFacturado > 0 && cantidadTotal > 0) {
-                // Calcular el monto de descuento basado en el porcentaje
-                const montoDescuento = precioFacturado * (descuentoPorcentaje / 100);
+                // Calcular Costo sin Descuento (antes del descuento)
+                const costoSinDescuento = precioFacturado / cantidadTotal;
                 
-                // Calcular el precio con descuento y el costo facturado
-                const precioConDescuento = Math.max(0, precioFacturado - montoDescuento);
+                let montoDescuento;
+                let precioConDescuento;
+                
+                if (esSinIva) {
+                    // Lógica para descuento sin IVA
+                    // 1. Quitar IVA del precio facturado
+                    const precioSinIva = precioFacturado / 1.12;
+                    
+                    // 2. Aplicar descuento porcentual al precio sin IVA
+                    montoDescuento = precioSinIva * (descuentoPorcentaje / 100);
+                    
+                    // 3. Calcular precio final: Precio Facturado - Descuento calculado sobre precio sin IVA
+                    precioConDescuento = Math.max(0, precioFacturado - montoDescuento);
+                    
+                    // Marcar como descuento sin IVA para el guardado
+                    descuentoInput.setAttribute('data-sin-iva', 'true');
+                } else {
+                    // Lógica normal: calcular el monto de descuento basado en el porcentaje
+                    montoDescuento = precioFacturado * (descuentoPorcentaje / 100);
+                    precioConDescuento = Math.max(0, precioFacturado - montoDescuento);
+                    
+                    // Remover el atributo sin IVA si existía
+                    descuentoInput.removeAttribute('data-sin-iva');
+                }
+                
                 const costoFacturado = precioConDescuento / cantidadTotal;
                 const diferencia = costoFacturado - costo;
                 
-                // Actualizar las celdas calculadas (NO el campo de descuento)
+                // Actualizar las celdas calculadas
+                costoSinDescuentoCell.textContent = costoSinDescuento.toFixed(2);
                 costoFacturadoCell.textContent = costoFacturado.toFixed(2);
                 diferenciaCell.textContent = diferencia.toFixed(2);
                 
-                // IMPORTANTE: Marcar este descuento como porcentual para el guardado
+                // Marcar este descuento como porcentual para el guardado
                 descuentoInput.setAttribute('data-porcentual', 'true');
                 
                 // Aplicar clases según diferencia
@@ -1096,10 +1126,19 @@ function aplicarDescuentoGlobal() {
                 }
                 
                 // Añadir efectos visuales para indicar actualización
+                costoSinDescuentoCell.classList.add('cell-updated');
                 costoFacturadoCell.classList.add('cell-updated');
                 diferenciaCell.classList.add('cell-updated');
-                descuentoInput.classList.add('descuento-porcentual'); // Clase visual opcional
+                
+                // Aplicar clase especial si es descuento sin IVA
+                if (esSinIva) {
+                    descuentoInput.classList.add('descuento-sin-iva');
+                } else {
+                    descuentoInput.classList.add('descuento-porcentual');
+                }
+                
                 setTimeout(() => {
+                    costoSinDescuentoCell.classList.remove('cell-updated');
                     costoFacturadoCell.classList.remove('cell-updated');
                     diferenciaCell.classList.remove('cell-updated');
                 }, 1000);
@@ -1115,15 +1154,73 @@ function aplicarDescuentoGlobal() {
     // Actualizar el total general
     actualizarTotalFactura();
     
-    // Mostrar mensaje de éxito
+    // Mostrar mensaje informativo
     if (filasActualizadas > 0) {
-        
+        const tipoDescuento = esSinIva ? 'sin IVA' : 'normal';
+        console.log(`Se aplicaron ${filasActualizadas} descuentos ${tipoDescuento} correctamente.`);
     } else {
         mostrarInfo(
             'Sin cambios', 
             'No se aplicaron descuentos. Verifique que los productos tengan valores en los campos de precio y descuento.'
         );
     }
+}
+function manejarCambioDescuentoSinIva() {
+    const checkbox = document.getElementById('descuento-sin-iva');
+    const inventorySection = document.querySelector('.inventory-detail-section');
+    
+    if (checkbox && inventorySection) {
+        if (checkbox.checked) {
+            inventorySection.classList.add('descuento-sin-iva-activo');
+            // Recalcular todos los costos con la nueva lógica
+            recalcularTodosLosCostos();
+        } else {
+            inventorySection.classList.remove('descuento-sin-iva-activo');
+            // Recalcular todos los costos con la lógica normal
+            recalcularTodosLosCostos();
+        }
+    }
+}
+function agregarEstilosDescuentoSinIva() {
+    const estilo = document.createElement('style');
+    estilo.textContent = `
+        .descuento-sin-iva {
+            background-color: rgba(255, 193, 7, 0.2) !important;
+            color: var(--warning-color) !important;
+            font-weight: 600 !important;
+            border: 1px solid var(--warning-color) !important;
+        }
+        
+        .descuento-sin-iva::after {
+            content: "% SIN IVA";
+            position: relative;
+            display: inline;
+            margin-left: 2px;
+            color: var(--warning-color);
+            font-size: 0.75em;
+        }
+        
+        .descuento-porcentual::after {
+            content: "%";
+            position: relative;
+            display: inline;
+            margin-left: 2px;
+            color: var(--accent-color);
+        }
+    `;
+    document.head.appendChild(estilo);
+}
+// Función para recalcular todos los costos cuando cambia el modo de descuento
+function recalcularTodosLosCostos() {
+    const rows = document.querySelectorAll('.data-table tbody tr');
+    
+    rows.forEach(row => {
+        const cantidadInput = row.querySelector('.cantidad-input');
+        if (cantidadInput) {
+            // Disparar el evento input para recalcular
+            cantidadInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    });
 }
 function agregarEstiloDescuentoPorcentual() {
     const estilo = document.createElement('style');
@@ -1164,8 +1261,7 @@ function agregarfila() {
     // Crear nueva fila
     const newRow = document.createElement('tr');
     
-    // Configurar HTML de la fila asegurando que todas las columnas estén presentes
-    // y con las clases correctas para mantener la estructura de la tabla
+    // Configurar HTML de la fila incluyendo la nueva columna
     newRow.innerHTML = `
         <td class="upc-column"><input type="text" class="upc-input"></td>
         <td class="descripcion-column"></td>
@@ -1178,6 +1274,7 @@ function agregarfila() {
         <td class="bonificacion-column"><input type="number" class="bonificacion-input" value="0"></td>
         <td class="precio-column"><input type="text" class="precio-facturado-input" value="0"></td>
         <td class="descuento-column"><input type="number" class="descuento-input" value="0"></td>
+        <td class="costo-sin-descuento-column costo-sin-descuento-cell">0.00</td>
         <td class="costo-facturado-column costo-facturado-cell">0.00</td>
         <td class="diferencia-column diferencia-cell">0.00</td>
     `;
@@ -1234,13 +1331,14 @@ function actualizarCostos() {
     const bonificacionInput = row.querySelector('.bonificacion-input');
     const precioFacturadoInput = row.querySelector('.precio-facturado-input');
     const costoInput = row.querySelector('.costo-input');
+    const costoSinDescuentoCell = row.querySelector('.costo-sin-descuento-cell');
     const costoFacturadoCell = row.querySelector('.costo-facturado-cell');
     const diferenciaCell = row.querySelector('.diferencia-cell');
     const descuentoInput = row.querySelector('.descuento-input');
 
     // Verificar que se encontraron todos los elementos necesarios
     if (!cantidadInput || !bonificacionInput || !precioFacturadoInput || 
-        !costoInput || !costoFacturadoCell || !diferenciaCell) {
+        !costoInput || !costoSinDescuentoCell || !costoFacturadoCell || !diferenciaCell) {
         console.error('Error: No se encontraron todos los elementos necesarios en la fila');
         return;
     }
@@ -1252,15 +1350,37 @@ function actualizarCostos() {
     const costo = parseFloat(costoInput.value) || 0;
     const descuento = parseFloat(descuentoInput.value) || 0;
 
+    // Verificar si el descuento sin IVA está activado
+    const descuentoSinIvaCheckbox = document.getElementById('descuento-sin-iva');
+    const esSinIva = descuentoSinIvaCheckbox && descuentoSinIvaCheckbox.checked;
+
     if (cantidadTotal > 0 && !isNaN(precioFacturado)) {
-        // Aplicar descuento como valor ABSOLUTO (no como porcentaje)
-        const precioConDescuento = Math.max(0, precioFacturado - descuento);
+        // Calcular Costo sin Descuento (Precio Facturado / Cantidad Total)
+        const costoSinDescuento = precioFacturado / cantidadTotal;
+        
+        let precioConDescuento;
+        
+        if (esSinIva && descuento > 0) {
+            // Lógica para descuento sin IVA
+            // 1. Quitar IVA del precio facturado
+            const precioSinIva = precioFacturado / 1.12;
+            
+            // 2. Aplicar descuento porcentual al precio sin IVA
+            const descuentoSinIva = precioSinIva * (descuento / 100);
+            
+            // 3. Calcular precio final: Precio Facturado - Descuento calculado sobre precio sin IVA
+            precioConDescuento = Math.max(0, precioFacturado - descuentoSinIva);
+        } else {
+            // Lógica normal: aplicar descuento como valor ABSOLUTO
+            precioConDescuento = Math.max(0, precioFacturado - descuento);
+        }
         
         // Dividir el precio con descuento entre la cantidad total
         const costoFacturado = precioConDescuento / cantidadTotal;
         const diferencia = costoFacturado - costo;
 
         // Formatear a 2 decimales para mostrar
+        costoSinDescuentoCell.textContent = costoSinDescuento.toFixed(2);
         costoFacturadoCell.textContent = costoFacturado.toFixed(2);
         diferenciaCell.textContent = diferencia.toFixed(2);
         
@@ -1276,6 +1396,7 @@ function actualizarCostos() {
         }
     } else {
         // Valores predeterminados si no hay cantidades válidas
+        costoSinDescuentoCell.textContent = '0.00';
         costoFacturadoCell.textContent = '0.00';
         diferenciaCell.textContent = '0.00';
         diferenciaCell.classList.remove('diferencia-positiva', 'diferencia-negativa');
@@ -1463,6 +1584,10 @@ async function realizarGuardado() {
             const bonificacion = parseFloat(row.querySelector('.bonificacion-input')?.value) || 0;
             const diferencia = parseFloat(row.querySelector('.diferencia-cell')?.textContent) || 0;
             const costoFacturado = parseFloat(row.querySelector('.costo-facturado-cell')?.textContent) || 0;
+            
+            // NUEVO: Obtener el costo sin descuento
+            const costoSinDescuento = parseFloat(row.querySelector('.costo-sin-descuento-cell')?.textContent) || 0;
+            
             const costoFiscal = costoFacturado / 1.12;
             const iva = costoFiscal * 0.12;
             
@@ -1471,7 +1596,6 @@ async function realizarGuardado() {
             let descuentoValor = parseFloat(descuentoInput?.value) || 0;
             
             // Determinar si es un descuento porcentual o monetario
-            // Si la fila ha sido procesada por el botón "Aplicar Descuento", usamos el flag
             let descuentoFactura = '';
             
             // Verificar si este descuento está marcado como porcentual
@@ -1487,10 +1611,12 @@ async function realizarGuardado() {
             // Evitar guardar filas vacías
             if (!upc) continue;
 
+            // ACTUALIZADO: Agregar el nuevo campo CostoFacSinDescuento
             const rowData = [
                 idInventario, upc, descripcion, idProveedores, idDepartamentos, fechaFactura, 
                 numero, serie, costo, costoFacturado, diferencia, idSucursal, nombreSucursal, 
-                fechaCuadre, usuario, cantidad, idRazon, bonificacion, costoFiscal, iva, idUsuario, descuentoFactura
+                fechaCuadre, usuario, cantidad, idRazon, bonificacion, costoFiscal, iva, 
+                idUsuario, descuentoFactura, costoSinDescuento
             ];
 
             const query = `
@@ -1498,8 +1624,9 @@ async function realizarGuardado() {
                     IdCuadre, Upc, Descripcion, Proveedor, Departamento, FechaFactura, 
                     NoFactura, Serie, costosistema, costofacturado, diferencia, 
                     IdSucursal, sucursal, fechacuadre, Usuario, CantidadIngresada, 
-                    IdRazonSocial, BonificacionIngresada, Costofiscal, Iva, IdUsuario, Descuentofactura
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    IdRazonSocial, BonificacionIngresada, Costofiscal, Iva, IdUsuario, 
+                    Descuentofactura, CostoFacSinDescuento
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             await connection.query(query, rowData);
@@ -1518,7 +1645,7 @@ async function realizarGuardado() {
         
         let mensajeExito = existeInventario ?
             'Cuadre actualizado exitosamente' :
-            'Nuevo cuadre guardado exitosamente';
+            'Cuadre guardado exitosamente';
 
         mostrarExito(
             mensajeExito, 
@@ -1629,7 +1756,8 @@ function exportarAExcel() {
                        cell.classList.contains('descuento-column')) {
                 // Para campos numéricos editables, tomar el valor del input
                 cellValue = cell.querySelector('input')?.value || '0';
-            } else if (cell.classList.contains('costo-facturado-column') || 
+            } else if (cell.classList.contains('costo-sin-descuento-column') ||
+                       cell.classList.contains('costo-facturado-column') || 
                        cell.classList.contains('diferencia-column')) {
                 // Para campos calculados, tomar el texto de la celda
                 cellValue = cell.textContent.trim() || '0';
@@ -1716,6 +1844,15 @@ function showCopyNotification() {
         }
     }, 3000);
 }
+function inicializarDescuentoSinIva() {
+    const checkbox = document.getElementById('descuento-sin-iva');
+    if (checkbox) {
+        checkbox.addEventListener('change', manejarCambioDescuentoSinIva);
+    }
+    
+    // Agregar estilos específicos
+    agregarEstilosDescuentoSinIva();
+}
 // Inicialización del documento
 document.addEventListener('DOMContentLoaded', () => {
     // Inicialización de elementos principales
@@ -1761,6 +1898,7 @@ document.addEventListener('DOMContentLoaded', () => {
     InicializartodasfilasUpc();
     ActualizarUpcdinamicamente();
     agregarEstiloDescuentoPorcentual();
+    inicializarDescuentoSinIva();
     // Asignar eventos de botones principales
     if (guardarBtn) {
         guardarBtn.addEventListener('click', guardarCuadre);

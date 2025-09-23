@@ -3569,3 +3569,266 @@ body {
     border-color: var(--info-color);
     box-shadow: 0 0 0 3px rgba(41, 182, 246, 0.1);
 }
+#restrictedAddCreditNoteBtn {
+    background: linear-gradient(135deg, var(--success-color), var(--success-light));
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+#restrictedAddCreditNoteBtn:hover {
+    background: linear-gradient(135deg, var(--success-light), var(--success-color));
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+#restrictedAddCreditNoteBtn::before {
+    content: '✅';
+    position: absolute;
+    top: 5px;
+    right: 8px;
+    font-size: 10px;
+    opacity: 0.7;
+}
+/* Estilos para edición directa en modo modificación */
+.direct-edit-container {
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.direct-edit-container:hover {
+    box-shadow: 0 4px 8px rgba(255, 167, 38, 0.2);
+    transform: translateY(-1px);
+}
+
+.modification-indicator {
+    animation: pulse-modification 2s infinite;
+}
+
+@keyframes pulse-modification {
+    0%, 100% { 
+        opacity: 0.7; 
+        transform: scale(1); 
+    }
+    50% { 
+        opacity: 1; 
+        transform: scale(1.2); 
+    }
+}
+
+/* Botón de actualización de modificación */
+.action-button.update-modification {
+    background: linear-gradient(135deg, var(--warning-color), #ffb74d);
+    color: white;
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+.action-button.update-modification:hover {
+    background: linear-gradient(135deg, #ffb74d, var(--warning-color));
+    box-shadow: 0 6px 20px rgba(255, 167, 38, 0.4);
+    transform: translateY(-1px);
+}
+
+.update-indicator {
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-left: 8px;
+    font-weight: 700;
+}
+
+/* Información de proveedor directa */
+.provider-info-direct {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .direct-edit-container {
+        margin-bottom: 5px;
+    }
+    
+    .update-indicator {
+        display: none;
+    }
+    
+    .action-button.update-modification {
+        font-size: 13px;
+        padding: 12px 15px;
+    }
+}
+/* Estilos para refacturación directa */
+.direct-refactoring-container {
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.direct-refactoring-container:hover {
+    box-shadow: 0 4px 8px rgba(41, 182, 246, 0.2);
+    transform: translateY(-1px);
+}
+
+.refactoring-indicator {
+    animation: pulse-refactoring 2s infinite;
+}
+
+@keyframes pulse-refactoring {
+    0%, 100% { 
+        opacity: 0.8; 
+        transform: scale(1); 
+    }
+    50% { 
+        opacity: 1; 
+        transform: scale(1.3); 
+    }
+}
+
+.required-label {
+    animation: blink-required 3s infinite;
+}
+
+@keyframes blink-required {
+    0%, 50% { opacity: 0.7; }
+    25% { opacity: 1; }
+    75% { opacity: 0.4; }
+}
+
+.direct-refactoring-input,
+.direct-refactoring-select {
+    transition: all 0.3s ease;
+}
+
+.direct-refactoring-input:focus,
+.direct-refactoring-select:focus {
+    background: rgba(255, 255, 255, 0.8) !important;
+    box-shadow: 0 0 0 2px rgba(41, 182, 246, 0.3) !important;
+}
+
+.direct-refactoring-input::placeholder {
+    color: var(--text-light);
+    font-style: italic;
+    opacity: 0.7;
+}
+
+/* Container completado */
+.direct-refactoring-container[data-completed="true"] {
+    border-style: solid !important;
+    animation: completed-pulse 0.6s ease;
+}
+
+@keyframes completed-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+
+/* Información de proveedor en refacturación */
+.provider-info-refactoring {
+    font-weight: 500;
+}
+
+.provider-info-refactoring i {
+    margin-right: 5px;
+}
+
+/* Responsive para refacturación directa */
+@media (max-width: 768px) {
+    .direct-refactoring-container {
+        margin-bottom: 8px;
+        min-height: 45px;
+    }
+    
+    .required-label {
+        position: static;
+        display: block;
+        margin-top: 4px;
+        text-align: center;
+    }
+    
+    .refactoring-indicator {
+        top: 5px;
+        right: 8px;
+        font-size: 14px;
+    }
+}
+/* Estilos específicos para selector de proveedor en refacturación */
+.provider-select-container-refactoring {
+    width: 100%;
+    position: relative;
+}
+
+.provider-select-container-refactoring .provider-select {
+    font-family: 'Nunito', sans-serif;
+}
+
+.provider-select-container-refactoring .provider-select option {
+    padding: 8px 12px;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.provider-select-container-refactoring .provider-select:focus {
+    background: rgba(255, 255, 255, 0.9) !important;
+    box-shadow: 0 0 0 2px rgba(41, 182, 246, 0.3) !important;
+}
+
+.provider-info-refactoring {
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.05), rgba(129, 199, 132, 0.05));
+    border-color: rgba(76, 175, 80, 0.3) !important;
+    color: var(--success-color) !important;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+.provider-info-refactoring strong {
+    color: var(--text-primary);
+}
+
+/* Animación al mostrar información del proveedor */
+.provider-info-refactoring {
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Hover effects para el selector */
+.provider-select-container-refactoring .provider-select:hover {
+    background: rgba(255, 255, 255, 0.7);
+}
+
+/* Responsive para selector de proveedor */
+@media (max-width: 768px) {
+    .provider-select-container-refactoring .provider-select {
+        padding: 10px 35px 10px 12px;
+        font-size: 15px;
+    }
+    
+    .provider-info-refactoring {
+        padding: 10px;
+        font-size: 12px;
+        margin-top: 5px;
+    }
+}
+.product-item.has-quantity {
+    border-color: var(--success-color) !important;
+    background: rgba(76, 175, 80, 0.05) !important;
+}
+
+.quantity-input.has-value {
+    border-color: var(--success-color) !important;
+    background: rgba(76, 175, 80, 0.1) !important;
+    font-weight: 600 !important;
+}

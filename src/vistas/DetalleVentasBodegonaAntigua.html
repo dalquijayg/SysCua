@@ -33,8 +33,40 @@
                             <input type="text" id="fechaFin" class="date-picker" placeholder="Seleccione fecha final">
                         </div>
                     </div>
-                    <button id="btnBuscar" class="btn-search"><i class="fas fa-search"></i> Buscar</button>
-                    <button id="btnExportar" class="btn-export"><i class="fas fa-file-excel"></i> Exportar a Excel</button>
+                    
+                    <!-- Nueva sección para búsqueda por UPC -->
+                    <div class="upc-search-section">
+                        <div class="input-group">
+                            <label for="busquedaUPC">
+                                <i class="fas fa-barcode"></i> Búsqueda por UPC:
+                                <small>(Opcional - deje vacío para consulta general)</small>
+                            </label>
+                            <div class="upc-input-container">
+                                <textarea 
+                                    id="busquedaUPC" 
+                                    class="upc-input" 
+                                    placeholder="Ingrese uno o varios UPC separados por comas, saltos de línea o espacios&#10;Ejemplo: 123456789, 987654321, 555666777"
+                                    rows="3"></textarea>
+                                <div class="upc-controls">
+                                    <button type="button" id="btnLimpiarUPC" class="btn-clear-upc" title="Limpiar UPCs">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    <button type="button" id="btnValidarUPC" class="btn-validate-upc" title="Validar UPCs">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="upc-info">
+                                <span id="upcCount">0 UPCs ingresados</span>
+                                <span id="upcStatus" class="upc-status"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="search-buttons">
+                        <button id="btnBuscar" class="btn-search"><i class="fas fa-search"></i> Buscar</button>
+                        <button id="btnExportar" class="btn-export"><i class="fas fa-file-excel"></i> Exportar a Excel</button>
+                    </div>
                 </div>
 
                 <div class="status-panel">
@@ -107,10 +139,6 @@
                 </div>
 
                 <div class="results-container">
-                    <div class="tabs">
-                        <button class="tab-btn active" data-tab="tablaDatos">Vista Tabla</button>
-                        <button class="tab-btn" data-tab="resumenes">Resúmenes</button>
-                    </div>
                     
                     <div id="tablaDatos" class="tab-content active">
                         <div class="table-responsive">
@@ -140,23 +168,6 @@
                             <button id="btnAnterior" disabled><i class="fas fa-chevron-left"></i> Anterior</button>
                             <span id="paginaActual">Página 1 de 1</span>
                             <button id="btnSiguiente" disabled>Siguiente <i class="fas fa-chevron-right"></i></button>
-                        </div>
-                    </div>
-                    
-                    <div id="resumenes" class="tab-content">
-                        <div class="summary-cards">
-                            <div class="summary-card">
-                                <h3>Top 5 Productos Vendidos</h3>
-                                <canvas id="chartProductos"></canvas>
-                            </div>
-                            <div class="summary-card">
-                                <h3>Distribución por Cliente</h3>
-                                <canvas id="chartClientes"></canvas>
-                            </div>
-                            <div class="summary-card">
-                                <h3>Ventas por Sucursal</h3>
-                                <canvas id="chartSucursales"></canvas>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -221,6 +232,26 @@
             </div>
             <div class="info-grupo">
                 <p><strong>Estado:</strong> <span id="detalleSucursalEstado"></span></p>
+            </div>
+        </div>
+    </template>
+
+    <!-- Nuevo template para mostrar lista de UPCs -->
+    <template id="listaUPCTemplate">
+        <div class="lista-upc-modal">
+            <h2>Lista de UPCs para Buscar</h2>
+            <div class="upc-summary">
+                <p><strong>Total de UPCs:</strong> <span id="totalUPCsModal"></span></p>
+            </div>
+            <div class="upc-lista-container">
+                <div id="listaUPCsModal" class="upc-items">
+                    <!-- Los UPCs se llenarán dinámicamente aquí -->
+                </div>
+            </div>
+            <div class="upc-modal-actions">
+                <button type="button" id="btnCopiarUPCs" class="btn-copy-upcs">
+                    <i class="fas fa-copy"></i> Copiar Lista
+                </button>
             </div>
         </div>
     </template>

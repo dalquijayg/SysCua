@@ -19,6 +19,7 @@ let originalFieldValues = {};
 let selectedRefacturingMethod = null;
 let creditNoteSerieValue = '';
 let creditNoteNumberValue = '';
+let productQuantities = {};
 
 // Variables para edición inline
 let isEditing = false;
@@ -316,7 +317,39 @@ class SelectManager {
         
         return true;
     }
-    
+    static async loadProviders(currentProviderId = null) {
+        const data = await DatabaseManager.loadSelectOptions(
+            'proveedores_facturas', 
+            'Id', 
+            'Nombre',
+            "Estado = 'V'",
+            'Nombre'
+        );
+        
+        const select = document.createElement('select');
+        select.className = 'inline-edit-select';
+        
+        // Agregar opción por defecto
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Seleccione un proveedor...';
+        select.appendChild(defaultOption);
+        
+        // Agregar opciones
+        data.forEach(provider => {
+            const option = document.createElement('option');
+            option.value = provider.Id;
+            option.textContent = provider.Nombre;
+            
+            if (provider.Id.toString() === currentProviderId.toString()) {
+                option.selected = true;
+            }
+            
+            select.appendChild(option);
+        });
+        
+        return select;
+    }
     static async loadCreditNoteTypes() {
         const data = await DatabaseManager.loadSelectOptions(
             'TiposNotaCredito', 
@@ -1073,15 +1106,22 @@ function createRestrictedPanel() {
                 </div>
                 <div class="restriction-content">
                     <h3>⚠️ Modificación No Permitida</h3>
-                    <p>Solo se pueden modificar facturas con <strong>Estado = 0</strong>.</p>
+                    <p>Solo se pueden modificar facturas con <strong>Estado = Ingresado</strong>.</p>
                     <p>Esta factura tiene un estado diferente y no puede ser editada.</p>
+                    <p style="color: var(--success-color); font-weight: 600; margin-top: 10px;">
+                        ✅ Sin embargo, <strong>sí puedes agregar notas de crédito</strong>.
+                    </p>
                 </div>
             </div>
         </div>
 
-        <!-- Botones de acción -->
+        <!-- Botones de acción modificados -->
         <div class="action-buttons">
             <div class="action-buttons-row">
+                <button class="action-button primary" id="restrictedAddCreditNoteBtn">
+                    <i class="fas fa-plus"></i>
+                    Agregar Nota de Crédito
+                </button>
                 <button class="action-button secondary" id="newSearchFromRestricted">
                     <i class="fas fa-search"></i>
                     Nueva Búsqueda
@@ -1090,8 +1130,19 @@ function createRestrictedPanel() {
         </div>
     `;
     
-    // Agregar event listener al botón
-    panel.querySelector('#newSearchFromRestricted').addEventListener('click', resetSearch);
+    // Agregar event listeners a los botones
+    setTimeout(() => {
+        const restrictedAddCreditNoteBtn = panel.querySelector('#restrictedAddCreditNoteBtn');
+        const newSearchFromRestricted = panel.querySelector('#newSearchFromRestricted');
+        
+        if (restrictedAddCreditNoteBtn) {
+            restrictedAddCreditNoteBtn.addEventListener('click', handleAddCreditNote);
+        }
+        
+        if (newSearchFromRestricted) {
+            newSearchFromRestricted.addEventListener('click', resetSearch);
+        }
+    }, 100);
     
     return panel;
 }
@@ -1143,7 +1194,7 @@ function showRestrictedInvoicePanel(invoice) {
         }, 100);
     }, 300);
 
-    NotificationManager.showToast('warning', 'Esta factura no puede ser modificada por su estado actual');
+    NotificationManager.showToast('warning', 'Modificaciones no permitidas, pero sí se pueden agregar notas de crédito');
 }
 // Llenar los datos de la factura en el panel
 function populateInvoiceData(invoice) {
@@ -1316,610 +1367,288 @@ function handleRefacturingReasonSubmit(e) {
 function enableModificationMode() {
     isModificationMode = true;
     
-    // Configurar campos editables
-    setupEditableFields();
+    // Limpiar cualquier edición inline previa
+    if (isEditing) {
+        isEditing = false;
+        currentEditingElement = null;
+    }
     
-    // Cambiar apariencia de los campos editables
-    const editableElements = document.querySelectorAll('.editable-field');
-    editableElements.forEach(element => {
-        element.style.border = '2px dashed var(--warning-color)';
-        element.style.backgroundColor = 'rgba(255, 167, 38, 0.05)';
-        element.style.cursor = 'pointer';
-        
-        // Agregar indicador visual de que es editable
-        if (!element.querySelector('.edit-indicator')) {
-            const indicator = document.createElement('span');
-            indicator.className = 'edit-indicator';
-            indicator.innerHTML = '✏️';
-            indicator.style.cssText = `
-                position: absolute;
-                top: 2px;
-                right: 5px;
-                font-size: 10px;
-                opacity: 0.7;
-                pointer-events: none;
-            `;
-            element.style.position = 'relative';
-            element.appendChild(indicator);
-        }
-    });
+    // Configurar campos editables directamente
+    setupDirectEditableFields();
     
     NotificationManager.showToast('success', `Modo modificación habilitado: ${selectedModificationReason.text}`);
     showModificationBanner();
-    makeFieldsImmediatelyEditable();
-    
-    // NUEVO: Actualizar estado de botones
-    updateActionButtonsState();
-}
-
-// Habilitar modo refacturación
-function enableRefacturingMode() {
-    isRefacturingMode = true;
-    isModificationMode = false;
-    
-    // Guardar valores originales antes de limpiar
-    saveOriginalFieldValues();
-    
-    // Inicializar campos de refacturación
-    initializeRefacturingFields();
-    
-    // Limpiar los campos editables
-    clearEditableFields();
-    
-    // Configurar campos para refacturación (no editables individualmente)
-    setupRefacturingFields();
     
     // Mostrar el botón de actualización
-    showRefacturingUpdateButton();
+    showModificationUpdateButton();
     
-    NotificationManager.showToast('success', `Modo refacturación habilitado: ${selectedRefacturingReason.text}`);
-    showRefacturingBanner();
-    
-    // NUEVO: Actualizar estado de botones
+    // Actualizar estado de botones
     updateActionButtonsState();
 }
-
-// Configurar campos editables
-function setupEditableFields() {
-    if (!isModificationMode) {
-        return;
-    }
-    
+// Configurar campos para edición directa
+function setupDirectEditableFields() {
     const editableFields = [
         { id: 'invoiceSerie', type: 'text', fieldName: 'Serie', tipoCambio: 1 },
         { id: 'invoiceNumber', type: 'text', fieldName: 'Numero', tipoCambio: 2 },
         { id: 'socialReason', type: 'select', fieldName: 'IdRazon', tipoCambio: 3 },
         { id: 'invoiceAmount', type: 'number', fieldName: 'MontoFactura', tipoCambio: 4 },
         { id: 'invoiceDate', type: 'date', fieldName: 'FechaFactura', tipoCambio: 5 },
-        { id: 'providerNit', type: 'provider-nit', fieldName: 'NIT', tipoCambio: 6 }
+        { id: 'providerName', type: 'provider-select', fieldName: 'IdProveedor', tipoCambio: 6 } // CAMBIO AQUÍ
     ];
 
-    editableFields.forEach(field => {
+    editableFields.forEach(async (field) => {
         const element = document.getElementById(field.id);
         if (element) {
-            element.classList.add('editable-field');
+            await convertToDirectInput(element, field);
         }
     });
 }
 
-// Configurar campos editables para refacturación
-function setupEditableFieldsForRefactoring() {
-    const editableFields = [
-        { id: 'invoiceSerie', type: 'text', fieldName: 'Serie', tipoCambio: 1 },
-        { id: 'invoiceNumber', type: 'text', fieldName: 'Numero', tipoCambio: 2 },
-        { id: 'socialReason', type: 'select', fieldName: 'IdRazon', tipoCambio: 3 },
-        { id: 'invoiceAmount', type: 'number', fieldName: 'MontoFactura', tipoCambio: 4 },
-        { id: 'invoiceDate', type: 'date', fieldName: 'FechaFactura', tipoCambio: 5 },
-        { id: 'providerNit', type: 'provider-nit', fieldName: 'NIT', tipoCambio: 6 }
-    ];
-
-    editableFields.forEach(field => {
-        const element = document.getElementById(field.id);
-        if (element) {
-            element.classList.add('editable-field');
-        }
-    });
-}
-
-// Guardar valores originales de los campos
-function saveOriginalFieldValues() {
-    originalFieldValues = {
-        invoiceSerie: document.getElementById('invoiceSerie').textContent,
-        invoiceNumber: document.getElementById('invoiceNumber').textContent,
-        socialReason: document.getElementById('socialReason').textContent,
-        invoiceAmount: document.getElementById('invoiceAmount').textContent,
-        invoiceDate: document.getElementById('invoiceDate').textContent,
-        providerNit: document.getElementById('providerNit').textContent
-    };
-}
-
-// Limpiar campos editables para refacturación
-function clearEditableFields() {
-    const fieldsTolear = [
-        'invoiceSerie',
-        'invoiceNumber', 
-        'socialReason',
-        'invoiceAmount',
-        'invoiceDate',
-        'providerNit'
-    ];
-    
-    fieldsTolear.forEach(fieldId => {
-        const element = document.getElementById(fieldId);
-        if (element) {
-            element.textContent = '';
-            element.style.minHeight = '20px';
-            element.style.border = '1px dashed #ccc';
-            element.style.padding = '5px';
-            
-            // Agregar placeholder visual
-            const placeholder = document.createElement('span');
-            placeholder.style.color = '#999';
-            placeholder.style.fontStyle = 'italic';
-            placeholder.textContent = 'Campo requerido - clic para editar';
-            element.appendChild(placeholder);
-        }
-    });
-}
-
-// Hacer campos inmediatamente editables
-function makeFieldsImmediatelyEditable() {
-    const editableFields = [
-        { id: 'invoiceSerie', type: 'text', fieldName: 'Serie', tipoCambio: 1 },
-        { id: 'invoiceNumber', type: 'text', fieldName: 'Numero', tipoCambio: 2 },
-        { id: 'socialReason', type: 'select', fieldName: 'IdRazon', tipoCambio: 3 },
-        { id: 'invoiceAmount', type: 'number', fieldName: 'MontoFactura', tipoCambio: 4 },
-        { id: 'invoiceDate', type: 'date', fieldName: 'FechaFactura', tipoCambio: 5 },
-        { id: 'providerNit', type: 'provider-nit', fieldName: 'NIT', tipoCambio: 6 }
-    ];
-
-    editableFields.forEach(field => {
-        const element = document.getElementById(field.id);
-        if (element) {
-            element.addEventListener('click', () => {
-                if (isModificationMode && !isEditing) {
-                    enableInlineEdit(element, field);
-                }
-            });
-            
-            element.title = 'Clic para editar';
-        }
-    });
-}
-
-// Hacer campos inmediatamente editables para refacturación
-function makeFieldsImmediatelyEditableForRefactoring() {
-    const editableFields = [
-        { id: 'invoiceSerie', type: 'text', fieldName: 'Serie', tipoCambio: 1 },
-        { id: 'invoiceNumber', type: 'text', fieldName: 'Numero', tipoCambio: 2 },
-        { id: 'socialReason', type: 'select', fieldName: 'IdRazon', tipoCambio: 3 },
-        { id: 'invoiceAmount', type: 'number', fieldName: 'MontoFactura', tipoCambio: 4 },
-        { id: 'invoiceDate', type: 'date', fieldName: 'FechaFactura', tipoCambio: 5 },
-        { id: 'providerNit', type: 'provider-nit', fieldName: 'NIT', tipoCambio: 6 }
-    ];
-
-    editableFields.forEach(field => {
-        const element = document.getElementById(field.id);
-        if (element) {
-            element.addEventListener('click', () => {
-                if (isRefacturingMode && !isEditing) {
-                    enableInlineEditForRefactoring(element, field);
-                }
-            });
-            
-            element.title = 'Clic para editar (REQUERIDO)';
-        }
-    });
-}
-// ===== EDICIÓN INLINE =====
-// Habilitar edición inline
-// Habilitar edición inline
-async function enableInlineEdit(element, fieldConfig) {
-    if (isEditing) {
-        NotificationManager.showToast('warning', 'Ya hay un campo en edición. Complete la edición actual primero.');
-        return;
-    }
-
-    isEditing = true;
-    currentEditingElement = element;
-    
+// Convertir elemento a input directo
+async function convertToDirectInput(element, fieldConfig) {
     const originalValue = getOriginalValue(element, fieldConfig);
     const currentDisplayValue = element.textContent.trim();
     
-    // Crear el elemento de edición
-    let editElement;
+    // Crear el contenedor de input
+    const inputContainer = document.createElement('div');
+    inputContainer.className = 'direct-edit-container';
+    inputContainer.style.cssText = `
+        width: 100%;
+        position: relative;
+        border: 2px solid var(--warning-color);
+        border-radius: var(--border-radius-sm);
+        background: rgba(255, 167, 38, 0.05);
+        padding: 0;
+    `;
+    
+    // Crear el input correspondiente
+    let inputElement;
     
     if (fieldConfig.type === 'select' && fieldConfig.fieldName === 'IdRazon') {
-        editElement = await SelectManager.loadSocialReasons(window.currentInvoice.IdRazon);
-    } else if (fieldConfig.type === 'provider-nit') {
-        editElement = await createProviderNitInput(originalValue);
+        inputElement = await SelectManager.loadSocialReasons(window.currentInvoice.IdRazon);
+        inputElement.className = 'direct-edit-select';
+    } else if (fieldConfig.type === 'provider-select') {
+        // CORRECCIÓN: Pasar el IdProveedor actual en lugar de buscar en originalValue
+        const currentProviderId = window.currentInvoice?.IdProveedor || null;
+        inputElement = await createProviderSelectDirect(currentProviderId);
     } else {
-        editElement = createInputElement(fieldConfig.type, originalValue);
+        inputElement = createDirectInputElement(fieldConfig.type, originalValue);
     }
     
-    // Reemplazar el contenido del span con el elemento de edición
-    const originalHTML = element.innerHTML;
-    element.innerHTML = '';
-    element.appendChild(editElement);
-    
-    // Agregar botones de acción
-    const actionButtons = createActionButtons();
-    element.appendChild(actionButtons);
-    
-    // Enfocar el elemento
-    if (editElement.focus) {
-        editElement.focus();
-        if (fieldConfig.type === 'text' || fieldConfig.type === 'number') {
-            editElement.select();
-        }
+    // Configurar estilos del input
+    if (inputElement.tagName !== 'DIV') { // Para inputs simples
+        inputElement.style.cssText = `
+            width: 100%;
+            border: none;
+            outline: none;
+            padding: 8px 10px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            background: transparent;
+            border-radius: var(--border-radius-sm);
+        `;
     }
     
-    // Manejar eventos
-    const handleSave = async () => {
-        let newValue;
-        let newDisplayValue;
-        let selectedProvider = null;
-        
-        if (fieldConfig.type === 'select') {
-            const selectedOption = editElement.options[editElement.selectedIndex];
-            newValue = editElement.value;
-            newDisplayValue = selectedOption ? selectedOption.text : '';
-            
-            if (fieldConfig.fieldName === 'IdRazon' && !newValue) {
-                NotificationManager.showToast('error', 'Debe seleccionar una razón social válida');
-                return;
-            }
-            
-        } else if (fieldConfig.type === 'provider-nit') {
-            newValue = editElement.mainInput.value.trim();
-            selectedProvider = editElement.selectedProvider;
-            
-            if (!selectedProvider) {
-                NotificationManager.showToast('error', 'Debe seleccionar un proveedor válido');
-                return;
-            }
-            
-            newDisplayValue = formatNIT(selectedProvider.NIT);
-            
-        } else if (fieldConfig.type === 'number') {
-            newValue = parseFloat(editElement.value);
-            newDisplayValue = formatCurrency(newValue);
-        } else if (fieldConfig.type === 'date') {
-            newValue = editElement.value;
-            newDisplayValue = formatDate(newValue);
-        } else {
-            newValue = editElement.value.trim();
-            newDisplayValue = newValue;
-        }
-        
-        // Validar que hay cambios
-        if (fieldConfig.type === 'provider-nit') {
-            if (selectedProvider && selectedProvider.NIT === originalValue) {
-                cancelEdit();
-                NotificationManager.showToast('info', 'No se realizaron cambios');
-                return;
-            }
-        } else {
-            if (newValue.toString() === originalValue.toString()) {
-                cancelEdit();
-                NotificationManager.showToast('info', 'No se realizaron cambios');
-                return;
-            }
-        }
-        
-        // Validaciones específicas
-        if (!ValidationManager.validateFieldValue(fieldConfig, newValue, selectedProvider)) {
-            return;
-        }
-        
-        try {
-            // Confirmar cambio
-            const confirmed = await confirmChange(fieldConfig, currentDisplayValue, newDisplayValue, selectedProvider);
-            if (!confirmed) {
-                return;
-            }
-            
-            // Mostrar loading durante la actualización
-            NotificationManager.showLoading('Actualizando Sistema Completo...', `
-                <div style="text-align: center; margin: 20px 0;">
-                    <div class="loading-spinner"></div>
-                    <p style="margin-top: 15px; font-weight: 600;">Sincronizando datos en:</p>
-                    <div style="text-align: left; margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 8px;">
-                        <p style="margin: 5px 0;"><strong>Sistema Central:</strong></p>
-                        <p style="margin: 2px 0; font-size: 14px;">• facturas_compras</p>
-                        <p style="margin: 2px 0; font-size: 14px;">• CambiosFacturasHistorial</p>
-                        <br>
-                        <p style="margin: 5px 0;"><strong>Sucursal:</strong></p>
-                        <p style="margin: 2px 0; font-size: 14px;">• inventarios</p>
-                        <p style="margin: 2px 0; font-size: 14px;">• facturas_compras</p>
-                        <p style="margin: 2px 0; font-size: 14px;">• ordenescompra_factura</p>
-                    </div>
-                    <p style="font-size: 14px; color: #6c757d;">Por favor espere...</p>
-                </div>
-            `);
-            
-            // Guardar en base de datos (central y sucursal)
-            await saveFieldChange(fieldConfig, originalValue, newValue, selectedProvider);
-            
-            // Cerrar loading
-            NotificationManager.closeLoading();
-            
-            // Actualizar la interfaz
-            element.innerHTML = newDisplayValue;
-            element.classList.add('field-updated');
-            
-            // Actualizar el objeto currentInvoice
-            updateCurrentInvoiceObject(fieldConfig, newValue, newDisplayValue, selectedProvider);
-            
-            // Resetear estado
-            isEditing = false;
-            currentEditingElement = null;
-            
-            // Mensaje de éxito
-            NotificationManager.showToast('success', '🎉 Sistema sincronizado exitosamente (Central + Sucursal)');
-            
-            // Quitar resaltado después de un tiempo
-            setTimeout(() => {
-                element.classList.remove('field-updated');
-            }, 3000);
-            
-        } catch (error) {
-            NotificationManager.closeLoading();
-            NotificationManager.showToast('error', '❌ Error al sincronizar el sistema: ' + error.message);
-        }
-    };
+    // Agregar indicador de campo modificable
+    const indicator = document.createElement('span');
+    indicator.className = 'modification-indicator';
+    indicator.innerHTML = '✏️';
+    indicator.style.cssText = `
+        position: absolute;
+        top: 2px;
+        right: 5px;
+        font-size: 10px;
+        opacity: 0.7;
+        pointer-events: none;
+    `;
     
-    const cancelEdit = () => {
-        element.innerHTML = originalHTML;
-        isEditing = false;
-        currentEditingElement = null;
-    };
+    inputContainer.appendChild(inputElement);
+    inputContainer.appendChild(indicator);
     
-    // Event listeners para los botones
-    const saveBtn = actionButtons.querySelector('.save-btn');
-    const cancelBtn = actionButtons.querySelector('.cancel-btn');
-
-    // Usar addEventListener con manejo mejorado de eventos
-    saveBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+    // Guardar referencia del campo original
+    inputContainer.dataset.fieldId = fieldConfig.id;
+    inputContainer.dataset.fieldName = fieldConfig.fieldName;
+    inputContainer.dataset.tipoCambio = fieldConfig.tipoCambio;
+    
+    // Reemplazar el elemento original
+    element.parentNode.replaceChild(inputContainer, element);
+}
+async function createProviderSelectDirect(currentProviderId) {
+    const container = document.createElement('div');
+    container.className = 'provider-select-container-direct';
+    container.style.cssText = `
+        width: 100%;
+        position: relative;
+    `;
+    
+    // Crear el select
+    const providerSelect = document.createElement('select');
+    providerSelect.className = 'direct-edit-select provider-select';
+    providerSelect.style.cssText = `
+        width: 100%;
+        border: none;
+        outline: none;
+        padding: 8px 10px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        background: transparent;
+        border-radius: var(--border-radius-sm);
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+        background-position: right 8px center;
+        background-repeat: no-repeat;
+        background-size: 16px;
+        padding-right: 35px;
+    `;
+    
+    // Variable para almacenar todos los proveedores
+    let allProviders = [];
+    
+    // Cargar proveedores
+    try {
+        allProviders = await DatabaseManager.executeWithConnection('DSN=facturas;charset=utf8', async (connection) => {
+            const query = `
+                SELECT Id, Nombre, NIT
+                FROM proveedores_facturas
+                ORDER BY Nombre
+            `;
+            return await connection.query(query);
+        });
         
-        // Deshabilitar botón temporalmente para evitar clics múltiples
-        saveBtn.disabled = true;
+        // Agregar opción por defecto
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Seleccione un proveedor...';
+        defaultOption.dataset.nit = '';
+        providerSelect.appendChild(defaultOption);
         
-        try {
-            await handleSave();
-        } finally {
-            if (saveBtn) saveBtn.disabled = false;
-        }
-    }, { passive: false });
-
-    cancelBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        cancelEdit();
-    }, { passive: false });
-
-    // Event listener para Enter y Escape
-    const keydownHandler = async (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            e.stopPropagation();
+        // Variable para rastrear si se encontró el proveedor actual
+        let currentProviderFound = false;
+        
+        // Agregar proveedores
+        allProviders.forEach(provider => {
+            const option = document.createElement('option');
+            option.value = provider.Id;
+            option.textContent = provider.Nombre;
+            option.dataset.nit = provider.NIT;
             
-            // Deshabilitar temporalmente para evitar múltiples ejecuciones
-            if (!editElement.disabled) {
-                editElement.disabled = true;
-                try {
-                    await handleSave();
-                } finally {
-                    if (editElement) editElement.disabled = false;
+            // CORRECCIÓN: Usar el IdProveedor actual de la factura para seleccionar
+            const facturaProviderId = window.currentInvoice?.IdProveedor || currentProviderId;
+            
+            if (facturaProviderId && provider.Id.toString() === facturaProviderId.toString()) {
+                option.selected = true;
+                currentProviderFound = true;
+            }
+            
+            providerSelect.appendChild(option);
+        });
+        
+        // Si no se encontró el proveedor actual, intentar buscarlo por NIT como fallback
+        if (!currentProviderFound && window.currentInvoice?.NIT) {
+            const providerByNit = allProviders.find(p => p.NIT === window.currentInvoice.NIT);
+            if (providerByNit) {
+                // Seleccionar el proveedor encontrado por NIT
+                const optionToSelect = providerSelect.querySelector(`option[value="${providerByNit.Id}"]`);
+                if (optionToSelect) {
+                    optionToSelect.selected = true;
+                    currentProviderFound = true;
                 }
             }
-        } else if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            cancelEdit();
         }
-    };
-
-    editElement.addEventListener('keydown', keydownHandler, { passive: false });
-
-    // También agregar al elemento contenedor como respaldo para Escape
-    element.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            cancelEdit();
-        }
-    }, { passive: false, once: true });
-}
-
-// Función especial para editar en modo refacturación
-async function enableInlineEditForRefactoring(element, fieldConfig) {
-    if (isEditing) {
-        NotificationManager.showToast('warning', 'Ya hay un campo en edición. Complete la edición actual primero.');
-        return;
-    }
-
-    isEditing = true;
-    currentEditingElement = element;
-    
-    const originalValue = getOriginalValueForRefactoring(fieldConfig);
-    const currentValue = '';
-    
-    // Limpiar el placeholder
-    element.innerHTML = '';
-    
-    // Crear el elemento de edición
-    let editElement;
-    
-    if (fieldConfig.type === 'select' && fieldConfig.fieldName === 'IdRazon') {
-        editElement = await SelectManager.loadSocialReasons('');
-    } else if (fieldConfig.type === 'provider-nit') {
-        editElement = await createProviderNitInput('');
-    } else {
-        editElement = createInputElement(fieldConfig.type, '');
-    }
-    
-    // Reemplazar el contenido del span con el elemento de edición
-    element.appendChild(editElement);
-    
-    // Agregar botones de acción
-    const actionButtons = createActionButtons();
-    element.appendChild(actionButtons);
-    
-    // Enfocar el elemento
-    if (editElement.focus) {
-        editElement.focus();
-    }
-    
-    // Manejar eventos (lógica específica para refacturación)
-    const handleSave = async () => {
-        let newValue;
-        let newDisplayValue;
-        let selectedProvider = null;
         
-        if (fieldConfig.type === 'select') {
-            const selectedOption = editElement.options[editElement.selectedIndex];
-            newValue = editElement.value;
-            newDisplayValue = selectedOption ? selectedOption.text : '';
+    } catch (error) {
+        console.error('Error al cargar proveedores:', error);
+        // Agregar opción de error
+        const errorOption = document.createElement('option');
+        errorOption.value = '';
+        errorOption.textContent = 'Error al cargar proveedores';
+        errorOption.dataset.nit = '';
+        providerSelect.appendChild(errorOption);
+    }
+    
+    // Información del proveedor seleccionado
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'provider-info-direct';
+    infoDiv.style.cssText = `
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-top: 2px;
+        padding: 0 10px;
+        min-height: 15px;
+    `;
+    
+    // Función para actualizar la información del proveedor
+    const updateProviderSelection = () => {
+        const selectedOption = providerSelect.options[providerSelect.selectedIndex];
+        if (selectedOption && selectedOption.value) {
+            const selectedProvider = {
+                Id: selectedOption.value,
+                Nombre: selectedOption.textContent,
+                NIT: selectedOption.dataset.nit || ''
+            };
             
-            if (!newValue) {
-                NotificationManager.showToast('error', 'Debe seleccionar un valor para continuar con la refacturación');
-                return;
-            }
+            // Guardar el proveedor seleccionado en el container
+            container.selectedProvider = selectedProvider;
             
-        } else if (fieldConfig.type === 'provider-nit') {
-            newValue = editElement.mainInput.value.trim();
-            selectedProvider = editElement.selectedProvider;
+            // Actualizar el campo NIT automáticamente
+            updateNitField(selectedProvider.NIT);
             
-            if (!selectedProvider) {
-                NotificationManager.showToast('error', 'Debe seleccionar un proveedor válido para continuar con la refacturación');
-                return;
-            }
-            
-            newDisplayValue = formatNIT(selectedProvider.NIT);
-            
-        } else if (fieldConfig.type === 'number') {
-            newValue = parseFloat(editElement.value);
-            if (!newValue || newValue <= 0) {
-                NotificationManager.showToast('error', 'Debe ingresar un monto válido para continuar con la refacturación');
-                return;
-            }
-            newDisplayValue = formatCurrency(newValue);
-        } else if (fieldConfig.type === 'date') {
-            newValue = editElement.value;
-            if (!newValue) {
-                NotificationManager.showToast('error', 'Debe seleccionar una fecha para continuar con la refacturación');
-                return;
-            }
-            newDisplayValue = formatDate(newValue);
+            // Mostrar información del proveedor
+            updateProviderInfo(selectedProvider, infoDiv);
         } else {
-            newValue = editElement.value.trim();
-            if (!newValue) {
-                NotificationManager.showToast('error', 'Este campo es requerido para continuar con la refacturación');
-                return;
-            }
-            newDisplayValue = newValue;
-        }
-        
-        // Validaciones específicas
-        if (!ValidationManager.validateFieldValue(fieldConfig, newValue, selectedProvider)) {
-            return;
-        }
-        
-        try {
-            // Confirmar cambio (usando valor original guardado)
-            const confirmed = await confirmRefacturingChange(fieldConfig, originalValue, newDisplayValue, selectedProvider);
-            if (!confirmed) {
-                return;
-            }
-            
-            // Mostrar loading durante la actualización
-            NotificationManager.showLoading('Actualizando Sistema Completo...', `
-                <div style="text-align: center; margin: 20px 0;">
-                    <div class="loading-spinner"></div>
-                    <p style="margin-top: 15px; font-weight: 600;">Refacturando datos en:</p>
-                    <div style="text-align: left; margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 8px;">
-                        <p style="margin: 5px 0;"><strong>Sistema Central:</strong></p>
-                        <p style="margin: 2px 0; font-size: 14px;">• facturas_compras</p>
-                        <p style="margin: 2px 0; font-size: 14px;">• CambiosFacturasHistorial</p>
-                        <br>
-                        <p style="margin: 5px 0;"><strong>Sucursal:</strong></p>
-                        <p style="margin: 2px 0; font-size: 14px;">• inventarios</p>
-                        <p style="margin: 2px 0; font-size: 14px;">• facturas_compras</p>
-                        <p style="margin: 2px 0; font-size: 14px;">• ordenescompra_factura</p>
-                    </div>
-                    <p style="font-size: 14px; color: #6c757d;">Por favor espere...</p>
-                </div>
-            `);
-            
-            // Guardar en base de datos usando la lógica de refacturación
-            await saveRefacturingFieldChange(fieldConfig, originalValue, newValue, selectedProvider);
-            
-            // Cerrar loading
-            NotificationManager.closeLoading();
-            
-            // Actualizar la interfaz
-            element.innerHTML = newDisplayValue;
-            element.classList.add('field-updated');
-            
-            // Actualizar el objeto currentInvoice
-            updateCurrentInvoiceObject(fieldConfig, newValue, newDisplayValue, selectedProvider);
-            
-            // Resetear estado
-            isEditing = false;
-            currentEditingElement = null;
-            
-            // Mensaje de éxito
-            NotificationManager.showToast('success', '🎉 Campo refacturado exitosamente (Central + Sucursal)');
-            
-            // Quitar resaltado después de un tiempo
-            setTimeout(() => {
-                element.classList.remove('field-updated');
-            }, 3000);
-            
-        } catch (error) {
-            NotificationManager.closeLoading();
-            NotificationManager.showToast('error', '❌ Error al refacturar: ' + error.message);
+            container.selectedProvider = null;
+            updateNitField('');
+            infoDiv.innerHTML = '';
         }
     };
     
-    const cancelEdit = () => {
-        // En refacturación, volver a mostrar placeholder
-        element.innerHTML = '';
-        const placeholder = document.createElement('span');
-        placeholder.style.color = '#999';
-        placeholder.style.fontStyle = 'italic';
-        placeholder.textContent = 'Campo requerido - clic para editar';
-        element.appendChild(placeholder);
-        
-        isEditing = false;
-        currentEditingElement = null;
-    };
+    // Event listener para cuando cambie el proveedor
+    providerSelect.addEventListener('change', updateProviderSelection);
     
-    // Event listeners para los botones
-    actionButtons.querySelector('.save-btn').addEventListener('click', handleSave);
-    actionButtons.querySelector('.cancel-btn').addEventListener('click', cancelEdit);
+    // IMPORTANTE: Ejecutar la actualización inicial para establecer el proveedor actual
+    setTimeout(() => {
+        updateProviderSelection();
+    }, 100);
     
-    // Event listener para Enter y Escape
-    editElement.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            handleSave();
-        } else if (e.key === 'Escape') {
-            e.preventDefault();
-            cancelEdit();
-        }
-    });
+    container.appendChild(providerSelect);
+    container.appendChild(infoDiv);
+    container.mainSelect = providerSelect;
+    
+    return container;
 }
-
-// ===== CREACIÓN DE ELEMENTOS DE EDICIÓN =====
-// Crear elemento de entrada
-function createInputElement(type, value) {
+function updateProviderInfo(provider, infoElement) {
+    if (provider && provider.Id) {
+        infoElement.innerHTML = `
+            <i class="fas fa-check-circle" style="color: var(--success-color);"></i> 
+            NIT: ${formatNIT(provider.NIT)} | ID: ${provider.Id}
+        `;
+    } else {
+        infoElement.innerHTML = '';
+    }
+}
+function updateNitField(nit) {
+    const nitElement = document.getElementById('providerNit');
+    if (nitElement) {
+        nitElement.textContent = formatNIT(nit) || '-';
+        
+        // Agregar efecto visual para mostrar que se actualizó
+        nitElement.style.background = 'rgba(76, 175, 80, 0.1)';
+        nitElement.style.borderColor = 'var(--success-color)';
+        
+        setTimeout(() => {
+            nitElement.style.background = '';
+            nitElement.style.borderColor = '';
+        }, 2000);
+    }
+}
+// Crear input directo simple
+function createDirectInputElement(type, value) {
     const input = document.createElement('input');
     input.type = type;
-    input.className = 'inline-edit-input';
+    input.className = 'direct-edit-input';
     
     if (type === 'number') {
         input.step = '0.01';
@@ -1934,194 +1663,812 @@ function createInputElement(type, value) {
     return input;
 }
 
-// Crear input especial para NIT de proveedor con búsqueda automática
-async function createProviderNitInput(currentNit) {
-    const container = document.createElement('div');
-    container.className = 'provider-nit-container';
+// Mostrar botón de actualización de modificación
+function showModificationUpdateButton() {
+    // Buscar si ya existe el botón
+    let updateRow = document.getElementById('modificationUpdateRow');
     
-    // Input para el NIT
-    const nitInput = document.createElement('input');
-    nitInput.type = 'text';
-    nitInput.className = 'inline-edit-input provider-nit-input';
-    nitInput.value = currentNit || '';
-    nitInput.placeholder = 'Ingrese el NIT del proveedor';
-    
-    // Contenedor de información del proveedor
-    const providerInfo = document.createElement('div');
-    providerInfo.className = 'provider-info-display';
-    providerInfo.style.marginTop = '8px';
-    
-    // Función para buscar proveedor por NIT
-    const searchProvider = async (nit) => {
-        if (!nit || nit.trim().length < 3) {
-            providerInfo.innerHTML = '';
-            return null;
+    if (!updateRow) {
+        // Crear la fila del botón
+        updateRow = document.createElement('div');
+        updateRow.id = 'modificationUpdateRow';
+        updateRow.className = 'action-buttons-row';
+        updateRow.innerHTML = `
+            <button class="action-button update-modification" id="updateModificationBtn">
+                <i class="fas fa-sync-alt"></i>
+                Procesar Actualización
+                <span class="update-indicator">📝 Listo para actualizar</span>
+            </button>
+        `;
+        
+        // Insertar después de la primera fila de botones
+        const firstButtonRow = document.querySelector('.action-buttons .action-buttons-row');
+        if (firstButtonRow) {
+            firstButtonRow.insertAdjacentElement('afterend', updateRow);
         }
         
-        try {
-            providerInfo.innerHTML = `
-                <div class="provider-searching">
-                    <i class="fas fa-spinner fa-spin"></i> Buscando proveedor...
-                </div>
-            `;
+        // Agregar event listener
+        const updateBtn = document.getElementById('updateModificationBtn');
+        if (updateBtn) {
+            updateBtn.addEventListener('click', handleModificationUpdate);
+        }
+    }
+    
+    updateRow.style.display = 'flex';
+}
+
+// Ocultar botón de actualización de modificación
+function hideModificationUpdateButton() {
+    const updateRow = document.getElementById('modificationUpdateRow');
+    if (updateRow) {
+        updateRow.style.display = 'none';
+    }
+}
+
+// Manejar actualización masiva de modificación
+async function handleModificationUpdate() {
+    const modificationFields = document.querySelectorAll('.direct-edit-container');
+    
+    if (modificationFields.length === 0) {
+        NotificationManager.showToast('error', 'No hay campos para actualizar');
+        return;
+    }
+    
+    // Recopilar cambios
+    const changes = [];
+    let hasChanges = false;
+    
+    for (const container of modificationFields) {
+        const fieldId = container.dataset.fieldId;
+        const fieldName = container.dataset.fieldName;
+        const tipoCambio = parseInt(container.dataset.tipoCambio);
+        
+        const fieldConfig = { id: fieldId, fieldName, tipoCambio };
+        
+        // DECLARAR TODAS LAS VARIABLES PRIMERO
+        let originalValue;
+        let newValue;
+        let newDisplayValue;
+        let selectedProvider = null;
+        
+        // OBTENER VALOR ORIGINAL CORRECTAMENTE
+        if (fieldName === 'IdProveedor') {
+            // Para proveedor, usar el IdProveedor actual de la factura
+            originalValue = window.currentInvoice.IdProveedor || '';
+        } else {
+            originalValue = getOriginalValue({ id: fieldId }, fieldConfig);
+        }
+        
+        // Obtener el valor según el tipo de campo
+        const input = container.querySelector('input, select');
+        
+        if (fieldName === 'IdRazon') {
+            newValue = input.value;
+            newDisplayValue = input.options[input.selectedIndex]?.text || '';
             
-            const result = await DatabaseManager.executeWithConnection('DSN=facturas;charset=utf8', async (connection) => {
-                const query = `
-                    SELECT 
-                        Id,
-                        Nombre,
-                        NIT
-                    FROM proveedores_facturas 
-                    WHERE NIT = ? OR NIT LIKE ?
-                    ORDER BY 
-                        CASE WHEN NIT = ? THEN 1 ELSE 2 END,
-                        Nombre
-                    LIMIT 5
-                `;
-                
-                const searchPattern = `%${nit}%`;
-                return await connection.query(query, [nit, searchPattern, nit]);
-            });
+        } else if (fieldName === 'IdProveedor') {
+            newValue = input.value;
+            selectedProvider = container.selectedProvider;
             
-            if (result.length === 0) {
-                providerInfo.innerHTML = `
-                    <div class="provider-not-found">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <span>No se encontró proveedor con NIT: ${nit}</span>
-                    </div>
-                `;
-                return null;
+            if (selectedProvider) {
+                newDisplayValue = selectedProvider.Nombre;
+            } else {
+                // Si no hay selectedProvider, obtenerlo del select
+                const selectedOption = input.options[input.selectedIndex];
+                if (selectedOption && selectedOption.value) {
+                    selectedProvider = {
+                        Id: selectedOption.value,
+                        Nombre: selectedOption.textContent,
+                        NIT: selectedOption.dataset.nit || ''
+                    };
+                    newDisplayValue = selectedProvider.Nombre;
+                } else {
+                    newDisplayValue = 'No seleccionado';
+                }
             }
             
-            if (result.length === 1) {
-                const provider = result[0];
-                providerInfo.innerHTML = `
-                    <div class="provider-found">
-                        <i class="fas fa-check-circle"></i>
-                        <div class="provider-details">
-                            <strong>${provider.Nombre}</strong>
-                            <div class="provider-nit">NIT: ${formatNIT(provider.NIT)}</div>
-                        </div>
-                    </div>
-                `;
-                return provider;
+        } else if (fieldName === 'MontoFactura') {
+            newValue = parseFloat(input.value) || 0;
+            newDisplayValue = formatCurrency(newValue);
+        } else if (fieldName === 'FechaFactura') {
+            newValue = input.value;
+            newDisplayValue = formatDate(newValue);
+        } else {
+            newValue = input.value.trim();
+            newDisplayValue = newValue;
+        }
+        
+        // Debug para proveedor
+        if (fieldName === 'IdProveedor') {
+            console.log('Debug Proveedor:', {
+                fieldName: fieldName,
+                originalValue: originalValue,
+                newValue: newValue,
+                currentInvoiceProvider: window.currentInvoice.Nombre,
+                currentInvoiceNIT: window.currentInvoice.NIT,
+                selectedProvider: selectedProvider
+            });
+        }
+        
+        // Validar cambios
+        let hasChanged = false;
+        
+        if (fieldName === 'IdProveedor') {
+            // Para proveedores, comparar por ID
+            hasChanged = originalValue.toString() !== newValue.toString();
+        } else {
+            hasChanged = originalValue.toString() !== newValue.toString();
+        }
+        
+        if (hasChanged) {
+            // Validar el campo - AGREGAR VALIDACIÓN ESPECÍFICA PARA PROVEEDOR
+            if (fieldName === 'IdProveedor' && (!selectedProvider || !selectedProvider.Id)) {
+                NotificationManager.showToast('error', 'Debe seleccionar un proveedor válido');
+                return;
             }
             
-            // Múltiples resultados - mostrar lista para selección
-            const optionsHtml = result.map((provider, index) => `
-                <div class="provider-option" data-provider-id="${provider.Id}" data-provider-nit="${provider.NIT}" data-provider-name="${provider.Nombre}">
-                    <i class="fas fa-building"></i>
-                    <div class="provider-option-details">
-                        <strong>${provider.Nombre}</strong>
-                        <div class="provider-option-nit">NIT: ${formatNIT(provider.NIT)}</div>
-                    </div>
-                    <button type="button" class="select-provider-btn" data-index="${index}">
-                        <i class="fas fa-check"></i>
-                    </button>
-                </div>
-            `).join('');
+            if (!ValidationManager.validateFieldValue(fieldConfig, newValue, selectedProvider)) {
+                return;
+            }
             
-            providerInfo.innerHTML = `
-                <div class="provider-multiple">
-                    <div class="provider-multiple-header">
-                        <i class="fas fa-list"></i>
-                        <span>Se encontraron ${result.length} proveedores. Seleccione uno:</span>
-                    </div>
-                    <div class="provider-options">
-                        ${optionsHtml}
-                    </div>
-                </div>
-            `;
-            
-            // Agregar event listeners para selección
-            providerInfo.querySelectorAll('.select-provider-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const index = parseInt(e.target.closest('.select-provider-btn').dataset.index);
-                    const selectedProvider = result[index];
-                    
-                    // Actualizar el input con el NIT seleccionado
-                    nitInput.value = selectedProvider.NIT;
-                    
-                    // Mostrar el proveedor seleccionado
-                    providerInfo.innerHTML = `
-                        <div class="provider-selected">
-                            <i class="fas fa-check-circle"></i>
-                            <div class="provider-details">
-                                <strong>${selectedProvider.Nombre}</strong>
-                                <div class="provider-nit">NIT: ${formatNIT(selectedProvider.NIT)}</div>
-                            </div>
-                        </div>
-                    `;
-                    
-                    // Guardar proveedor seleccionado
-                    container.selectedProvider = selectedProvider;
-                });
+            changes.push({
+                fieldConfig: fieldConfig,
+                originalValue: originalValue,
+                newValue: newValue,
+                newDisplayValue: newDisplayValue,
+                selectedProvider: selectedProvider,
+                container: container
             });
             
-            return null; // No hay selección automática
-            
-        } catch (error) {
-            providerInfo.innerHTML = `
-                <div class="provider-error">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span>Error al buscar proveedor: ${error.message}</span>
+            hasChanges = true;
+        }
+    }
+    
+    if (!hasChanges) {
+        NotificationManager.showToast('info', 'No se detectaron cambios para actualizar');
+        return;
+    }
+    
+    // Mostrar confirmación
+    const confirmed = await NotificationManager.showConfirmation(
+        '¿Procesar Actualización?',
+        `
+        <div style="text-align: left; margin: 20px 0;">
+            <p><strong>Se actualizarán ${changes.length} campo(s):</strong></p>
+            <hr style="margin: 15px 0;">
+            ${changes.map(change => `
+                <p style="margin: 8px 0;">
+                    <strong>${getFieldDisplayName(change.fieldConfig.tipoCambio)}:</strong><br>
+                    <span style="color: var(--text-secondary);">De: ${getDisplayValue(change.originalValue, change.fieldConfig)}</span><br>
+                    <span style="color: var(--success-color);">A: ${change.newDisplayValue}</span>
+                </p>
+            `).join('')}
+            <hr style="margin: 15px 0;">
+            <p style="color: var(--warning-color); font-weight: 600;">
+                <i class="fas fa-edit"></i> 
+                Motivo: ${selectedModificationReason.text}
+            </p>
+        </div>
+        `,
+        'Sí, actualizar todo',
+        'Cancelar'
+    );
+    
+    if (!confirmed) return;
+    
+    // Procesar actualizaciones
+    NotificationManager.showLoading('Procesando Actualización...', `
+        <div style="text-align: center; margin: 20px 0;">
+            <div class="loading-spinner"></div>
+            <p style="margin-top: 15px; font-weight: 600;">Actualizando ${changes.length} campo(s):</p>
+            <div style="text-align: left; margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 8px;">
+                <p style="margin: 5px 0;"><strong>Sistema Central:</strong></p>
+                <p style="margin: 2px 0; font-size: 14px;">• Actualizando facturas_compras</p>
+                <p style="margin: 2px 0; font-size: 14px;">• Registrando en historial</p>
+                <br>
+                <p style="margin: 5px 0;"><strong>Sucursal:</strong></p>
+                <p style="margin: 2px 0; font-size: 14px;">• Sincronizando datos</p>
+            </div>
+            <p style="font-size: 14px; color: #6c757d;">Por favor espere...</p>
+        </div>
+    `);
+    
+    try {
+        // Procesar todos los cambios
+        for (const change of changes) {
+            await saveFieldChange(change.fieldConfig, change.originalValue, change.newValue, change.selectedProvider);
+            updateCurrentInvoiceObject(change.fieldConfig, change.newValue, change.newDisplayValue, change.selectedProvider);
+        }
+        
+        NotificationManager.closeLoading();
+        
+        // Éxito
+        await NotificationManager.showSuccess(
+            '¡Actualización Completada!',
+            `
+            <div style="text-align: center; margin: 20px 0;">
+                <p style="font-size: 16px; margin-bottom: 15px;">
+                    <strong>Se actualizaron ${changes.length} campo(s) exitosamente</strong>
+                </p>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <p style="margin: 5px 0; color: #4caf50;">✅ Sistema central sincronizado</p>
+                    <p style="margin: 5px 0; color: #4caf50;">✅ Base de sucursal actualizada</p>
+                    <p style="margin: 5px 0; color: #4caf50;">✅ Historial registrado</p>
                 </div>
+            </div>
+            `,
+            'Continuar',
+            4000
+        );
+        
+        // Salir del modo modificación y actualizar la interfaz
+        disableModificationMode();
+        
+        // Recargar la información de la factura para mostrar los cambios
+        setTimeout(() => {
+            location.reload();
+        }, 2000);
+        
+    } catch (error) {
+        NotificationManager.closeLoading();
+        NotificationManager.showError(
+            'Error en Actualización',
+            `No se pudo completar la actualización: ${error.message}`
+        );
+    }
+}
+
+// Función auxiliar para obtener valor de display
+function getDisplayValue(value, fieldConfig) {
+    if (fieldConfig.fieldName === 'MontoFactura') {
+        return formatCurrency(value);
+    } else if (fieldConfig.fieldName === 'FechaFactura') {
+        return formatDate(value);
+    } else if (fieldConfig.fieldName === 'NIT') {
+        return formatNIT(value);
+    } else if (fieldConfig.fieldName === 'IdProveedor') {
+        // CORRECCIÓN: Para proveedores, usar la información del currentInvoice
+        if (window.currentInvoice && window.currentInvoice.Nombre) {
+            return `${window.currentInvoice.Nombre} (${formatNIT(window.currentInvoice.NIT || '')})`;
+        } else {
+            return 'Proveedor no disponible';
+        }
+    } else if (fieldConfig.fieldName === 'IdRazon') {
+        // Para razón social, usar el nombre actual
+        if (window.currentInvoice && window.currentInvoice.NombreRazon) {
+            return window.currentInvoice.NombreRazon;
+        } else {
+            return 'Razón social no disponible';
+        }
+    } else {
+        return value.toString();
+    }
+}
+// Habilitar modo refacturación
+function enableRefacturingMode() {
+    isRefacturingMode = true;
+    isModificationMode = false;
+    
+    // Guardar valores originales antes de limpiar
+    saveOriginalFieldValues();
+    
+    // Inicializar campos de refacturación
+    initializeRefacturingFields();
+    
+    // CAMBIO: Configurar campos directamente editables (sin clic)
+    setupDirectRefacturingFields();
+    
+    // Mostrar el botón de actualización
+    showRefacturingUpdateButton();
+    
+    NotificationManager.showToast('success', `Modo refacturación habilitado: ${selectedRefacturingReason.text}`);
+    showRefacturingBanner();
+    
+    // Actualizar estado de botones
+    updateActionButtonsState();
+}
+function setupDirectRefacturingFields() {
+    const editableFields = [
+        { id: 'invoiceSerie', type: 'text', fieldName: 'Serie', tipoCambio: 1, placeholder: 'Ingrese la serie de la factura' },
+        { id: 'invoiceNumber', type: 'text', fieldName: 'Numero', tipoCambio: 2, placeholder: 'Ingrese el número de la factura' },
+        { id: 'socialReason', type: 'select', fieldName: 'IdRazon', tipoCambio: 3, placeholder: 'Seleccione razón social' },
+        { id: 'invoiceAmount', type: 'number', fieldName: 'MontoFactura', tipoCambio: 4, placeholder: 'Ingrese el monto' },
+        { id: 'invoiceDate', type: 'date', fieldName: 'FechaFactura', tipoCambio: 5, placeholder: 'Seleccione fecha' },
+        // CAMBIO: Cambiar de 'provider-nit' a 'provider-select'
+        { id: 'providerName', type: 'provider-select', fieldName: 'IdProveedor', tipoCambio: 6, placeholder: 'Seleccione proveedor' }
+    ];
+
+    editableFields.forEach(async (field) => {
+        const element = document.getElementById(field.id);
+        if (element) {
+            await convertToDirectRefacturingInput(element, field);
+        }
+    });
+}
+async function convertToDirectRefacturingInput(element, fieldConfig) {
+    // Crear el contenedor de input directo
+    const inputContainer = document.createElement('div');
+    inputContainer.className = 'direct-refactoring-container';
+    inputContainer.style.cssText = `
+        width: 100%;
+        position: relative;
+        border: 2px dashed var(--info-color);
+        border-radius: var(--border-radius-sm);
+        background: rgba(41, 182, 246, 0.05);
+        padding: 0;
+        min-height: 35px;
+        display: flex;
+        align-items: center;
+        transition: all 0.3s ease;
+    `;
+    
+    // Crear el input correspondiente
+    let inputElement;
+    
+    if (fieldConfig.type === 'select' && fieldConfig.fieldName === 'IdRazon') {
+        inputElement = await SelectManager.loadSocialReasons('');
+        inputElement.className = 'direct-refactoring-select';
+    } else if (fieldConfig.type === 'provider-select') {
+        // CAMBIO: Usar selector de proveedor en lugar de NIT
+        inputElement = await createProviderSelectForRefactoring();
+    } else {
+        inputElement = createDirectRefacturingInputElement(fieldConfig.type, '', fieldConfig.placeholder);
+    }
+    
+    // Configurar estilos del input para refacturación
+    if (inputElement.tagName !== 'DIV') {
+        inputElement.style.cssText = `
+            width: 100%;
+            border: none;
+            outline: none;
+            padding: 8px 10px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            background: transparent;
+            border-radius: var(--border-radius-sm);
+        `;
+    }
+    
+    // Agregar indicador de campo requerido
+    const indicator = document.createElement('span');
+    indicator.className = 'refactoring-indicator';
+    indicator.innerHTML = '📝';
+    indicator.style.cssText = `
+        position: absolute;
+        top: 2px;
+        right: 5px;
+        font-size: 12px;
+        opacity: 0.7;
+        pointer-events: none;
+    `;
+    
+    // Agregar etiqueta de campo requerido
+    const requiredLabel = document.createElement('div');
+    requiredLabel.className = 'required-label';
+    requiredLabel.textContent = 'Campo requerido';
+    requiredLabel.style.cssText = `
+        position: absolute;
+        bottom: -20px;
+        left: 0;
+        font-size: 11px;
+        color: var(--info-color);
+        font-weight: 600;
+    `;
+    
+    inputContainer.appendChild(inputElement);
+    inputContainer.appendChild(indicator);
+    inputContainer.appendChild(requiredLabel);
+    
+    // Guardar referencia del campo
+    inputContainer.dataset.fieldId = fieldConfig.id;
+    inputContainer.dataset.fieldName = fieldConfig.fieldName;
+    inputContainer.dataset.tipoCambio = fieldConfig.tipoCambio;
+    inputContainer.dataset.completed = 'false';
+    
+    // Event listeners para actualización automática
+    setupRefacturingFieldListeners(inputContainer, inputElement, fieldConfig);
+    
+    // Reemplazar el elemento original
+    element.parentNode.replaceChild(inputContainer, element);
+}
+async function createProviderSelectForRefactoring() {
+    const container = document.createElement('div');
+    container.className = 'provider-select-container-refactoring';
+    container.style.cssText = `
+        width: 100%;
+        position: relative;
+    `;
+    
+    // Crear el select principal
+    const providerSelect = document.createElement('select');
+    providerSelect.className = 'direct-refactoring-select provider-select';
+    providerSelect.style.cssText = `
+        width: 100%;
+        border: none;
+        outline: none;
+        padding: 8px 30px 8px 10px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-primary);
+        background: transparent;
+        border-radius: var(--border-radius-sm);
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+        background-position: right 8px center;
+        background-repeat: no-repeat;
+        background-size: 16px;
+    `;
+    
+    // Variable para almacenar todos los proveedores
+    let allProviders = [];
+    
+    // Cargar proveedores
+    try {
+        allProviders = await DatabaseManager.executeWithConnection('DSN=facturas;charset=utf8', async (connection) => {
+            const query = `
+                SELECT Id, Nombre, NIT
+                FROM proveedores_facturas
+                ORDER BY Nombre
             `;
-            return null;
+            return await connection.query(query);
+        });
+        
+        // Agregar opción por defecto
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Seleccione un proveedor...';
+        defaultOption.dataset.nit = '';
+        defaultOption.dataset.nombre = '';
+        providerSelect.appendChild(defaultOption);
+        
+        // Agregar proveedores
+        allProviders.forEach(provider => {
+            const option = document.createElement('option');
+            option.value = provider.Id;
+            option.textContent = `${provider.Nombre} (${formatNIT(provider.NIT)})`;
+            option.dataset.nit = provider.NIT;
+            option.dataset.nombre = provider.Nombre;
+            providerSelect.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('Error al cargar proveedores:', error);
+        // Agregar opción de error
+        const errorOption = document.createElement('option');
+        errorOption.value = '';
+        errorOption.textContent = 'Error al cargar proveedores';
+        errorOption.dataset.nit = '';
+        errorOption.dataset.nombre = '';
+        providerSelect.appendChild(errorOption);
+    }
+    
+    // Información del proveedor seleccionado
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'provider-info-refactoring';
+    infoDiv.style.cssText = `
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-sm);
+        padding: 8px;
+        font-size: 11px;
+        color: var(--text-secondary);
+        z-index: 10;
+        display: none;
+        margin-top: 2px;
+    `;
+    
+    // Función para actualizar la información del proveedor
+    const updateProviderSelection = () => {
+        const selectedOption = providerSelect.options[providerSelect.selectedIndex];
+        if (selectedOption && selectedOption.value) {
+            const selectedProvider = {
+                Id: selectedOption.value,
+                Nombre: selectedOption.dataset.nombre,
+                NIT: selectedOption.dataset.nit
+            };
+            
+            // Guardar el proveedor seleccionado en el container
+            container.selectedProvider = selectedProvider;
+            
+            // Actualizar también el campo NIT automáticamente si existe
+            updateNitFieldInRefactoring(selectedProvider.NIT);
+            
+            // Mostrar información del proveedor
+            showProviderInfoInRefactoring(selectedProvider, infoDiv);
+        } else {
+            container.selectedProvider = null;
+            updateNitFieldInRefactoring('');
+            hideProviderInfoInRefactoring(infoDiv);
         }
     };
     
-    // Búsqueda con debounce
-    let searchTimeout;
-    nitInput.addEventListener('input', (e) => {
-        clearTimeout(searchTimeout);
-        const nit = e.target.value.trim();
-        
-        searchTimeout = setTimeout(async () => {
-            const provider = await searchProvider(nit);
-            if (provider) {
-                container.selectedProvider = provider;
-            }
-        }, 500);
+    // Event listener para cuando cambie el proveedor
+    providerSelect.addEventListener('change', updateProviderSelection);
+    
+    // Event listener para mostrar/ocultar info al hacer focus/blur
+    providerSelect.addEventListener('focus', () => {
+        if (container.selectedProvider) {
+            infoDiv.style.display = 'block';
+        }
     });
     
-    // Búsqueda inicial si hay valor
-    if (currentNit) {
-        setTimeout(() => searchProvider(currentNit), 100);
+    providerSelect.addEventListener('blur', () => {
+        setTimeout(() => {
+            infoDiv.style.display = 'none';
+        }, 200);
+    });
+    
+    container.appendChild(providerSelect);
+    container.appendChild(infoDiv);
+    container.mainSelect = providerSelect;
+    
+    return container;
+}
+
+// NUEVA FUNCIÓN: Actualizar campo NIT en refacturación
+function updateNitFieldInRefactoring(nit) {
+    const nitElement = document.getElementById('providerNit');
+    if (nitElement) {
+        nitElement.textContent = formatNIT(nit) || '-';
+        
+        // Agregar efecto visual para mostrar que se actualizó
+        nitElement.style.background = 'rgba(76, 175, 80, 0.1)';
+        nitElement.style.borderColor = 'var(--success-color)';
+        
+        setTimeout(() => {
+            nitElement.style.background = '';
+            nitElement.style.borderColor = '';
+        }, 2000);
+    }
+}
+
+// NUEVA FUNCIÓN: Mostrar información del proveedor en refacturación
+function showProviderInfoInRefactoring(provider, infoElement) {
+    if (provider && provider.Id) {
+        infoElement.innerHTML = `
+            <i class="fas fa-check-circle" style="color: var(--success-color);"></i> 
+            <strong>Seleccionado:</strong> ${provider.Nombre}<br>
+            <strong>NIT:</strong> ${formatNIT(provider.NIT)} | <strong>ID:</strong> ${provider.Id}
+        `;
+        infoElement.style.display = 'block';
+    } else {
+        hideProviderInfoInRefactoring(infoElement);
+    }
+}
+
+// NUEVA FUNCIÓN: Ocultar información del proveedor en refacturación
+function hideProviderInfoInRefactoring(infoElement) {
+    infoElement.style.display = 'none';
+}
+function createDirectRefacturingInputElement(type, value, placeholder) {
+    const input = document.createElement('input');
+    input.type = type;
+    input.className = 'direct-refactoring-input';
+    input.placeholder = placeholder;
+    
+    if (type === 'number') {
+        input.step = '0.01';
+        input.min = '0.01';
+        input.value = value || '';
+    } else if (type === 'date') {
+        input.value = value || '';
+    } else {
+        input.value = value || '';
     }
     
-    container.appendChild(nitInput);
-    container.appendChild(providerInfo);
+    return input;
+}
+// NUEVA FUNCIÓN: Configurar listeners para campos de refacturación
+function setupRefacturingFieldListeners(container, inputElement, fieldConfig) {
+    const mainInput = inputElement.mainInput || inputElement;
     
-    // Exponer el input principal para el manejo de eventos
-    container.mainInput = nitInput;
+    // Listener para cambios en el campo
+    const handleFieldChange = () => {
+        validateAndUpdateRefacturingField(container, inputElement, fieldConfig);
+    };
     
-    return container;
+    // Listener para focus (resaltar campo activo)
+    const handleFocus = () => {
+        container.style.borderColor = 'var(--primary-color)';
+        container.style.backgroundColor = 'rgba(110, 120, 255, 0.05)';
+        container.style.boxShadow = '0 0 0 3px rgba(110, 120, 255, 0.1)';
+    };
+    
+    // Listener para blur (quitar resaltado)
+    const handleBlur = () => {
+        const isCompleted = container.dataset.completed === 'true';
+        
+        if (isCompleted) {
+            container.style.borderColor = 'var(--success-color)';
+            container.style.backgroundColor = 'rgba(76, 175, 80, 0.05)';
+        } else {
+            container.style.borderColor = 'var(--info-color)';
+            container.style.backgroundColor = 'rgba(41, 182, 246, 0.05)';
+        }
+        container.style.boxShadow = 'none';
+    };
+    
+    // Agregar event listeners
+    mainInput.addEventListener('input', handleFieldChange);
+    mainInput.addEventListener('change', handleFieldChange);
+    mainInput.addEventListener('focus', handleFocus);
+    mainInput.addEventListener('blur', handleBlur);
+    
+    // Para selects, también escuchar el evento change
+    if (inputElement.tagName === 'SELECT') {
+        inputElement.addEventListener('change', handleFieldChange);
+        inputElement.addEventListener('focus', handleFocus);
+        inputElement.addEventListener('blur', handleBlur);
+    }
 }
 
-// Crear botones de acción
-function createActionButtons() {
-    const container = document.createElement('div');
-    container.className = 'inline-edit-actions';
+// NUEVA FUNCIÓN: Validar y actualizar campo de refacturación
+function validateAndUpdateRefacturingField(container, inputElement, fieldConfig) {
+    let value;
+    let displayValue;
+    let selectedProvider = null;
+    let isValid = false;
     
-    const saveBtn = document.createElement('button');
-    saveBtn.type = 'button'; // CAMBIO: Especificar tipo
-    saveBtn.className = 'save-btn';
-    saveBtn.innerHTML = '<i class="fas fa-check"></i>';
-    saveBtn.title = 'Guardar cambios';
+    // Obtener valor según tipo de campo
+    const mainInput = inputElement.mainSelect || inputElement.mainInput || inputElement;
     
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button'; // CAMBIO: Especificar tipo
-    cancelBtn.className = 'cancel-btn';
-    cancelBtn.innerHTML = '<i class="fas fa-times"></i>';
-    cancelBtn.title = 'Cancelar edición';
+    if (fieldConfig.type === 'select') {
+        value = mainInput.value;
+        const selectedOption = mainInput.options[mainInput.selectedIndex];
+        displayValue = selectedOption ? selectedOption.text : '';
+        isValid = value && value.trim() !== '';
+        
+    } else if (fieldConfig.type === 'provider-select') {
+        // CAMBIO: Manejar selector de proveedor
+        value = mainInput.value;
+        selectedProvider = inputElement.selectedProvider;
+        
+        if (selectedProvider && selectedProvider.Id) {
+            displayValue = `${selectedProvider.Nombre} (${formatNIT(selectedProvider.NIT)})`;
+            isValid = true;
+        } else {
+            displayValue = 'Seleccione un proveedor...';
+            isValid = false;
+        }
+        
+    } else if (fieldConfig.type === 'number') {
+        value = parseFloat(mainInput.value);
+        if (!isNaN(value) && value > 0) {
+            displayValue = formatCurrency(value);
+            isValid = true;
+        } else {
+            displayValue = mainInput.value;
+            isValid = false;
+        }
+        
+    } else if (fieldConfig.type === 'date') {
+        value = mainInput.value;
+        if (value && ValidationManager.validateDate(value)) {
+            displayValue = formatDate(value);
+            isValid = true;
+        } else {
+            displayValue = value;
+            isValid = false;
+        }
+        
+    } else {
+        value = mainInput.value.trim();
+        displayValue = value;
+        isValid = value.length > 0;
+    }
     
-    container.appendChild(saveBtn);
-    container.appendChild(cancelBtn);
+    // Actualizar estado del campo
+    const wasCompleted = container.dataset.completed === 'true';
+    container.dataset.completed = isValid.toString();
     
-    return container;
+    // Actualizar objeto refacturingFields
+    const fieldKey = getRefacturingFieldKey(fieldConfig.id);
+    if (refacturingFields[fieldKey]) {
+        refacturingFields[fieldKey].value = value;
+        refacturingFields[fieldKey].completed = isValid;
+        
+        if (selectedProvider) {
+            refacturingFields[fieldKey].selectedProvider = selectedProvider;
+        }
+    }
+    
+    // Actualizar estilos visuales
+    updateRefacturingFieldVisualState(container, isValid);
+    
+    // Actualizar contador si cambió el estado
+    if (wasCompleted !== isValid) {
+        updateRefacturingCompletedCount();
+    }
 }
 
+// NUEVA FUNCIÓN: Actualizar estado visual del campo
+function updateRefacturingFieldVisualState(container, isCompleted) {
+    const indicator = container.querySelector('.refactoring-indicator');
+    const requiredLabel = container.querySelector('.required-label');
+    
+    if (isCompleted) {
+        container.style.borderStyle = 'solid';
+        container.style.borderColor = 'var(--success-color)';
+        container.style.backgroundColor = 'rgba(76, 175, 80, 0.05)';
+        
+        if (indicator) {
+            indicator.innerHTML = '✅';
+            indicator.style.color = 'var(--success-color)';
+        }
+        
+        if (requiredLabel) {
+            requiredLabel.textContent = 'Completado';
+            requiredLabel.style.color = 'var(--success-color)';
+        }
+    } else {
+        container.style.borderStyle = 'dashed';
+        container.style.borderColor = 'var(--info-color)';
+        container.style.backgroundColor = 'rgba(41, 182, 246, 0.05)';
+        
+        if (indicator) {
+            indicator.innerHTML = '📝';
+            indicator.style.color = 'var(--text-light)';
+        }
+        
+        if (requiredLabel) {
+            requiredLabel.textContent = 'Campo requerido';
+            requiredLabel.style.color = 'var(--info-color)';
+        }
+    }
+}
+
+// NUEVA FUNCIÓN: Obtener clave del campo de refacturación
+function getRefacturingFieldKey(fieldId) {
+    const mapping = {
+        'invoiceSerie': 'invoiceSerie',
+        'invoiceNumber': 'invoiceNumber',
+        'socialReason': 'socialReason',
+        'invoiceAmount': 'invoiceAmount',
+        'invoiceDate': 'invoiceDate',
+        // CAMBIO: Mapear providerName en lugar de providerNit
+        'providerName': 'providerName'
+    };
+    return mapping[fieldId] || fieldId;
+}
+
+// NUEVA FUNCIÓN: Actualizar contador de campos completados
+function updateRefacturingCompletedCount() {
+    refacturingCompletedFields = Object.values(refacturingFields).filter(field => field.completed).length;
+    updateRefacturingCounter();
+    
+    // Actualizar botón de actualización
+    if (updateRefacturingBtn) {
+        const isAllCompleted = refacturingCompletedFields >= Object.keys(refacturingFields).length;
+        updateRefacturingBtn.disabled = !isAllCompleted;
+        
+        if (isAllCompleted) {
+            updateRefacturingBtn.style.opacity = '1';
+            updateRefacturingBtn.style.cursor = 'pointer';
+            updateRefacturingBtn.classList.remove('disabled');
+        } else {
+            updateRefacturingBtn.style.opacity = '0.6';
+            updateRefacturingBtn.style.cursor = 'not-allowed';
+            updateRefacturingBtn.classList.add('disabled');
+        }
+    }
+}
+// Guardar valores originales de los campos
+function saveOriginalFieldValues() {
+    originalFieldValues = {
+        invoiceSerie: document.getElementById('invoiceSerie').textContent,
+        invoiceNumber: document.getElementById('invoiceNumber').textContent,
+        socialReason: document.getElementById('socialReason').textContent,
+        invoiceAmount: document.getElementById('invoiceAmount').textContent,
+        invoiceDate: document.getElementById('invoiceDate').textContent,
+        providerNit: document.getElementById('providerNit').textContent
+    };
+}
 // ===== FUNCIONES DE OBTENCIÓN DE VALORES =====
 // Obtener valor original del campo
 function getOriginalValue(element, fieldConfig) {
@@ -2144,7 +2491,9 @@ function getOriginalValue(element, fieldConfig) {
                 return dateOnly;
             }
             return '';
-        case 'NIT':
+        case 'IdProveedor': // CORRECCIÓN: Usar IdProveedor del currentInvoice
+            return invoice.IdProveedor || '';
+        case 'NIT': // MANTENER PARA COMPATIBILIDAD
             return invoice.NIT || '';
         default:
             return '';
@@ -2170,95 +2519,16 @@ function getOriginalValueForRefactoring(fieldConfig) {
                 return dateOnly;
             }
             return '';
+        case 'IdProveedor':
+            // CORRECCIÓN: Devolver el IdProveedor actual
+            return window.currentInvoice.IdProveedor || '';
         case 'NIT':
+            // Mantener compatibilidad
             return window.currentInvoice.NIT || '';
         default:
             return '';
     }
 }
-
-// ===== CONFIRMACIONES =====
-// Confirmar cambio
-async function confirmChange(fieldConfig, oldDisplayValue, newDisplayValue, selectedProvider = null) {
-    let changeDetails = `
-        <div style="text-align: left; margin: 20px 0;">
-            <p><strong>Campo:</strong> ${getFieldDisplayName(fieldConfig.tipoCambio)}</p>
-            <p><strong>Valor anterior:</strong> ${oldDisplayValue}</p>
-            <p><strong>Valor nuevo:</strong> ${newDisplayValue}</p>
-    `;
-    
-    if (fieldConfig.fieldName === 'NIT' && selectedProvider) {
-        changeDetails += `
-            <hr style="margin: 15px 0;">
-            <p><strong>Proveedor seleccionado:</strong></p>
-            <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 5px 0;">
-                <p style="margin: 2px 0;"><strong>Nombre:</strong> ${selectedProvider.Nombre}</p>
-                <p style="margin: 2px 0;"><strong>NIT:</strong> ${formatNIT(selectedProvider.NIT)}</p>
-                <p style="margin: 2px 0;"><strong>ID:</strong> ${selectedProvider.Id}</p>
-            </div>
-        `;
-    }
-    
-    changeDetails += `</div>`;
-    
-    return await NotificationManager.showConfirmation(
-        '¿Confirmar cambio?',
-        changeDetails,
-        'Sí, guardar cambio',
-        'Cancelar'
-    );
-}
-
-// Confirmar cambio de refacturación
-async function confirmRefacturingChange(fieldConfig, originalValue, newDisplayValue, selectedProvider = null) {
-    let changeDetails = `
-        <div style="text-align: left; margin: 20px 0;">
-            <p><strong>Campo:</strong> ${getFieldDisplayName(fieldConfig.tipoCambio)}</p>
-            <p><strong>Valor original:</strong> ${originalFieldValues[getFieldElementId(fieldConfig)] || 'No disponible'}</p>
-            <p><strong>Valor nuevo:</strong> ${newDisplayValue}</p>
-    `;
-    
-    if (fieldConfig.fieldName === 'NIT' && selectedProvider) {
-        changeDetails += `
-            <hr style="margin: 15px 0;">
-            <p><strong>Proveedor seleccionado:</strong></p>
-            <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 5px 0;">
-                <p style="margin: 2px 0;"><strong>Nombre:</strong> ${selectedProvider.Nombre}</p>
-                <p style="margin: 2px 0;"><strong>NIT:</strong> ${formatNIT(selectedProvider.NIT)}</p>
-                <p style="margin: 2px 0;"><strong>ID:</strong> ${selectedProvider.Id}</p>
-            </div>
-        `;
-    }
-    
-    changeDetails += `
-            <hr style="margin: 15px 0;">
-            <p style="color: #29b6f6; font-weight: 600;">
-                <i class="fas fa-redo"></i> 
-                Refacturación en progreso
-            </p>
-        </div>`;
-    
-    return await NotificationManager.showConfirmation(
-        '¿Confirmar refacturación?',
-        changeDetails,
-        'Sí, refacturar',
-        'Cancelar'
-    );
-}
-
-// Función auxiliar para obtener ID del elemento por fieldConfig
-function getFieldElementId(fieldConfig) {
-    const mapping = {
-        'Serie': 'invoiceSerie',
-        'Numero': 'invoiceNumber',
-        'IdRazon': 'socialReason',
-        'MontoFactura': 'invoiceAmount',
-        'FechaFactura': 'invoiceDate',
-        'NIT': 'providerNit'
-    };
-    return mapping[fieldConfig.fieldName] || '';
-}
-
 // Obtener nombre del campo para mostrar
 function getFieldDisplayName(tipoCambio) {
     const names = {
@@ -2267,7 +2537,7 @@ function getFieldDisplayName(tipoCambio) {
         3: 'Razón Social',
         4: 'Monto Facturado',
         5: 'Fecha Factura',
-        6: 'Proveedor'
+        6: 'Proveedor' // CAMBIO: Ya no es NIT sino Proveedor
     };
     return names[tipoCambio] || 'Campo';
 }
@@ -2335,8 +2605,21 @@ async function updateInvoiceField(connection, fieldConfig, newValue, selectedPro
         `;
         queryParams = [newValue, nombreRazon, window.currentInvoice.Id];
         
+    } else if (fieldConfig.fieldName === 'IdProveedor') {
+        // CORRECCIÓN: Para cambio de proveedor por ID - LÓGICA PRINCIPAL
+        if (!selectedProvider) {
+            throw new Error('No se proporcionó información del proveedor seleccionado');
+        }
+        
+        updateQuery = `
+            UPDATE facturas_compras 
+            SET IdProveedor = ?, NombreProveedor = ?, NIT = ?
+            WHERE Id = ?
+        `;
+        queryParams = [selectedProvider.Id, selectedProvider.Nombre, selectedProvider.NIT, window.currentInvoice.Id];
+        
     } else if (fieldConfig.fieldName === 'NIT') {
-        // Para cambio de proveedor
+        // Mantener para compatibilidad con código antiguo
         if (!selectedProvider) {
             throw new Error('No se proporcionó información del proveedor seleccionado');
         }
@@ -2360,96 +2643,7 @@ async function updateInvoiceField(connection, fieldConfig, newValue, selectedPro
     
     await connection.query(updateQuery, queryParams);
 }
-
-// Registrar cambio en historial
-async function logFieldChange(connection, fieldConfig, oldValue, newValue, selectedProvider = null) {
-    const userId = localStorage.getItem('userId') || '0';
-    const userName = localStorage.getItem('userName') || 'Usuario Desconocido';
-    
-    // Determinar qué tipo de modificación es
-    let modificationReason = null;
-    let tipoModificacion = '2'; // Por defecto modificación
-    
-    if (isRefacturingMode && selectedRefacturingReason) {
-        modificationReason = selectedRefacturingReason;
-        tipoModificacion = '1';
-    } else if (isModificationMode && selectedModificationReason) {
-        modificationReason = selectedModificationReason;
-        tipoModificacion = '2';
-    } else {
-        modificationReason = window.selectedRefacturingReason || window.selectedModificationReason;
-        tipoModificacion = window.selectedRefacturingReason ? '1' : '2';
-    }
-    
-    let valorAnterior = oldValue.toString();
-    let valorNuevo = newValue.toString();
-    
-    // Para cambios de proveedor, registrar información más detallada
-    if (fieldConfig.fieldName === 'NIT' && selectedProvider) {
-        const originalProvider = `${window.currentInvoice.Nombre} (${formatNIT(window.currentInvoice.NIT)})`;
-        const newProvider = `${selectedProvider.Nombre} (${formatNIT(selectedProvider.NIT)})`;
-        
-        valorAnterior = originalProvider;
-        valorNuevo = newProvider;
-    }
-    
-    // Para cambios de razón social, guardar NOMBRES en lugar de IDs
-    if (fieldConfig.fieldName === 'IdRazon') {
-        try {
-            const oldRazonName = window.currentInvoice.NombreRazon || 'No disponible';
-            const newRazonQuery = `SELECT NombreRazon FROM razonessociales WHERE Id = ?`;
-            const newRazonResult = await connection.query(newRazonQuery, [newValue]);
-            const newRazonName = newRazonResult.length > 0 ? newRazonResult[0].NombreRazon : 'No encontrada';
-            
-            valorAnterior = oldRazonName;
-            valorNuevo = newRazonName;
-        } catch (error) {
-            valorAnterior = `ID: ${oldValue}`;
-            valorNuevo = `ID: ${newValue}`;
-        }
-    }
-    
-    const insertQuery = `
-        INSERT INTO CambiosFacturasHistorial (
-            IdTipoCambio,
-            TipoCambio,
-            ValorAnterior,
-            ValorNuevo,
-            IdInventario,
-            IdSucursal,
-            Sucursal,
-            IdFacturasCompras,
-            IdUsuario,
-            NombreUsuario,
-            TipoModificacion,
-            IdRazonModificacion
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    
-    const insertParams = [
-        fieldConfig.tipoCambio,
-        getFieldDisplayName(fieldConfig.tipoCambio),
-        valorAnterior,
-        valorNuevo,
-        window.currentInvoice.IdInventory || '',
-        window.currentInvoice.IdSucursalCori || 0,
-        window.currentInvoice.NombreSucursal || '',
-        window.currentInvoice.Id,
-        parseInt(userId),
-        userName,
-        tipoModificacion, // '1' para refacturación, '2' para modificación
-        modificationReason ? modificationReason.id : null
-    ];
-    
-    try {
-        const result = await connection.query(insertQuery, insertParams);
-        return result;
-    } catch (error) {
-        throw error;
-    }
-}
-
-// Registrar cambio de refacturación en historial
+// CORRECCIÓN: Actualizar logRefacturingFieldChange para manejar proveedores correctamente
 async function logRefacturingFieldChange(connection, fieldConfig, oldValue, newValue, selectedProvider = null) {
     const userId = localStorage.getItem('userId') || '0';
     const userName = localStorage.getItem('userName') || 'Usuario Desconocido';
@@ -2457,17 +2651,37 @@ async function logRefacturingFieldChange(connection, fieldConfig, oldValue, newV
     let valorAnterior = oldValue.toString();
     let valorNuevo = newValue.toString();
     
-    // Para cambios de proveedor, registrar información más detallada
-    if (fieldConfig.fieldName === 'NIT' && selectedProvider) {
+    // CORRECCIÓN PRINCIPAL: Manejar el campo de proveedor correctamente
+    if (fieldConfig.fieldName === 'IdProveedor' && selectedProvider) {
+        // USAR LA MISMA LÓGICA QUE EN MODIFICACIÓN
+        // Formatear valor anterior usando los datos actuales de la factura
+        const originalProviderName = window.currentInvoice.Nombre || 'Proveedor no disponible';
+        const originalProviderNit = window.currentInvoice.NIT || '';
+        
+        valorAnterior = `${originalProviderName} (${formatNIT(originalProviderNit)})`;
+        
+        // Formatear valor nuevo con el proveedor seleccionado
+        valorNuevo = `${selectedProvider.Nombre} (${formatNIT(selectedProvider.NIT)})`;
+        
+        console.log('Historial Refacturación Proveedor:', {
+            anterior: valorAnterior,
+            nuevo: valorNuevo,
+            oldValue: oldValue,
+            newValue: newValue,
+            currentInvoice: window.currentInvoice.Nombre,
+            selectedProvider: selectedProvider.Nombre
+        });
+        
+    } else if (fieldConfig.fieldName === 'NIT' && selectedProvider) {
+        // Mantener compatibilidad si por alguna razón llega como NIT
         const originalProvider = `${window.currentInvoice.Nombre} (${formatNIT(window.currentInvoice.NIT)})`;
         const newProvider = `${selectedProvider.Nombre} (${formatNIT(selectedProvider.NIT)})`;
         
         valorAnterior = originalProvider;
         valorNuevo = newProvider;
-    }
-    
-    // Para cambios de razón social, guardar NOMBRES en lugar de IDs
-    if (fieldConfig.fieldName === 'IdRazon') {
+        
+    } else if (fieldConfig.fieldName === 'IdRazon') {
+        // Para cambios de razón social, guardar NOMBRES en lugar de IDs
         try {
             const oldRazonName = window.currentInvoice.NombreRazon || 'No disponible';
             const newRazonQuery = `SELECT NombreRazon FROM razonessociales WHERE Id = ?`;
@@ -2518,12 +2732,222 @@ async function logRefacturingFieldChange(connection, fieldConfig, oldValue, newV
             userName,
             '1', // TipoModificacion para refacturación
             refacturingReason ? refacturingReason.id : null,
-            selectedRefacturingMethod ? selectedRefacturingMethod.id : null, // NUEVO
-            getSerieNumeroNotaCredito() // NUEVO
+            selectedRefacturingMethod ? selectedRefacturingMethod.id : null,
+            getSerieNumeroNotaCredito()
         ]);
         return result;
         
     } catch (error) {
+        console.error('Error al registrar historial de refacturación:', error);
+        throw error;
+    }
+}
+
+// CORRECCIÓN: Actualizar también logFieldChange para asegurar consistencia
+async function logFieldChange(connection, fieldConfig, oldValue, newValue, selectedProvider = null) {
+    const userId = localStorage.getItem('userId') || '0';
+    const userName = localStorage.getItem('userName') || 'Usuario Desconocido';
+    
+    // Determinar qué tipo de modificación es
+    let modificationReason = null;
+    let tipoModificacion = '2'; // Por defecto modificación
+    
+    if (isRefacturingMode && selectedRefacturingReason) {
+        modificationReason = selectedRefacturingReason;
+        tipoModificacion = '1';
+    } else if (isModificationMode && selectedModificationReason) {
+        modificationReason = selectedModificationReason;
+        tipoModificacion = '2';
+    } else {
+        modificationReason = window.selectedRefacturingReason || window.selectedModificationReason;
+        tipoModificacion = window.selectedRefacturingReason ? '1' : '2';
+    }
+    
+    let valorAnterior = oldValue.toString();
+    let valorNuevo = newValue.toString();
+    
+    // CORRECCIÓN: Usar la misma lógica para proveedores en ambos casos
+    if (fieldConfig.fieldName === 'IdProveedor' && selectedProvider) {
+        // USAR INFORMACIÓN COMPLETA DEL PROVEEDOR
+        const originalProviderName = window.currentInvoice.Nombre || 'Proveedor no disponible';
+        const originalProviderNit = window.currentInvoice.NIT || '';
+        
+        // Formatear valor anterior usando los datos actuales de la factura
+        valorAnterior = `${originalProviderName} (${formatNIT(originalProviderNit)})`;
+        
+        // Formatear valor nuevo con el proveedor seleccionado
+        valorNuevo = `${selectedProvider.Nombre} (${formatNIT(selectedProvider.NIT)})`;
+        
+        console.log('Historial Modificación Proveedor:', {
+            anterior: valorAnterior,
+            nuevo: valorNuevo,
+            oldValue: oldValue,
+            newValue: newValue,
+            currentInvoice: window.currentInvoice.Nombre,
+            selectedProvider: selectedProvider.Nombre
+        });
+        
+    } else if (fieldConfig.fieldName === 'NIT' && selectedProvider) {
+        // Mantener compatibilidad con el campo NIT antiguo
+        const originalProvider = `${window.currentInvoice.Nombre} (${formatNIT(window.currentInvoice.NIT)})`;
+        const newProvider = `${selectedProvider.Nombre} (${formatNIT(selectedProvider.NIT)})`;
+        
+        valorAnterior = originalProvider;
+        valorNuevo = newProvider;
+        
+    } else if (fieldConfig.fieldName === 'IdRazon') {
+        // Para cambios de razón social, guardar NOMBRES en lugar de IDs
+        try {
+            const oldRazonName = window.currentInvoice.NombreRazon || 'No disponible';
+            const newRazonQuery = `SELECT NombreRazon FROM razonessociales WHERE Id = ?`;
+            const newRazonResult = await connection.query(newRazonQuery, [newValue]);
+            const newRazonName = newRazonResult.length > 0 ? newRazonResult[0].NombreRazon : 'No encontrada';
+            
+            valorAnterior = oldRazonName;
+            valorNuevo = newRazonName;
+        } catch (error) {
+            valorAnterior = `ID: ${oldValue}`;
+            valorNuevo = `ID: ${newValue}`;
+        }
+    }
+    
+    const insertQuery = `
+        INSERT INTO CambiosFacturasHistorial (
+            IdTipoCambio,
+            TipoCambio,
+            ValorAnterior,
+            ValorNuevo,
+            IdInventario,
+            IdSucursal,
+            Sucursal,
+            IdFacturasCompras,
+            IdUsuario,
+            NombreUsuario,
+            TipoModificacion,
+            IdRazonModificacion
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    const insertParams = [
+        fieldConfig.tipoCambio,
+        getFieldDisplayName(fieldConfig.tipoCambio),
+        valorAnterior,
+        valorNuevo,
+        window.currentInvoice.IdInventory || '',
+        window.currentInvoice.IdSucursalCori || 0,
+        window.currentInvoice.NombreSucursal || '',
+        window.currentInvoice.Id,
+        parseInt(userId),
+        userName,
+        tipoModificacion, // '1' para refacturación, '2' para modificación
+        modificationReason ? modificationReason.id : null
+    ];
+    
+    try {
+        const result = await connection.query(insertQuery, insertParams);
+        return result;
+    } catch (error) {
+        console.error('Error al registrar historial:', error);
+        throw error;
+    }
+}
+
+// Registrar cambio de refacturación en historial
+async function logRefacturingFieldChange(connection, fieldConfig, oldValue, newValue, selectedProvider = null) {
+    const userId = localStorage.getItem('userId') || '0';
+    const userName = localStorage.getItem('userName') || 'Usuario Desconocido';
+    
+    let valorAnterior = oldValue.toString();
+    let valorNuevo = newValue.toString();
+    
+    // CORRECCIÓN PRINCIPAL: Manejar el campo de proveedor correctamente
+    if (fieldConfig.fieldName === 'IdProveedor' && selectedProvider) {
+        // USAR LA MISMA LÓGICA QUE EN MODIFICACIÓN
+        // Formatear valor anterior usando los datos actuales de la factura
+        const originalProviderName = window.currentInvoice.Nombre || 'Proveedor no disponible';
+        const originalProviderNit = window.currentInvoice.NIT || '';
+        
+        valorAnterior = `${originalProviderName} (${formatNIT(originalProviderNit)})`;
+        
+        // Formatear valor nuevo con el proveedor seleccionado
+        valorNuevo = `${selectedProvider.Nombre} (${formatNIT(selectedProvider.NIT)})`;
+        
+        console.log('Historial Refacturación Proveedor:', {
+            anterior: valorAnterior,
+            nuevo: valorNuevo,
+            oldValue: oldValue,
+            newValue: newValue,
+            currentInvoice: window.currentInvoice.Nombre,
+            selectedProvider: selectedProvider.Nombre
+        });
+        
+    } else if (fieldConfig.fieldName === 'NIT' && selectedProvider) {
+        // Mantener compatibilidad si por alguna razón llega como NIT
+        const originalProvider = `${window.currentInvoice.Nombre} (${formatNIT(window.currentInvoice.NIT)})`;
+        const newProvider = `${selectedProvider.Nombre} (${formatNIT(selectedProvider.NIT)})`;
+        
+        valorAnterior = originalProvider;
+        valorNuevo = newProvider;
+        
+    } else if (fieldConfig.fieldName === 'IdRazon') {
+        // Para cambios de razón social, guardar NOMBRES en lugar de IDs
+        try {
+            const oldRazonName = window.currentInvoice.NombreRazon || 'No disponible';
+            const newRazonQuery = `SELECT NombreRazon FROM razonessociales WHERE Id = ?`;
+            const newRazonResult = await connection.query(newRazonQuery, [newValue]);
+            const newRazonName = newRazonResult.length > 0 ? newRazonResult[0].NombreRazon : 'No encontrada';
+            
+            valorAnterior = oldRazonName;
+            valorNuevo = newRazonName;
+        } catch (error) {
+            valorAnterior = `ID: ${oldValue}`;
+            valorNuevo = `ID: ${newValue}`;
+        }
+    }
+    
+    const insertQuery = `
+        INSERT INTO CambiosFacturasHistorial (
+            IdTipoCambio,
+            TipoCambio,
+            ValorAnterior,
+            ValorNuevo,
+            IdInventario,
+            IdSucursal,
+            Sucursal,
+            IdFacturasCompras,
+            IdUsuario,
+            NombreUsuario,
+            TipoModificacion,
+            IdRazonModificacion,
+            ManeraRefacturacion,
+            SerieNumeroNotaCredito
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    // Usar selectedRefacturingReason en lugar de selectedModificationReason
+    const refacturingReason = window.selectedRefacturingReason || selectedRefacturingReason;
+    
+    try {
+        const result = await connection.query(insertQuery, [
+            fieldConfig.tipoCambio,
+            getFieldDisplayName(fieldConfig.tipoCambio),
+            valorAnterior,
+            valorNuevo,
+            window.currentInvoice.IdInventory || '',
+            window.currentInvoice.IdSucursalCori || 0,
+            window.currentInvoice.NombreSucursal || '',
+            window.currentInvoice.Id,
+            parseInt(userId),
+            userName,
+            '1', // TipoModificacion para refacturación
+            refacturingReason ? refacturingReason.id : null,
+            selectedRefacturingMethod ? selectedRefacturingMethod.id : null,
+            getSerieNumeroNotaCredito()
+        ]);
+        return result;
+        
+    } catch (error) {
+        console.error('Error al registrar historial de refacturación:', error);
         throw error;
     }
 }
@@ -2551,6 +2975,19 @@ function updateCurrentInvoiceObject(fieldConfig, newValue, newDisplayValue, sele
            break;
        case 'FechaFactura':
            window.currentInvoice.FechaFactura = newValue;
+           break;
+       case 'IdProveedor': // NUEVO CASO
+           if (selectedProvider) {
+               window.currentInvoice.IdProveedor = selectedProvider.Id;
+               window.currentInvoice.Nombre = selectedProvider.Nombre;
+               window.currentInvoice.NIT = selectedProvider.NIT;
+               
+               // Actualizar también la UI del NIT
+               const nitElement = document.getElementById('providerNit');
+               if (nitElement) {
+                   nitElement.textContent = formatNIT(selectedProvider.NIT);
+               }
+           }
            break;
        case 'NIT':
            if (selectedProvider) {
@@ -2632,26 +3069,11 @@ function disableModificationMode() {
     isModificationMode = false;
     selectedModificationReason = null;
     
-    // Remover estilos de campos editables
-    const editableElements = document.querySelectorAll('.editable-field');
-    editableElements.forEach(element => {
-        element.style.border = '';
-        element.style.backgroundColor = '';
-        element.style.cursor = '';
-        element.style.position = '';
-        element.classList.remove('editable-field');
-        element.title = '';
-        
-        // Remover indicador de edición
-        const indicator = element.querySelector('.edit-indicator');
-        if (indicator) {
-            indicator.remove();
-        }
-        
-        // Remover todos los event listeners
-        const newElement = element.cloneNode(true);
-        element.parentNode.replaceChild(newElement, element);
-    });
+    // Ocultar botón de actualización
+    hideModificationUpdateButton();
+    
+    // Restaurar campos originales
+    restoreOriginalFields();
     
     // Remover banner
     const banner = document.getElementById('modificationBanner');
@@ -2661,10 +3083,63 @@ function disableModificationMode() {
     
     NotificationManager.showToast('info', 'Modo modificación desactivado');
     
-    // NUEVO: Actualizar estado de botones
+    // Actualizar estado de botones
     updateActionButtonsState();
 }
-
+function restoreOriginalFields() {
+    const directEditContainers = document.querySelectorAll('.direct-edit-container');
+    
+    directEditContainers.forEach(container => {
+        const fieldId = container.dataset.fieldId;
+        const originalElement = document.createElement('span');
+        originalElement.id = fieldId;
+        
+        // Restaurar el valor original del currentInvoice
+        const invoice = window.currentInvoice;
+        let displayValue = '';
+        
+        switch (fieldId) {
+            case 'invoiceSerie':
+                displayValue = invoice.Serie || '-';
+                break;
+            case 'invoiceNumber':
+                displayValue = invoice.Numero || '-';
+                break;
+            case 'socialReason':
+                displayValue = invoice.NombreRazon || '-';
+                break;
+            case 'invoiceAmount':
+                displayValue = formatCurrency(invoice.MontoFactura) || '-';
+                originalElement.classList.add('amount');
+                break;
+            case 'invoiceDate':
+                displayValue = formatDate(invoice.FechaFactura) || '-';
+                break;
+            case 'providerName': // NUEVO CASO
+                displayValue = invoice.Nombre || '-';
+                break;
+            case 'providerNit':
+                displayValue = formatNIT(invoice.NIT) || '-';
+                originalElement.classList.add('nit-field');
+                break;
+        }
+        
+        originalElement.textContent = displayValue;
+        originalElement.className = 'detail-item span';
+        originalElement.style.cssText = `
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            padding: 6px 10px;
+            background: white;
+            border-radius: var(--border-radius-sm);
+            border: 1px solid var(--border-color);
+            transition: var(--transition-normal);
+        `;
+        
+        container.parentNode.replaceChild(originalElement, container);
+    });
+}
 // Desactivar modo refacturación
 function disableRefacturingMode() {
     isRefacturingMode = false;
@@ -2673,26 +3148,23 @@ function disableRefacturingMode() {
     // Ocultar botón de actualización
     hideRefacturingUpdateButton();
     
-    // Restaurar valores originales
-    restoreOriginalFieldValues();
+    // Restaurar valores originales si están disponibles
+    if (Object.keys(originalFieldValues).length > 0) {
+        restoreOriginalFieldValues();
+    }
     
     // Limpiar datos de refacturación
     refacturingFields = {};
     refacturingCompletedFields = 0;
     
     // Remover estilos de campos editables
-    const editableElements = document.querySelectorAll('.refacturation-field-pending, .refacturation-field-completed');
+    const editableElements = document.querySelectorAll('.direct-refactoring-container');
     editableElements.forEach(element => {
-        element.style.border = '';
-        element.style.backgroundColor = '';
-        element.style.cursor = '';
-        element.style.position = '';
-        element.classList.remove('refacturation-field-pending', 'refacturation-field-completed');
-        element.title = '';
-        
-        // Remover event listeners
-        const newElement = element.cloneNode(true);
-        element.parentNode.replaceChild(newElement, element);
+        // Restaurar elemento original si es posible
+        const fieldId = element.dataset.fieldId;
+        if (fieldId && window.currentInvoice) {
+            restoreOriginalField(element, fieldId);
+        }
     });
     
     // Remover banner
@@ -2703,10 +3175,59 @@ function disableRefacturingMode() {
     
     NotificationManager.showToast('info', 'Modo refacturación desactivado');
     
-    // NUEVO: Actualizar estado de botones
+    // Actualizar estado de botones
     updateActionButtonsState();
 }
-
+function restoreOriginalField(container, fieldId) {
+    const originalElement = document.createElement('span');
+    originalElement.id = fieldId;
+    
+    // Restaurar el valor original del currentInvoice
+    const invoice = window.currentInvoice;
+    let displayValue = '';
+    let className = '';
+    
+    switch (fieldId) {
+        case 'invoiceSerie':
+            displayValue = invoice.Serie || '-';
+            break;
+        case 'invoiceNumber':
+            displayValue = invoice.Numero || '-';
+            break;
+        case 'socialReason':
+            displayValue = invoice.NombreRazon || '-';
+            break;
+        case 'invoiceAmount':
+            displayValue = formatCurrency(invoice.MontoFactura) || '-';
+            className = 'amount';
+            break;
+        case 'invoiceDate':
+            displayValue = formatDate(invoice.FechaFactura) || '-';
+            break;
+        case 'providerName':
+            displayValue = invoice.Nombre || '-';
+            break;
+        case 'providerNit':
+            displayValue = formatNIT(invoice.NIT) || '-';
+            className = 'nit-field';
+            break;
+    }
+    
+    originalElement.textContent = displayValue;
+    originalElement.className = className;
+    originalElement.style.cssText = `
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        padding: 6px 10px;
+        background: white;
+        border-radius: var(--border-radius-sm);
+        border: 1px solid var(--border-color);
+        transition: var(--transition-normal);
+    `;
+    
+    container.parentNode.replaceChild(originalElement, container);
+}
 function restoreOriginalFieldValues() {
     Object.keys(originalFieldValues).forEach(fieldId => {
         const element = document.getElementById(fieldId);
@@ -2721,16 +3242,20 @@ async function handleAddCreditNote() {
         NotificationManager.showToast('error', 'No hay una factura seleccionada');
         return;
     }
-
-    // NUEVA VALIDACIÓN: Verificar que no esté en modo modificación o refacturación
-    if (isModificationMode) {
-        NotificationManager.showToast('warning', 'No se pueden agregar notas de crédito durante el modo modificación. Desactive el modo modificación primero.');
-        return;
-    }
+    const restrictedPanel = document.getElementById('restrictedPanel');
+    const isInRestrictedView = restrictedPanel && restrictedPanel.style.display !== 'none';
     
-    if (isRefacturingMode) {
-        NotificationManager.showToast('warning', 'No se pueden agregar notas de crédito durante el modo refacturación. Desactive el modo refacturación primero.');
-        return;
+    if (!isInRestrictedView) {
+        // Solo aplicar estas validaciones en la vista normal
+        if (isModificationMode) {
+            NotificationManager.showToast('warning', 'No se pueden agregar notas de crédito durante el modo modificación. Desactive el modo modificación primero.');
+            return;
+        }
+        
+        if (isRefacturingMode) {
+            NotificationManager.showToast('warning', 'No se pueden agregar notas de crédito durante el modo refacturación. Desactive el modo refacturación primero.');
+            return;
+        }
     }
 
     try {
@@ -2968,22 +3493,28 @@ function confirmCreditNoteCreation(data) {
     
     // Pequeña pausa para que termine la animación de cierre
     setTimeout(async () => {
-        const confirmed = await NotificationManager.showConfirmation('¿Confirmar Nota de Crédito?', `
+        const confirmed = await NotificationManager.showConfirmation(
+            '¿Crear Nota de Crédito?',
+            `
             <div style="text-align: left; margin: 20px 0;">
+                <p><strong>Detalles de la nota de crédito:</strong></p>
+                <hr style="margin: 15px 0;">
                 <p><strong>Tipo:</strong> ${data.typeName}</p>
                 <p><strong>Serie-Número:</strong> ${data.serie}-${data.number}</p>
                 <p><strong>Monto:</strong> ${formatCurrency(data.amount)}</p>
                 <p><strong>Fecha:</strong> ${formatDate(data.date)}</p>
                 <p><strong>Concepto:</strong> ${conceptText}</p>
-                <hr style="margin: 15px 0;">
                 <p><strong>Factura Original:</strong> ${data.originalInvoice.Serie}-${data.originalInvoice.Numero}</p>
                 <hr style="margin: 15px 0;">
-                <p style="color: #4caf50; font-weight: 600;">
-                    <i class="fas fa-check-circle"></i> 
-                    ✅ Validación exitosa: No hay duplicados
+                <p style="color: var(--info-color); font-weight: 600;">
+                    <i class="fas fa-info-circle"></i> 
+                    ¿Desea continuar con la creación de esta nota de crédito?
                 </p>
             </div>
-        `, 'Sí, continuar', 'Cancelar');
+            `,
+            'Sí, crear nota',
+            'Cancelar'
+        );
         
         if (confirmed) {
             // Proceder según el tipo de concepto seleccionado
@@ -3075,13 +3606,19 @@ async function loadInventoryProducts() {
         const query = `
             SELECT
                 detalleinventarios.Upc, 
-                detalleinventarios.Descripcion, 
+                COALESCE(NULLIF(productos.DescLarga, ''), detalleinventarios.Descripcion) AS Descripcion,
                 detalleinventarios.Cantidad_Rechequeo, 
                 detalleinventarios.Bonificacion_Rechequeo
-            FROM detalleinventarios
-            WHERE detalleinventarios.IdInventarios = ? AND
-                detalleinventarios.Detalle_Rechequeo = 0
-            ORDER BY detalleinventarios.Descripcion
+            FROM
+                detalleinventarios
+            INNER JOIN
+                productos
+                ON detalleinventarios.Upc = productos.Upc
+            WHERE
+                detalleinventarios.IdInventarios = ?
+                AND detalleinventarios.Detalle_Rechequeo = 0
+            ORDER BY
+                Descripcion ASC;
         `;
         
         // CAMBIO: Usar execute y destructuring para MySQL2
@@ -3177,13 +3714,6 @@ function createMerchandiseModal() {
     document.getElementById('saveMerchandise').addEventListener('click', saveMerchandiseSelection);
     productSearchInput.addEventListener('input', filterProducts);
     
-    // Cerrar modal al hacer clic fuera
-    merchandiseModal.addEventListener('click', (e) => {
-        if (e.target === merchandiseModal) {
-            closeMerchandiseModalFunc();
-        }
-    });
-    
     // Configurar F1 para productos adicionales
     setupF1ProductSearch();
     
@@ -3194,9 +3724,11 @@ function createMerchandiseModal() {
     ModalManager.showModal('merchandiseModal', 'productSearchInput');
 }
 
-// Cerrar modal de mercadería
 function closeMerchandiseModalFunc() {
     removeF1ProductSearch();
+    
+    // NUEVO: Limpiar cantidades al cerrar modal
+    productQuantities = {};
     
     if (merchandiseModal) {
         ModalManager.removeModal('merchandiseModal');
@@ -3253,13 +3785,13 @@ function displayProducts(products) {
                     <div class="quantity-input-group">
                         <label for="quantity_${index}">Cantidad a devolver:</label>
                         <input type="number" 
-                               id="quantity_${index}" 
-                               class="quantity-input" 
-                               min="0"
-                               step="1" 
-                               value="0"
-                               data-upc="${product.Upc}"
-                               data-additional="${isAdditional}">
+                            id="quantity_${index}" 
+                            class="quantity-input" 
+                            min="0"
+                            step="1" 
+                            value="0"
+                            data-upc="${product.Upc}"
+                            data-additional="${isAdditional}">
                     </div>
                 </div>
             </div>
@@ -3272,14 +3804,32 @@ function displayProducts(products) {
     // Agregar event listeners a los inputs de cantidad
     const quantityInputs = document.querySelectorAll('.quantity-input');
     quantityInputs.forEach(input => {
+        // Eventos existentes
         input.addEventListener('input', (e) => ValidationManager.validateQuantity(e.target, 0));
         input.addEventListener('change', (e) => ValidationManager.validateQuantity(e.target, 0));
+        
+        // NUEVO: Actualizar variable global en tiempo real
+        input.addEventListener('input', updateQuantityInGlobal);
+        input.addEventListener('change', updateQuantityInGlobal);
     });
 }
-
+function updateQuantityInGlobal(event) {
+    const input = event.target;
+    const upc = input.dataset.upc;
+    const quantity = parseInt(input.value) || 0;
+    
+    if (quantity > 0) {
+        productQuantities[upc] = quantity;
+    } else if (productQuantities[upc]) {
+        delete productQuantities[upc];
+    }
+}
 // Filtrar productos por búsqueda
 function filterProducts() {
     const searchTerm = productSearchInput.value.toLowerCase().trim();
+    
+    // IMPORTANTE: Siempre preservar cantidades antes de cualquier cambio
+    preserveAllQuantities();
     
     if (!searchTerm) {
         window.filteredProducts = window.inventoryProducts;
@@ -3291,8 +3841,43 @@ function filterProducts() {
     }
     
     displayProducts(window.filteredProducts);
+    
+    // Restaurar TODAS las cantidades después de mostrar productos
+    restoreAllQuantities();
+}function preserveAllQuantities() {
+    const quantityInputs = document.querySelectorAll('.quantity-input');
+    
+    quantityInputs.forEach(input => {
+        const upc = input.dataset.upc;
+        const quantity = parseInt(input.value) || 0;
+        
+        if (quantity > 0) {
+            productQuantities[upc] = quantity;
+        } else if (productQuantities[upc]) {
+            // Si el usuario puso 0, eliminar del registro
+            delete productQuantities[upc];
+        }
+    });
 }
-
+function restoreAllQuantities() {
+    setTimeout(() => {
+        Object.entries(productQuantities).forEach(([upc, quantity]) => {
+            const input = document.querySelector(`input[data-upc="${upc}"]`);
+            if (input) {
+                input.value = quantity;
+                
+                // Efecto visual para mostrar que se restauró
+                input.style.background = 'rgba(76, 175, 80, 0.1)';
+                input.style.borderColor = 'var(--success-color)';
+                
+                setTimeout(() => {
+                    input.style.background = '';
+                    input.style.borderColor = '';
+                }, 800);
+            }
+        });
+    }, 100);
+}
 // Guardar selección de mercadería
 function saveMerchandiseSelection() {
     const quantityInputs = document.querySelectorAll('.quantity-input');
@@ -3519,13 +4104,6 @@ function createOtherConceptsModal() {
     
     // Contador de caracteres
     observationText.addEventListener('input', updateCharacterCount);
-    
-    // Cerrar modal al hacer clic fuera
-    otherConceptsModal.addEventListener('click', (e) => {
-        if (e.target === otherConceptsModal) {
-            ModalManager.removeModal('otherConceptsModal');
-        }
-    });
     
     // Mostrar modal con animación
     ModalManager.showModal('otherConceptsModal', 'observationText');
@@ -3834,32 +4412,8 @@ function resetSearch() {
 }
 
 function resetToInitialStateComplete() {
-    // Limpiar variables globales
-    window.currentInvoice = null;
-    window.currentCreditNote = null;
-    window.selectedMerchandise = null;
-    window.selectedConcept = null;
-    window.inventoryProducts = null;
-    window.filteredProducts = null;
-    window.branchConnectionData = null;
-    
-    // Resetear variables de edición
-    isEditing = false;
-    currentEditingElement = null;
-    
-    // Limpiar formulario de búsqueda
-    const serieElement = document.getElementById('searchSerie');
-    const numberElement = document.getElementById('searchNumber');
-    
-    if (serieElement) serieElement.value = '';
-    if (numberElement) numberElement.value = '';
-    
-    hideAllResultPanels();
-    showSearchPanel();
-    
-    setTimeout(() => {
-        NotificationManager.showToast('success', 'Puede realizar una nueva búsqueda de factura');
-    }, 800);
+    // Usar la nueva función más completa
+    resetToInitialStateAfterRefactoring();
 }
 
 // Ocultar panel de búsqueda con animación
@@ -4303,7 +4857,7 @@ function showAdditionalSearchLoading() {
 }
 async function searchAdditionalProducts(query) {
     let connection = null;
-    
+    const currentAdditionalQuantities = preserveAdditionalQuantities();
     try {
         // Mostrar loading en el contenedor
         showAdditionalSearchLoading();
@@ -4330,7 +4884,7 @@ async function searchAdditionalProducts(query) {
         
         // Mostrar resultados
         displayAdditionalProducts(rows, query);
-        
+        restoreAdditionalQuantities(currentAdditionalQuantities);
     } catch (error) {
         showAdditionalSearchError(error.message);
     } finally {
@@ -4342,6 +4896,31 @@ async function searchAdditionalProducts(query) {
             }
         }
     }
+}
+function preserveAdditionalQuantities() {
+    const quantities = {};
+    const quantityInputs = document.querySelectorAll('.additional-quantity-input');
+    
+    quantityInputs.forEach(input => {
+        const upc = input.dataset.upc;
+        const quantity = parseInt(input.value) || 0;
+        if (quantity > 0) {
+            quantities[upc] = quantity;
+        }
+    });
+    
+    return quantities;
+}
+
+function restoreAdditionalQuantities(quantities) {
+    setTimeout(() => {
+        Object.entries(quantities).forEach(([upc, quantity]) => {
+            const input = document.querySelector(`.additional-quantity-input[data-upc="${upc}"]`);
+            if (input) {
+                input.value = quantity;
+            }
+        });
+    }, 100);
 }
 function prepareSearchTerms(query) {
     return query
@@ -4714,37 +5293,10 @@ function initializeRefacturingFields() {
         socialReason: { value: '', completed: false, required: true },
         invoiceAmount: { value: '', completed: false, required: true },
         invoiceDate: { value: '', completed: false, required: true },
-        providerNit: { value: '', selectedProvider: null, completed: false, required: true }
+        // CAMBIO: Cambiar de providerNit a providerName
+        providerName: { value: '', selectedProvider: null, completed: false, required: true }
     };
     refacturingCompletedFields = 0;
-}
-
-// Configurar campos para refacturación
-function setupRefacturingFields() {
-    const fieldConfigs = [
-        { id: 'invoiceSerie', type: 'text', fieldName: 'Serie', tipoCambio: 1 },
-        { id: 'invoiceNumber', type: 'text', fieldName: 'Numero', tipoCambio: 2 },
-        { id: 'socialReason', type: 'select', fieldName: 'IdRazon', tipoCambio: 3 },
-        { id: 'invoiceAmount', type: 'number', fieldName: 'MontoFactura', tipoCambio: 4 },
-        { id: 'invoiceDate', type: 'date', fieldName: 'FechaFactura', tipoCambio: 5 },
-        { id: 'providerNit', type: 'provider-nit', fieldName: 'NIT', tipoCambio: 6 }
-    ];
-
-    fieldConfigs.forEach(field => {
-        const element = document.getElementById(field.id);
-        if (element) {
-            element.classList.add('refacturation-field-pending');
-            element.classList.remove('editable-field');
-            element.title = 'Campo requerido para refacturación - clic para editar';
-            
-            // Agregar event listener para editar
-            element.addEventListener('click', () => {
-                if (isRefacturingMode) {
-                    openRefacturingFieldEditor(field);
-                }
-            });
-        }
-    });
 }
 
 // Mostrar botón de actualización
@@ -4777,240 +5329,6 @@ function updateRefacturingCounter() {
     }
 }
 
-// Abrir editor de campo específico
-async function openRefacturingFieldEditor(fieldConfig) {
-    if (isEditing) {
-        NotificationManager.showToast('warning', 'Ya hay un campo en edición. Complete la edición actual primero.');
-        return;
-    }
-
-    const element = document.getElementById(fieldConfig.id);
-    const currentValue = refacturingFields[fieldConfig.id].value;
-    
-    // Usar la lógica de edición existente pero adaptada
-    await enableInlineEditForRefacturingField(element, fieldConfig);
-}
-
-// Edición inline adaptada para refacturación
-async function enableInlineEditForRefacturingField(element, fieldConfig) {
-    if (isEditing) return;
-
-    isEditing = true;
-    currentEditingElement = element;
-    
-    const currentValue = refacturingFields[fieldConfig.id].value;
-    
-    // Limpiar el contenido
-    element.innerHTML = '';
-    element.classList.remove('refacturation-field-pending', 'refacturation-field-completed');
-    
-    // Crear elemento de edición
-    let editElement;
-    
-    if (fieldConfig.type === 'select' && fieldConfig.fieldName === 'IdRazon') {
-        editElement = await SelectManager.loadSocialReasons('');
-    } else if (fieldConfig.type === 'provider-nit') {
-        editElement = await createProviderNitInput('');
-    } else {
-        editElement = createInputElement(fieldConfig.type, currentValue);
-    }
-    
-    element.appendChild(editElement);
-    
-    // Agregar botones de acción
-    const actionButtons = createActionButtons();
-    element.appendChild(actionButtons);
-    
-    // Enfocar elemento
-    if (editElement.focus) {
-        editElement.focus();
-    }
-    
-    // Manejar eventos
-    const handleSave = async () => {
-        let newValue;
-        let newDisplayValue;
-        let selectedProvider = null;
-        
-        // Obtener valor según tipo de campo
-        if (fieldConfig.type === 'select') {
-            const selectedOption = editElement.options[editElement.selectedIndex];
-            newValue = editElement.value;
-            newDisplayValue = selectedOption ? selectedOption.text : '';
-            
-            if (!newValue) {
-                NotificationManager.showToast('error', 'Debe seleccionar un valor');
-                return;
-            }
-            
-        } else if (fieldConfig.type === 'provider-nit') {
-            newValue = editElement.mainInput.value.trim();
-            selectedProvider = editElement.selectedProvider;
-            
-            if (!selectedProvider) {
-                NotificationManager.showToast('error', 'Debe seleccionar un proveedor válido');
-                return;
-            }
-            
-            newDisplayValue = formatNIT(selectedProvider.NIT);
-            
-        } else if (fieldConfig.type === 'number') {
-            newValue = parseFloat(editElement.value);
-            if (!newValue || newValue <= 0) {
-                NotificationManager.showToast('error', 'Debe ingresar un valor válido');
-                return;
-            }
-            newDisplayValue = formatCurrency(newValue);
-            
-        } else if (fieldConfig.type === 'date') {
-            newValue = editElement.value;
-            if (!newValue) {
-                NotificationManager.showToast('error', 'Debe seleccionar una fecha');
-                return;
-            }
-            newDisplayValue = formatDate(newValue);
-            
-        } else {
-            newValue = editElement.value.trim();
-            if (!newValue) {
-                NotificationManager.showToast('error', 'Este campo es requerido');
-                return;
-            }
-            newDisplayValue = newValue;
-        }
-        
-        // Validar campo
-        if (!ValidationManager.validateFieldValue(fieldConfig, newValue, selectedProvider)) {
-            return;
-        }
-        
-        // Guardar en el objeto de refacturación
-        refacturingFields[fieldConfig.id].value = newValue;
-        refacturingFields[fieldConfig.id].completed = true;
-        
-        if (selectedProvider) {
-            refacturingFields[fieldConfig.id].selectedProvider = selectedProvider;
-        }
-        
-        // CAMBIO: Actualizar interfaz inmediatamente y de forma visible
-        element.innerHTML = newDisplayValue;
-        element.classList.add('refacturation-field-completed');
-        
-        // Forzar repaint del elemento
-        element.offsetHeight; // Trigger reflow
-        
-        // Actualizar contador
-        updateCompletedFieldsCount();
-        
-        // Resetear estado
-        isEditing = false;
-        currentEditingElement = null;
-        
-        NotificationManager.showToast('success', 'Campo completado correctamente');
-    };
-    
-    const cancelEdit = () => {
-        const wasCompleted = refacturingFields[fieldConfig.id].completed;
-        
-        if (wasCompleted) {
-            // Restaurar valor guardado
-            const savedValue = refacturingFields[fieldConfig.id].value;
-            const savedProvider = refacturingFields[fieldConfig.id].selectedProvider;
-            
-            let displayValue;
-            if (fieldConfig.type === 'provider-nit' && savedProvider) {
-                displayValue = formatNIT(savedProvider.NIT);
-            } else if (fieldConfig.type === 'number') {
-                displayValue = formatCurrency(savedValue);
-            } else if (fieldConfig.type === 'date') {
-                displayValue = formatDate(savedValue);
-            } else {
-                displayValue = savedValue;
-            }
-            
-            element.innerHTML = displayValue;
-            element.classList.add('refacturation-field-completed');
-        } else {
-            // Volver a mostrar placeholder
-            element.innerHTML = '';
-            const placeholder = document.createElement('span');
-            placeholder.style.color = '#999';
-            placeholder.style.fontStyle = 'italic';
-            placeholder.textContent = 'Campo requerido - clic para editar';
-            element.appendChild(placeholder);
-            element.classList.add('refacturation-field-pending');
-        }
-        
-        isEditing = false;
-        currentEditingElement = null;
-    };
-    
-    // CAMBIO: Event listeners mejorados con mejor especificidad
-    const saveBtn = actionButtons.querySelector('.save-btn');
-    const cancelBtn = actionButtons.querySelector('.cancel-btn');
-    
-    // Remover event listeners previos si existen
-    saveBtn.removeEventListener('click', handleSave);
-    cancelBtn.removeEventListener('click', cancelEdit);
-    
-    // Agregar nuevos event listeners
-    saveBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        await handleSave();
-    });
-    
-    cancelBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        cancelEdit();
-    });
-    
-    // Enter y Escape
-    const handleKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            e.stopPropagation();
-            handleSave();
-        } else if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            cancelEdit();
-        }
-    };
-    
-    editElement.addEventListener('keydown', handleKeyDown);
-    
-    // CAMBIO: También agregar el event listener al elemento principal por si acaso
-    element.addEventListener('keydown', handleKeyDown);
-}
-
-// Actualizar count de campos completados
-function updateCompletedFieldsCount() {
-    refacturingCompletedFields = Object.values(refacturingFields).filter(field => field.completed).length;
-    updateRefacturingCounter();
-    
-    // CAMBIO: Forzar actualización visual del botón
-    if (updateRefacturingBtn) {
-        const isAllCompleted = refacturingCompletedFields >= Object.keys(refacturingFields).length;
-        updateRefacturingBtn.disabled = !isAllCompleted;
-        
-        // Cambiar visualmente el botón
-        if (isAllCompleted) {
-            updateRefacturingBtn.classList.remove('disabled');
-            updateRefacturingBtn.style.opacity = '1';
-            updateRefacturingBtn.style.cursor = 'pointer';
-        } else {
-            updateRefacturingBtn.classList.add('disabled');
-            updateRefacturingBtn.style.opacity = '0.6';
-            updateRefacturingBtn.style.cursor = 'not-allowed';
-        }
-        
-        // Forzar repaint
-        updateRefacturingBtn.offsetHeight;
-    }
-}
-
 // Manejar actualización masiva de refacturación
 async function handleRefacturingUpdate() {
     if (refacturingCompletedFields < Object.keys(refacturingFields).length) {
@@ -5029,7 +5347,7 @@ async function handleRefacturingUpdate() {
                 const label = getFieldLabelByKey(key);
                 let value = field.value;
                 
-                if (key === 'providerNit' && field.selectedProvider) {
+                if (key === 'providerName' && field.selectedProvider) {
                     value = `${field.selectedProvider.Nombre} (${formatNIT(field.selectedProvider.NIT)})`;
                 } else if (key === 'invoiceAmount') {
                     value = formatCurrency(field.value);
@@ -5052,33 +5370,32 @@ async function handleRefacturingUpdate() {
     
     if (!confirmed) return;
     
-    // Mostrar loading
-    NotificationManager.showLoading('Actualizando Refacturación...', `
+    // Procesar actualizaciones
+    NotificationManager.showLoading('Procesando Actualización...', `
         <div style="text-align: center; margin: 20px 0;">
             <div class="loading-spinner"></div>
-            <p style="margin-top: 15px; font-weight: 600;">Procesando refacturación completa:</p>
+            <p style="margin-top: 15px; font-weight: 600;">Actualizando ${Object.keys(refacturingFields).length} campo(s):</p>
             <div style="text-align: left; margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 8px;">
                 <p style="margin: 5px 0;"><strong>Sistema Central:</strong></p>
                 <p style="margin: 2px 0; font-size: 14px;">• Actualizando facturas_compras</p>
                 <p style="margin: 2px 0; font-size: 14px;">• Registrando en historial</p>
                 <br>
                 <p style="margin: 5px 0;"><strong>Sucursal:</strong></p>
-                <p style="margin: 2px 0; font-size: 14px;">• Sincronizando inventarios</p>
-                <p style="margin: 2px 0; font-size: 14px;">• Actualizando órdenes</p>
+                <p style="margin: 2px 0; font-size: 14px;">• Sincronizando datos</p>
             </div>
             <p style="font-size: 14px; color: #6c757d;">Por favor espere...</p>
         </div>
     `);
     
     try {
-        // Ejecutar todas las actualizaciones
+        // Procesar todos los cambios
         await executeCompleteRefactoring();
         
         NotificationManager.closeLoading();
         
         // Éxito
         await NotificationManager.showSuccess(
-            '🎉 Refacturación Completada',
+            'Refacturación Completada',
             `
             <div style="text-align: center; margin: 20px 0;">
                 <p style="font-size: 16px; margin-bottom: 15px;">
@@ -5089,15 +5406,16 @@ async function handleRefacturingUpdate() {
                     <p style="margin: 5px 0; color: #4caf50;">✅ Base de sucursal actualizada</p>
                     <p style="margin: 5px 0; color: #4caf50;">✅ Historial registrado</p>
                 </div>
-                <p style="font-size: 14px; color: #6c757d;">La refacturación se ha completado correctamente</p>
             </div>
             `,
             'Continuar',
-            4000
+            3000
         );
         
-        // Salir del modo refacturación
-        disableRefacturingMode();
+        // CAMBIO SIMPLE: Solo llamar a nueva búsqueda
+        setTimeout(() => {
+            goToNewSearch();
+        }, 3200);
         
     } catch (error) {
         NotificationManager.closeLoading();
@@ -5107,7 +5425,118 @@ async function handleRefacturingUpdate() {
         );
     }
 }
-
+function goToNewSearch() {
+    // Simplemente llamar a la función existente de reset
+    resetSearch();
+    
+    // Mostrar mensaje de confirmación
+    setTimeout(() => {
+        NotificationManager.showToast('success', 'Listo para nueva búsqueda');
+    }, 500);
+}
+function resetToInitialStateAfterRefactoring() {
+    // 1. Limpiar todas las variables globales
+    window.currentInvoice = null;
+    window.currentCreditNote = null;
+    window.selectedMerchandise = null;
+    window.selectedConcept = null;
+    window.inventoryProducts = null;
+    window.filteredProducts = null;
+    window.branchConnectionData = null;
+    
+    // 2. Resetear variables de edición y refacturación
+    isEditing = false;
+    currentEditingElement = null;
+    isRefacturingMode = false;
+    isModificationMode = false;
+    selectedRefacturingReason = null;
+    selectedModificationReason = null;
+    selectedRefacturingMethod = null;
+    creditNoteSerieValue = '';
+    creditNoteNumberValue = '';
+    
+    // 3. Limpiar datos de refacturación
+    refacturingFields = {};
+    refacturingCompletedFields = 0;
+    originalFieldValues = {};
+    
+    // 4. Limpiar formulario de búsqueda
+    const serieElement = document.getElementById('searchSerie');
+    const numberElement = document.getElementById('searchNumber');
+    
+    if (serieElement) {
+        serieElement.value = '';
+        serieElement.classList.remove('valid');
+    }
+    if (numberElement) {
+        numberElement.value = '';
+        numberElement.classList.remove('valid');
+    }
+    
+    // 5. Ocultar todos los paneles de resultados
+    hideAllResultPanels();
+    
+    // 6. Remover banners de modificación/refacturación si existen
+    const modificationBanner = document.getElementById('modificationBanner');
+    const refacturingBanner = document.getElementById('refacturingBanner');
+    
+    if (modificationBanner) modificationBanner.remove();
+    if (refacturingBanner) refacturingBanner.remove();
+    
+    // 7. Ocultar botones de actualización
+    hideModificationUpdateButton();
+    hideRefacturingUpdateButton();
+    
+    // 8. Actualizar estado de botones de acción
+    updateActionButtonsState();
+    
+    // 9. Mostrar panel de búsqueda con animación
+    showSearchPanelAfterRefactoring();
+    
+    // 10. Mostrar mensaje de éxito final
+    setTimeout(() => {
+        NotificationManager.showToast('success', 'Sistema listo para nueva búsqueda de factura');
+    }, 1000);
+}
+function showSearchPanelAfterRefactoring() {
+    const searchPanel = document.querySelector('.search-panel');
+    
+    if (!searchPanel) return;
+    
+    // Asegurar que el panel esté visible
+    searchPanel.style.display = 'block';
+    searchPanel.style.opacity = '0';
+    searchPanel.style.transform = 'translateY(-30px)';
+    
+    // Animación de entrada
+    setTimeout(() => {
+        searchPanel.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
+        searchPanel.style.opacity = '1';
+        searchPanel.style.transform = 'translateY(0)';
+        
+        // Enfocar automáticamente el primer campo
+        setTimeout(() => {
+            const serieElement = document.getElementById('searchSerie');
+            if (serieElement) {
+                serieElement.focus();
+                
+                // Efecto visual para llamar la atención
+                serieElement.style.boxShadow = '0 0 0 3px rgba(110, 120, 255, 0.3)';
+                setTimeout(() => {
+                    serieElement.style.boxShadow = '';
+                }, 2000);
+            }
+        }, 300);
+        
+        // Scroll suave hacia el panel de búsqueda
+        setTimeout(() => {
+            searchPanel.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start' 
+            });
+        }, 400);
+    }, 100);
+}
 // Ejecutar refacturación completa
 async function executeCompleteRefactoring() {
     // Preparar todos los cambios
@@ -5117,14 +5546,15 @@ async function executeCompleteRefactoring() {
         { id: 'socialReason', fieldName: 'IdRazon', tipoCambio: 3 },
         { id: 'invoiceAmount', fieldName: 'MontoFactura', tipoCambio: 4 },
         { id: 'invoiceDate', fieldName: 'FechaFactura', tipoCambio: 5 },
-        { id: 'providerNit', fieldName: 'NIT', tipoCambio: 6 }
+        // CAMBIO: Usar IdProveedor en lugar de NIT
+        { id: 'providerName', fieldName: 'IdProveedor', tipoCambio: 6 }
     ];
     
     // Actualizar base de datos central y sucursal
     await DatabaseManager.executeWithConnection('DSN=facturas;charset=utf8', async (connection) => {
         // Actualizar todos los campos en la base central
         for (const fieldConfig of fieldConfigs) {
-            const fieldData = refacturingFields[fieldConfig.id];
+            const fieldData = refacturingFields[getRefacturingFieldKey(fieldConfig.id)];
             const originalValue = getOriginalValueForRefactoring(fieldConfig);
             
             await updateInvoiceField(connection, fieldConfig, fieldData.value, fieldData.selectedProvider);
@@ -5151,7 +5581,6 @@ function updateCurrentInvoiceFromRefactoring() {
                 break;
             case 'socialReason':
                 window.currentInvoice.IdRazon = field.value;
-                // Buscar nombre de razón social
                 break;
             case 'invoiceAmount':
                 window.currentInvoice.MontoFactura = field.value;
@@ -5159,7 +5588,7 @@ function updateCurrentInvoiceFromRefactoring() {
             case 'invoiceDate':
                 window.currentInvoice.FechaFactura = field.value;
                 break;
-            case 'providerNit':
+            case 'providerName': // CAMBIO: De providerNit a providerName
                 if (field.selectedProvider) {
                     window.currentInvoice.NIT = field.selectedProvider.NIT;
                     window.currentInvoice.Nombre = field.selectedProvider.Nombre;
@@ -5178,7 +5607,8 @@ function getFieldLabelByKey(key) {
         'socialReason': 'Razón Social',
         'invoiceAmount': 'Monto',
         'invoiceDate': 'Fecha',
-        'providerNit': 'Proveedor'
+        // CORRECCIÓN: Cambiar 'providerName' por 'Proveedor'
+        'providerName': 'Proveedor'
     };
     return labels[key] || key;
 }

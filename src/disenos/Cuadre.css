@@ -388,14 +388,104 @@ body {
     animation: slideInUp 0.5s ease-in-out;
 }
 
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
 .section-title {
     font-size: 1.125rem;
     font-weight: 600;
     color: var(--text-dark);
-    margin-bottom: 0.5rem;
+    margin: 0;
     border-bottom: 2px solid var(--primary-light);
     padding-bottom: 0.5rem;
     display: inline-block;
+}
+
+.descuento-options {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Checkbox personalizado */
+.checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-medium);
+    cursor: pointer;
+    transition: color var(--transition-fast);
+    user-select: none;
+}
+
+.checkbox-container:hover {
+    color: var(--primary-color);
+}
+
+.descuento-checkbox {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+}
+
+.checkmark {
+    position: relative;
+    height: 18px;
+    width: 18px;
+    background-color: var(--white);
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    transition: all var(--transition-fast);
+}
+
+.checkbox-container:hover .checkmark {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(74, 109, 167, 0.1);
+}
+
+.descuento-checkbox:checked ~ .checkmark {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.checkmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+    left: 5px;
+    top: 2px;
+    width: 4px;
+    height: 8px;
+    border: solid var(--white);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.descuento-checkbox:checked ~ .checkmark:after {
+    display: block;
+}
+
+/* Indicador visual cuando está activo el descuento sin IVA */
+.descuento-sin-iva-activo .data-table {
+    border-left: 4px solid var(--warning-color);
+}
+
+.descuento-sin-iva-activo .section-title {
+    border-bottom-color: var(--warning-color);
+}
+
+.descuento-sin-iva-activo .checkbox-container {
+    color: var(--warning-color);
+    font-weight: 600;
 }
 
 /* Tabla de datos */
@@ -456,17 +546,18 @@ body {
     background-color: var(--row-highlight);
 }
 
-/* Ancho de columnas */
-.upc-column { width: 10%; }
-.descripcion-column { width: 25%; }
-.cantidad-column { width: 7%; }
-.costo-column { width: 8%; }
-.costo-alterno-column { width: 8%; }
-.bonificacion-column { width: 8%; }
-.precio-column { width: 10%; }
-.descuento-column { width: 8%; }
-.costo-facturado-column { width: 8%; }
-.diferencia-column { width: 8%; }
+/* Ancho de columnas - Ajustado para 11 columnas incluyendo Costo sin Descuento */
+.upc-column { width: 9%; }
+.descripcion-column { width: 20%; }
+.cantidad-column { width: 6%; }
+.costo-column { width: 7%; }
+.costo-alterno-column { width: 7%; }
+.bonificacion-column { width: 7%; }
+.precio-column { width: 9%; }
+.descuento-column { width: 7%; }
+.costo-sin-descuento-column { width: 9%; }
+.costo-facturado-column { width: 9%; }
+.diferencia-column { width: 10%; }
 
 /* Inputs dentro de la tabla */
 .data-table input {
@@ -590,6 +681,19 @@ body {
     border: 2px solid var(--primary-color) !important;
 }
 
+/* Estilo especial para la columna Costo sin Descuento */
+.costo-sin-descuento-column {
+    background-color: rgba(23, 162, 184, 0.05);
+    font-weight: 500;
+}
+
+.costo-sin-descuento-cell {
+    background-color: rgba(23, 162, 184, 0.08);
+    color: var(--info-color);
+    font-weight: 600;
+    text-align: center;
+}
+
 /* Animaciones */
 @keyframes fadeIn {
     from { opacity: 0; }
@@ -675,6 +779,7 @@ body {
         width: 100%;
     }
 }
+
 .export-btn {
     background-color: var(--success-color);
     color: var(--white);

@@ -37,50 +37,47 @@
 
     <!-- Contenedor principal -->
     <div class="main-container">
-        <!-- Panel de filtros -->
-        <div class="filters-panel">
-            <div class="panel-header">
-                <div class="panel-icon">
+        <!-- Panel de filtros compacto -->
+        <div class="filters-panel-compact">
+            <div class="filters-header">
+                <div class="filters-title">
                     <i class="fas fa-filter"></i>
+                    <span>Filtros de Búsqueda</span>
                 </div>
-                <div class="panel-title">
-                    <h2>Filtros de Búsqueda</h2>
-                    <p>Seleccione el rango de fechas para consultar</p>
-                </div>
-                <div class="stats-summary" id="statsSummary">
-                    <div class="stat-item">
-                        <span class="stat-label">Total cambios:</span>
-                        <span class="stat-value" id="totalChanges">0</span>
-                    </div>
+                <div class="stats-summary">
+                    <span class="total-changes">Total: <strong id="totalChanges">0</strong></span>
                 </div>
             </div>
             
-            <form id="filtersForm" class="filters-form">
-                <div class="filters-row">
+            <form id="filtersForm" class="filters-form-inline">
+                <div class="filters-grid">
                     <!-- Fecha desde -->
-                    <div class="filter-group">
-                        <label for="fechaDesde">
-                            <i class="fas fa-calendar-alt"></i>
-                            Fecha Desde
-                        </label>
+                    <div class="filter-item">
+                        <label for="fechaDesde">Fecha Desde</label>
                         <input type="date" id="fechaDesde" name="fechaDesde" required>
                     </div>
                     
                     <!-- Fecha hasta -->
-                    <div class="filter-group">
-                        <label for="fechaHasta">
-                            <i class="fas fa-calendar-check"></i>
-                            Fecha Hasta
-                        </label>
+                    <div class="filter-item">
+                        <label for="fechaHasta">Fecha Hasta</label>
                         <input type="date" id="fechaHasta" name="fechaHasta" required>
                     </div>
                     
-                    <!-- Filtro opcional por tipo de cambio -->
-                    <div class="filter-group">
-                        <label for="tipoCambio">
-                            <i class="fas fa-tags"></i>
-                            Tipo de Cambio (Opcional)
-                        </label>
+                    <!-- Serie de factura -->
+                    <div class="filter-item">
+                        <label for="serieFactura">Serie Factura</label>
+                        <input type="text" id="serieFactura" name="serieFactura" placeholder="Ej: A001" maxlength="10">
+                    </div>
+                    
+                    <!-- Número de factura -->
+                    <div class="filter-item">
+                        <label for="numeroFactura">Número Factura</label>
+                        <input type="text" id="numeroFactura" name="numeroFactura" placeholder="Ej: 123456" maxlength="20">
+                    </div>
+                    
+                    <!-- Tipo de cambio -->
+                    <div class="filter-item">
+                        <label for="tipoCambio">Tipo de Cambio</label>
                         <select id="tipoCambio" name="tipoCambio">
                             <option value="">Todos los tipos</option>
                             <option value="1">Serie</option>
@@ -91,121 +88,114 @@
                             <option value="6">Proveedor</option>
                         </select>
                     </div>
-                    <div class="filter-group">
-                        <label for="tipoModificacion">
-                            <i class="fas fa-cog"></i>
-                            Motivo de Modificación
-                        </label>
+                    
+                    <!-- Motivo de modificación -->
+                    <div class="filter-item">
+                        <label for="tipoModificacion">Motivo</label>
                         <select id="tipoModificacion" name="tipoModificacion">
-                            <option value="">Todos los motivos</option>
+                            <option value="">Todos</option>
                             <option value="1">Modificación</option>
                             <option value="2">Refacturación</option>
                         </select>
                     </div>
 
-                    <div class="filter-group">
-                        <label for="razonModificacion">
-                            <i class="fas fa-clipboard-list"></i>
-                            Razón de Modificación
-                        </label>
+                    <!-- Razón de modificación -->
+                    <div class="filter-item">
+                        <label for="razonModificacion">Razón</label>
                         <select id="razonModificacion" name="razonModificacion" disabled>
-                            <option value="">Seleccione primero el motivo</option>
+                            <option value="">Seleccione motivo</option>
                         </select>
                     </div>
-                </div>
-                
-                <div class="filters-actions">
-                    <button type="button" class="btn-secondary" id="limpiarFiltros">
-                        <i class="fas fa-eraser"></i>
-                        Limpiar Filtros
-                    </button>
-                    <button type="submit" class="btn-primary search-button">
-                        <span class="button-text">Buscar Cambios</span>
-                        <span class="button-icon">
-                            <i class="fas fa-search"></i>
-                        </span>
-                    </button>
+                    
+                    <!-- Botones -->
+                    <div class="filter-actions">
+                        <button type="button" class="btn-clear" id="limpiarFiltros" title="Limpiar filtros">
+                            <i class="fas fa-eraser"></i>
+                        </button>
+                        <button type="submit" class="btn-search" title="Buscar cambios">
+                            <span class="search-text">Buscar</span>
+                            <span class="search-icon">
+                                <i class="fas fa-search"></i>
+                            </span>
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
 
-        <!-- Panel de resultados -->
-        <div class="results-panel" id="resultsPanel" style="display: none;">
-            <div class="results-header">
+        <!-- Contenedor de resultados que ocupa toda la pantalla -->
+        <div class="results-container" id="resultsContainer">
+            <!-- Header de resultados -->
+            <div class="results-header" id="resultsHeader" style="display: none;">
                 <div class="results-info">
-                    <h3>
-                        <i class="fas fa-list-alt"></i>
-                        Resultados del Historial
-                    </h3>
-                    <div class="results-meta">
-                        <span class="results-count">
-                            <span id="resultsCount">0</span> cambios encontrados
-                        </span>
-                        <span class="results-period" id="resultsPeriod"></span>
+                    <div class="results-count">
+                        <span id="resultsCount">0</span> cambios encontrados
                     </div>
+                    <div class="results-period" id="resultsPeriod"></div>
                 </div>
-                
-                <div class="results-actions">
-                    <button class="btn-action" id="nuevaBusqueda">
+                <div class="table-controls">
+                    <div class="export-actions">
+                        <button class="btn-export" id="exportExcel" title="Exportar a Excel">
+                            <i class="fas fa-file-excel"></i>
+                            Exportar Excel
+                        </button>
+                    </div>
+                    <button class="btn-new-search" id="nuevaBusqueda" title="Nueva búsqueda">
                         <i class="fas fa-search-plus"></i>
                         Nueva Búsqueda
                     </button>
                 </div>
             </div>
             
-            <!-- Tabla de resultados -->
-            <div class="table-container">
-                <div class="table-wrapper">
-                    <table class="changes-table" id="changesTable">
+            <!-- Tabla de resultados expandida -->
+            <div class="table-container-full">
+                <div class="table-wrapper-full">
+                    <table class="changes-table-full" id="changesTable">
                         <thead>
                             <tr>
                                 <th class="col-tipo">
-                                    <div class="th-content">
-                                        <i class="fas fa-tag"></i>
-                                        <span>Tipo de Cambio</span>
-                                    </div>
+                                    <i class="fas fa-tag"></i>
+                                    <span>Tipo de Cambio</span>
                                 </th>
                                 <th class="col-anterior">
-                                    <div class="th-content">
-                                        <i class="fas fa-arrow-left"></i>
-                                        <span>Valor Anterior</span>
-                                    </div>
+                                    <i class="fas fa-arrow-left"></i>
+                                    <span>Valor Anterior</span>
                                 </th>
                                 <th class="col-nuevo">
-                                    <div class="th-content">
-                                        <i class="fas fa-arrow-right"></i>
-                                        <span>Valor Nuevo</span>
-                                    </div>
+                                    <i class="fas fa-arrow-right"></i>
+                                    <span>Valor Nuevo</span>
                                 </th>
                                 <th class="col-inventario">
-                                    <div class="th-content">
-                                        <i class="fas fa-boxes"></i>
-                                        <span>ID Inventario</span>
-                                    </div>
+                                    <i class="fas fa-boxes"></i>
+                                    <span>ID Inventario</span>
+                                </th>
+                                <th class="col-factura">
+                                    <i class="fas fa-file-invoice"></i>
+                                    <span>Factura</span>
+                                </th>
+                                <th class="col-monto">
+                                    <i class="fas fa-dollar-sign"></i>
+                                    <span>Monto</span>
                                 </th>
                                 <th class="col-sucursal">
-                                    <div class="th-content">
-                                        <i class="fas fa-building"></i>
-                                        <span>Sucursal</span>
-                                    </div>
+                                    <i class="fas fa-building"></i>
+                                    <span>Sucursal</span>
                                 </th>
                                 <th class="col-usuario">
-                                    <div class="th-content">
-                                        <i class="fas fa-user"></i>
-                                        <span>Usuario</span>
-                                    </div>
+                                    <i class="fas fa-user"></i>
+                                    <span>Usuario</span>
                                 </th>
                                 <th class="col-fecha">
-                                    <div class="th-content">
-                                        <i class="fas fa-calendar"></i>
-                                        <span>Fecha y Hora</span>
-                                    </div>
+                                    <i class="fas fa-calendar"></i>
+                                    <span>Fecha y Hora</span>
                                 </th>
-                                <th class="col-acciones">
-                                    <div class="th-content">
-                                        <i class="fas fa-cog"></i>
-                                        <span>Acciones</span>
-                                    </div>
+                                <th class="col-motivo">
+                                    <i class="fas fa-cog"></i>
+                                    <span>Motivo/Razón</span>
+                                </th>
+                                <th class="col-refacturacion">
+                                    <i class="fas fa-redo"></i>
+                                    <span>Refacturación</span>
                                 </th>
                             </tr>
                         </thead>
@@ -237,29 +227,52 @@
                         </button>
                     </div>
                 </div>
+                
+                <!-- Welcome state -->
+                <div class="welcome-state" id="welcomeState">
+                    <div class="welcome-content">
+                        <div class="welcome-icon">
+                            <i class="fas fa-history"></i>
+                        </div>
+                        <h2>Historial de Cambios en Facturas</h2>
+                        <p>Seleccione un rango de fechas para consultar el historial de modificaciones</p>
+                        <div class="welcome-features">
+                            <div class="feature-item">
+                                <i class="fas fa-search"></i>
+                                <span>Búsqueda avanzada con múltiples filtros</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-table"></i>
+                                <span>Vista completa de toda la información</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-sort"></i>
+                                <span>Ordenamiento y paginación inteligente</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <!-- Paginación -->
             <div class="pagination-container" id="paginationContainer" style="display: none;">
                 <div class="pagination-info">
-                    <span>Mostrando <span id="showingFrom">1</span> - <span id="showingTo">10</span> de <span id="totalRecords">0</span> registros</span>
+                    <span>Mostrando <span id="showingFrom">1</span> - <span id="showingTo">25</span> de <span id="totalRecords">0</span> registros</span>
                 </div>
                 <div class="pagination-controls">
-                    <button class="pagination-btn" id="firstPage" disabled>
+                    <button class="pagination-btn" id="firstPage" disabled title="Primera página">
                         <i class="fas fa-angle-double-left"></i>
                     </button>
-                    <button class="pagination-btn" id="prevPage" disabled>
+                    <button class="pagination-btn" id="prevPage" disabled title="Página anterior">
                         <i class="fas fa-angle-left"></i>
-                        Anterior
                     </button>
                     <div class="pagination-pages" id="paginationPages">
                         <!-- Se generarán dinámicamente -->
                     </div>
-                    <button class="pagination-btn" id="nextPage">
-                        Siguiente
+                    <button class="pagination-btn" id="nextPage" title="Página siguiente">
                         <i class="fas fa-angle-right"></i>
                     </button>
-                    <button class="pagination-btn" id="lastPage">
+                    <button class="pagination-btn" id="lastPage" title="Última página">
                         <i class="fas fa-angle-double-right"></i>
                     </button>
                 </div>
@@ -270,41 +283,10 @@
                         <option value="25" selected>25</option>
                         <option value="50">50</option>
                         <option value="100">100</option>
+                        <option value="200">200</option>
                     </select>
-                    <span>por página</span>
+                    <span>registros</span>
                 </div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Modal de detalles del cambio -->
-    <div class="modal-overlay" id="changeDetailModal" style="display: none;">
-        <div class="modal-container">
-            <div class="modal-header">
-                <div class="modal-icon">
-                    <i class="fas fa-info-circle"></i>
-                </div>
-                <div class="modal-title">
-                    <h2>Detalles del Cambio</h2>
-                    <p id="changeDetailSubtitle">Información detallada del registro</p>
-                </div>
-                <button class="modal-close" id="closeChangeDetailModal">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <div class="modal-content">
-                <div class="change-detail-content" id="changeDetailContent">
-                    <!-- El contenido se cargará dinámicamente -->
-                </div>
-            </div>
-            
-            <div class="modal-actions">
-                <button class="btn-secondary" id="closeDetailModal">
-                    <i class="fas fa-times"></i>
-                    Cerrar
-                </button>
             </div>
         </div>
     </div>
