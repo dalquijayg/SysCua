@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sincronización y Cuadres</title>
+    <link rel="stylesheet" href="../disenos/Auditorias/SincronizarGlobales.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-sync-alt"></i>
+                <h2>Sincronización</h2>
+            </div>
+            
+            <nav class="sidebar-menu">
+                <div class="menu-section">
+                    <h3 class="menu-title">
+                        <i class="fas fa-shopping-cart"></i>
+                        Ventas
+                    </h3>
+                    <ul class="menu-list">
+                        <li class="menu-item" data-section="ventas-megared">
+                            <i class="fas fa-store"></i>
+                            <span>Megared</span>
+                        </li>
+                        <li class="menu-item" data-section="ventas-surtimayoreo">
+                            <i class="fas fa-warehouse"></i>
+                            <span>SurtiMayoreo</span>
+                        </li>
+                        <li class="menu-item" data-section="ventas-bodegona">
+                            <i class="fas fa-building"></i>
+                            <span>Bodegona Antigua</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="menu-section">
+                    <h3 class="menu-title">
+                        <i class="fas fa-file-invoice"></i>
+                        Notas de Crédito
+                    </h3>
+                    <ul class="menu-list">
+                        <li class="menu-item" data-section="nc-megared">
+                            <i class="fas fa-receipt"></i>
+                            <span>Megared</span>
+                        </li>
+                        <li class="menu-item" data-section="nc-surtimayoreo">
+                            <i class="fas fa-receipt"></i>
+                            <span>SurtiMayoreo</span>
+                        </li>
+                        <li class="menu-item" data-section="nc-bodegona">
+                            <i class="fas fa-receipt"></i>
+                            <span>Bodegona Antigua</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="menu-section">
+                    <h3 class="menu-title">
+                        <i class="fas fa-box"></i>
+                        Proveedores
+                    </h3>
+                    <ul class="menu-list">
+                        <li class="menu-item" data-section="ingresos-proveedores">
+                            <i class="fas fa-truck-loading"></i>
+                            <span>Ingresos de Proveedores</span>
+                        </li>
+                        <li class="menu-item" data-section="bonificaciones-surtis">
+                            <i class="fas fa-gift"></i>
+                            <span>Bonificaciones Surtis</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="menu-section">
+                    <h3 class="menu-title">
+                        <i class="fas fa-file-alt"></i>
+                        Facturas
+                    </h3>
+                    <ul class="menu-list">
+                        <li class="menu-item" data-section="facturas-cori">
+                            <i class="fas fa-file-invoice-dollar"></i>
+                            <span>Facturas de CORI</span>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="content-header">
+                <h1 id="section-title">Panel de Sincronización</h1>
+                <div class="header-actions">
+                    <button class="btn-refresh" title="Actualizar">
+                        <i class="fas fa-sync"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="content-body">
+                <!-- Ventas Megared -->
+                <section id="ventas-megared" class="content-section">
+                    <div class="section-card">
+                        <h2><i class="fas fa-store"></i> Ventas Megared</h2>
+                        
+                        <!-- Filtros -->
+                        <div class="filters-container">
+                            <div class="filter-group">
+                                <label for="fecha-inicio-megared">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Inicio:
+                                </label>
+                                <input type="date" id="fecha-inicio-megared" class="input-date">
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label for="fecha-fin-megared">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Fin:
+                                </label>
+                                <input type="date" id="fecha-fin-megared" class="input-date">
+                            </div>
+                            
+                            <button class="btn-primary" id="btn-verificar-megared">
+                                <i class="fas fa-search"></i> Verificar
+                            </button>
+                            
+                            <button class="btn-sync-all" id="btn-sincronizar-todas-megared" style="display: none;" disabled>
+                                <i class="fas fa-sync-alt"></i> Sincronizar Todas
+                            </button>
+                            
+                            <button class="btn-secondary" id="btn-exportar-megared" style="display: none;">
+                                <i class="fas fa-file-excel"></i> Exportar a Excel
+                            </button>
+                        </div>
+                        
+                        <!-- Tabla de Sucursales -->
+                        <div class="table-container" id="container-sucursales-megared">
+                            <p class="info-message">
+                                <i class="fas fa-info-circle"></i> 
+                                Selecciona un rango de fechas y presiona "Verificar" para comparar los datos
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Ventas SurtiMayoreo -->
+                <section id="ventas-surtimayoreo" class="content-section">
+                    <div class="section-card">
+                        <h2><i class="fas fa-warehouse"></i> Ventas SurtiMayoreo</h2>
+                        
+                        <!-- Filtros -->
+                        <div class="filters-container">
+                            <div class="filter-group">
+                                <label for="fecha-inicio-surtimayoreo">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Inicio:
+                                </label>
+                                <input type="date" id="fecha-inicio-surtimayoreo" class="input-date">
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label for="fecha-fin-surtimayoreo">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Fin:
+                                </label>
+                                <input type="date" id="fecha-fin-surtimayoreo" class="input-date">
+                            </div>
+                            
+                            <button class="btn-primary" id="btn-verificar-surtimayoreo">
+                                <i class="fas fa-search"></i> Verificar
+                            </button>
+                            
+                            <button class="btn-sync-all" id="btn-sincronizar-todas-surtimayoreo" style="display: none;" disabled>
+                                <i class="fas fa-sync-alt"></i> Sincronizar Todas
+                            </button>
+                            
+                            <button class="btn-secondary" id="btn-exportar-surtimayoreo" style="display: none;">
+                                <i class="fas fa-file-excel"></i> Exportar a Excel
+                            </button>
+                        </div>
+                        
+                        <!-- Tabla de Sucursales -->
+                        <div class="table-container" id="container-sucursales-surtimayoreo">
+                            <p class="info-message">
+                                <i class="fas fa-info-circle"></i> 
+                                Selecciona un rango de fechas y presiona "Verificar" para comparar los datos
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Ventas Bodegona Antigua -->
+                <section id="ventas-bodegona" class="content-section">
+                    <div class="section-card">
+                        <h2><i class="fas fa-building"></i> Ventas Bodegona Antigua</h2>
+                        
+                        <!-- Filtros -->
+                        <div class="filters-container">
+                            <div class="filter-group">
+                                <label for="fecha-inicio-bodegona">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Inicio:
+                                </label>
+                                <input type="date" id="fecha-inicio-bodegona" class="input-date">
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label for="fecha-fin-bodegona">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Fin:
+                                </label>
+                                <input type="date" id="fecha-fin-bodegona" class="input-date">
+                            </div>
+                            
+                            <button class="btn-primary" id="btn-verificar-bodegona">
+                                <i class="fas fa-search"></i> Verificar
+                            </button>
+                            
+                            <button class="btn-sync-all" id="btn-sincronizar-todas-bodegona" style="display: none;" disabled>
+                                <i class="fas fa-sync-alt"></i> Sincronizar Todas
+                            </button>
+                            
+                            <button class="btn-secondary" id="btn-exportar-bodegona" style="display: none;">
+                                <i class="fas fa-file-excel"></i> Exportar a Excel
+                            </button>
+                        </div>
+                        
+                        <!-- Tabla de Sucursales -->
+                        <div class="table-container" id="container-sucursales-bodegona">
+                            <p class="info-message">
+                                <i class="fas fa-info-circle"></i> 
+                                Selecciona un rango de fechas y presiona "Verificar" para comparar los datos
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Notas de Crédito Megared -->
+                <section id="nc-megared" class="content-section">
+                    <div class="section-card">
+                        <h2><i class="fas fa-receipt"></i> Notas de Crédito Megared</h2>
+                        
+                        <!-- Filtros -->
+                        <div class="filters-container">
+                            <div class="filter-group">
+                                <label for="fecha-inicio-nc-megared">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Inicio:
+                                </label>
+                                <input type="date" id="fecha-inicio-nc-megared" class="input-date">
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label for="fecha-fin-nc-megared">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Fin:
+                                </label>
+                                <input type="date" id="fecha-fin-nc-megared" class="input-date">
+                            </div>
+                            
+                            <button class="btn-primary" id="btn-verificar-nc-megared">
+                                <i class="fas fa-search"></i> Verificar
+                            </button>
+                            
+                            <button class="btn-sync-all" id="btn-sincronizar-todas-nc-megared" style="display: none;" disabled>
+                                <i class="fas fa-sync-alt"></i> Sincronizar Todas
+                            </button>
+                            
+                            <button class="btn-secondary" id="btn-exportar-nc-megared" style="display: none;">
+                                <i class="fas fa-file-excel"></i> Exportar a Excel
+                            </button>
+                        </div>
+                        
+                        <!-- Tabla de Sucursales -->
+                        <div class="table-container" id="container-sucursales-nc-megared">
+                            <p class="info-message">
+                                <i class="fas fa-info-circle"></i> 
+                                Selecciona un rango de fechas y presiona "Verificar" para comparar los datos
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Notas de Crédito SurtiMayoreo -->
+                <section id="nc-surtimayoreo" class="content-section">
+                    <div class="section-card">
+                        <h2><i class="fas fa-receipt"></i> Notas de Crédito SurtiMayoreo</h2>
+                        
+                        <!-- Filtros -->
+                        <div class="filters-container">
+                            <div class="filter-group">
+                                <label for="fecha-inicio-nc-surtimayoreo">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Inicio:
+                                </label>
+                                <input type="date" id="fecha-inicio-nc-surtimayoreo" class="input-date">
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label for="fecha-fin-nc-surtimayoreo">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Fin:
+                                </label>
+                                <input type="date" id="fecha-fin-nc-surtimayoreo" class="input-date">
+                            </div>
+                            
+                            <button class="btn-primary" id="btn-verificar-nc-surtimayoreo">
+                                <i class="fas fa-search"></i> Verificar
+                            </button>
+                            
+                            <button class="btn-sync-all" id="btn-sincronizar-todas-nc-surtimayoreo" style="display: none;" disabled>
+                                <i class="fas fa-sync-alt"></i> Sincronizar Todas
+                            </button>
+                            
+                            <button class="btn-secondary" id="btn-exportar-nc-surtimayoreo" style="display: none;">
+                                <i class="fas fa-file-excel"></i> Exportar a Excel
+                            </button>
+                        </div>
+                        
+                        <!-- Tabla de Sucursales -->
+                        <div class="table-container" id="container-sucursales-nc-surtimayoreo">
+                            <p class="info-message">
+                                <i class="fas fa-info-circle"></i> 
+                                Selecciona un rango de fechas y presiona "Verificar" para comparar los datos
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Notas de Crédito Bodegona Antigua -->
+                <section id="nc-bodegona" class="content-section">
+                    <div class="section-card">
+                        <h2><i class="fas fa-receipt"></i> Notas de Crédito Bodegona Antigua</h2>
+                        
+                        <!-- Filtros -->
+                        <div class="filters-container">
+                            <div class="filter-group">
+                                <label for="fecha-inicio-nc-bodegona">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Inicio:
+                                </label>
+                                <input type="date" id="fecha-inicio-nc-bodegona" class="input-date">
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label for="fecha-fin-nc-bodegona">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Fin:
+                                </label>
+                                <input type="date" id="fecha-fin-nc-bodegona" class="input-date">
+                            </div>
+                            
+                            <button class="btn-primary" id="btn-verificar-nc-bodegona">
+                                <i class="fas fa-search"></i> Verificar
+                            </button>
+                            
+                            <button class="btn-sync-all" id="btn-sincronizar-todas-nc-bodegona" style="display: none;" disabled>
+                                <i class="fas fa-sync-alt"></i> Sincronizar Todas
+                            </button>
+                            
+                            <button class="btn-secondary" id="btn-exportar-nc-bodegona" style="display: none;">
+                                <i class="fas fa-file-excel"></i> Exportar a Excel
+                            </button>
+                        </div>
+                        
+                        <!-- Tabla de Sucursales -->
+                        <div class="table-container" id="container-sucursales-nc-bodegona">
+                            <p class="info-message">
+                                <i class="fas fa-info-circle"></i> 
+                                Selecciona un rango de fechas y presiona "Verificar" para comparar los datos
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Ingresos de Proveedores -->
+                <section id="ingresos-proveedores" class="content-section">
+                    <div class="section-card">
+                        <h2><i class="fas fa-truck-loading"></i> Ingresos de Proveedores</h2>
+                        
+                        <!-- Filtros -->
+                        <div class="filters-container">
+                            <div class="filter-group">
+                                <label for="fecha-inicio-ingresos">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Inicio:
+                                </label>
+                                <input type="date" id="fecha-inicio-ingresos" class="input-date">
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label for="fecha-fin-ingresos">
+                                    <i class="fas fa-calendar-alt"></i> Fecha Fin:
+                                </label>
+                                <input type="date" id="fecha-fin-ingresos" class="input-date">
+                            </div>
+                            
+                            <button class="btn-primary" id="btn-verificar-ingresos">
+                                <i class="fas fa-search"></i> Verificar
+                            </button>
+                            
+                            <button class="btn-sync-all" id="btn-sincronizar-todas-ingresos" style="display: none;" disabled>
+                                <i class="fas fa-sync-alt"></i> Sincronizar Todas
+                            </button>
+                            
+                            <button class="btn-secondary" id="btn-exportar-ingresos" style="display: none;">
+                                <i class="fas fa-file-excel"></i> Exportar a Excel
+                            </button>
+                        </div>
+                        
+                        <!-- Tabla de Sucursales -->
+                        <div class="table-container" id="container-sucursales-ingresos">
+                            <p class="info-message">
+                                <i class="fas fa-info-circle"></i> 
+                                Selecciona un rango de fechas y presiona "Verificar" para comparar los datos
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Bonificaciones Surtis -->
+                <section id="bonificaciones-surtis" class="content-section">
+                    <div class="section-card">
+                        <h2>Bonificaciones Surtis</h2>
+                        <p>Contenido para bonificaciones Surtis</p>
+                    </div>
+                </section>
+
+                <!-- Facturas de CORI -->
+                <section id="facturas-cori" class="content-section">
+                    <div class="section-card">
+                        <h2>Facturas de CORI</h2>
+                        <p>Contenido para facturas de CORI</p>
+                    </div>
+                </section>
+
+                <!-- Pantalla inicial -->
+                <section id="inicio" class="content-section active">
+                    <div class="welcome-card">
+                        <div class="welcome-icon">
+                            <i class="fas fa-sync-alt"></i>
+                        </div>
+                        <h2>Bienvenido al Panel de Sincronización y Cuadres</h2>
+                        <p>Selecciona una opción del menú lateral para comenzar</p>
+                        <div class="welcome-stats">
+                            <div class="stat-item">
+                                <i class="fas fa-database"></i>
+                                <span>Sistema listo</span>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-check-circle"></i>
+                                <span>Conexión establecida</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="../logica/Auditorias/SincronizarGlobales.js"></script>
+</body>
+</html>

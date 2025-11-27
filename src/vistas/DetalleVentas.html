@@ -3,32 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ingresos de Inventarios</title>
-    <link rel="stylesheet" href="../disenos/Reportes/Ingreso.css">
+    <title>Detalle Ventas Megared</title>
+    <link rel="stylesheet" href="../disenos/Reportes/DetalleVentas.css">
 </head>
 <body>
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <h1>📦 Consulta de Ingresos de Inventarios</h1>
+            <h1>📊 Consulta de Ventas Megared (Vista Completa)</h1>
         </div>
         
         <!-- Filtros -->
         <div class="filtros-container">
             <div class="filtro-grupo">
-                <label for="razonSocial">Razón Social:</label>
-                <select id="razonSocial">
-                    <option value="">Cargando...</option>
-                </select>
-            </div>
-
-            <div class="filtro-grupo">
-                <label for="fechaInicio">Fecha Factura Inicio:</label>
+                <label for="fechaInicio">Fecha Inicio:</label>
                 <input type="date" id="fechaInicio" required>
             </div>
 
             <div class="filtro-grupo">
-                <label for="fechaFin">Fecha Factura Fin:</label>
+                <label for="fechaFin">Fecha Fin:</label>
                 <input type="date" id="fechaFin" required>
             </div>
 
@@ -45,9 +38,23 @@
             </div>
 
             <div class="filtro-grupo">
-                <button id="btnBuscar" class="btn-buscar">
+                <button id="btnBuscarMegared" class="btn-buscar btn-megared">
                     <span class="btn-icon">🔍</span>
-                    Buscar
+                    Megared
+                </button>
+            </div>
+
+            <div class="filtro-grupo">
+                <button id="btnBuscarBodegona" class="btn-buscar btn-bodegona">
+                    <span class="btn-icon">🔍</span>
+                    Bodegona Antigua
+                </button>
+            </div>
+
+            <div class="filtro-grupo">
+                <button id="btnBuscarSurti" class="btn-buscar btn-surti">
+                    <span class="btn-icon">🔍</span>
+                    SurtiMayoreo
                 </button>
             </div>
 
@@ -62,44 +69,39 @@
         <!-- Información de resultados -->
         <div class="info-resultados">
             <div class="info-left">
-                <span id="razonSocialInfo" style="font-weight: 600; color: #667eea;"></span>
+                <span id="origenDatos" style="font-weight: 600; color: #667eea;"></span>
                 <span id="totalRegistros">Total de registros: 0</span>
                 <span id="rangoFechas"></span>
-            </div>
-            <div class="info-right">
-                <span style="font-size: 11px; color: #718096;">
-                    ⚡ Vista virtualizada - Scroll suave para cualquier volumen
-                </span>
             </div>
         </div>
 
         <!-- Tabla de resultados -->
         <div class="tabla-container">
-            <table id="tablaInventarios">
+            <table id="tablaVentas">
                 <thead>
                     <tr>
-                        <th>Fecha Factura</th>
-                        <th>Fecha Recepción</th>
-                        <th>Razón Social</th>
+                        <th>Fecha</th>
                         <th>Sucursal</th>
-                        <th>Id Inventario</th>
-                        <th>Proveedor</th>
-                        <th>Serie Factura</th>
-                        <th>No. Factura</th>
+                        <th>Id Trans.</th>
+                        <th>Caja</th>
                         <th>UPC</th>
                         <th>Descripción</th>
+                        <th>Desc. Corta</th>
                         <th>Cant.</th>
-                        <th>Bonif.</th>
-                        <th>Costo</th>
+                        <th>Costo Unit.</th>
+                        <th>Precio Unit.</th>
                         <th>Total</th>
-                        <th>Estado</th>
-                        <th>ReFacturar RS</th>
+                        <th>NIT</th>
+                        <th>Cliente</th>
+                        <th>Serie</th>
+                        <th>No. Doc.</th>
+                        <th>UUID</th>
                     </tr>
                 </thead>
                 <tbody id="tablaBody">
                     <tr>
                         <td colspan="16" class="sin-datos">
-                            Seleccione la Razón Social, fechas y presione "Buscar"
+                            Seleccione los filtros y presione el botón de búsqueda deseado
                         </td>
                     </tr>
                 </tbody>
@@ -113,6 +115,6 @@
         </div>
     </div>
 
-    <script src="../logica/Reportes/Ingreso.js"></script>
+    <script src="../logica/Reportes/DetalleVentas.js"></script>
 </body>
 </html>

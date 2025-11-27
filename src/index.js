@@ -16,18 +16,17 @@ let historialwindow = null;
 let criteriowindow = null;
 let ingresosWindow = null;
 let VentasMegared = null;
-let VentasSurti = null;
 let NotasMegared = null;
-let NotasSurti = null;
 let FacturasBoni = null;
 let VentasBodegonaAntigua = null;
-let NotasBodegonaAntigua = null;
 let UpdateFacturas = null;
 let ReporteNCT = null;
 let HitorialFacCompras = null;
 let ExistenciasGlobalesProductos = null;
 let facturasCoriDetalles = null;
-
+let Modificar_NotaCredito = null;
+let Registrar_FacturasVentas = null;
+let sincronizarGlobales = null;
 app.on('ready',  createWindow)
 
 autoUpdater.on('update-available', (info) => {
@@ -198,37 +197,11 @@ ipcMain.on('open-VMegared-window', () => {
       });
 
       VentasMegared.maximize();
-      VentasMegared.loadFile(path.join(__dirname, 'vistas/DetalleVentasMegared.html'));
+      VentasMegared.loadFile(path.join(__dirname, 'vistas/DetalleVentas.html'));
 
       // Manejar el evento de cierre de la ventana
       VentasMegared.on('closed', () => {
         VentasMegared = null; // Limpiar la referencia cuando se cierre la ventana
-      });
-  }
-});
-ipcMain.on('open-VSurti-window', () => {
-  if (VentasSurti) {
-      // Si la ventana ya está abierta, enfócala
-      VentasSurti.focus();
-  } else {
-      // Si no está abierta, crea una nueva ventana
-      VentasSurti = new BrowserWindow({
-          webPreferences: {
-              nodeIntegration: true,
-              contextIsolation: false,
-              webSecurity: false,
-              enableRemoteModule: true
-          },
-          icon: path.join(__dirname, 'ingresos.ico'),  // Asegúrate de tener este ícono
-          autoHideMenuBar: true
-      });
-
-      VentasSurti.maximize();
-      VentasSurti.loadFile(path.join(__dirname, 'vistas/DetalleVentasSurti.html'));
-
-      // Manejar el evento de cierre de la ventana
-      VentasSurti.on('closed', () => {
-        VentasSurti = null; // Limpiar la referencia cuando se cierre la ventana
       });
   }
 });
@@ -250,37 +223,11 @@ ipcMain.on('open-NMegared-window', () => {
       });
 
       NotasMegared.maximize();
-      NotasMegared.loadFile(path.join(__dirname, 'vistas/DetalleNotasCreditoMegared.html'));
+      NotasMegared.loadFile(path.join(__dirname, 'vistas/DetalleNotasCredito.html'));
 
       // Manejar el evento de cierre de la ventana
       NotasMegared.on('closed', () => {
         NotasMegared = null; // Limpiar la referencia cuando se cierre la ventana
-      });
-  }
-});
-ipcMain.on('open-NSurti-window', () => {
-  if (NotasSurti) {
-      // Si la ventana ya está abierta, enfócala
-      NotasSurti.focus();
-  } else {
-      // Si no está abierta, crea una nueva ventana
-      NotasSurti = new BrowserWindow({
-          webPreferences: {
-              nodeIntegration: true,
-              contextIsolation: false,
-              webSecurity: false,
-              enableRemoteModule: true
-          },
-          icon: path.join(__dirname, 'ingresos.ico'),  // Asegúrate de tener este ícono
-          autoHideMenuBar: true
-      });
-
-      NotasSurti.maximize();
-      NotasSurti.loadFile(path.join(__dirname, 'vistas/DetalleNotasCreditoSurti.html'));
-
-      // Manejar el evento de cierre de la ventana
-      NotasSurti.on('closed', () => {
-        NotasSurti = null; // Limpiar la referencia cuando se cierre la ventana
       });
   }
 });
@@ -328,37 +275,11 @@ ipcMain.on('open-VBodegonaAntigua-window', () => {
       });
 
       VentasBodegonaAntigua.maximize();
-      VentasBodegonaAntigua.loadFile(path.join(__dirname, 'vistas/DetalleVentasBodegonaAntigua.html'));
+      VentasBodegonaAntigua.loadFile(path.join(__dirname, 'vistas/Kardex.html'));
 
       // Manejar el evento de cierre de la ventana
       VentasBodegonaAntigua.on('closed', () => {
         VentasBodegonaAntigua = null; // Limpiar la referencia cuando se cierre la ventana
-      });
-  }
-});
-ipcMain.on('open-NBodegonaAntigua-window', () => {
-  if (NotasBodegonaAntigua) {
-      // Si la ventana ya está abierta, enfócala
-      NotasBodegonaAntigua.focus();
-  } else {
-      // Si no está abierta, crea una nueva ventana
-      NotasBodegonaAntigua = new BrowserWindow({
-          webPreferences: {
-              nodeIntegration: true,
-              contextIsolation: false,
-              webSecurity: false,
-              enableRemoteModule: true
-          },
-          icon: path.join(__dirname, 'ingresos.ico'),  // Asegúrate de tener este ícono
-          autoHideMenuBar: true
-      });
-
-      NotasBodegonaAntigua.maximize();
-      NotasBodegonaAntigua.loadFile(path.join(__dirname, 'vistas/DetalleNotasBodegonaAntigua.html'));
-
-      // Manejar el evento de cierre de la ventana
-      NotasBodegonaAntigua.on('closed', () => {
-        NotasBodegonaAntigua = null; // Limpiar la referencia cuando se cierre la ventana
       });
   }
 });
@@ -466,6 +387,58 @@ ipcMain.on('open-HisotrialFC-window', () => {
       });
   }
 });
+ipcMain.on('open-Modificar_NotaCredito-window', () => {
+  if (Modificar_NotaCredito) {
+      // Si la ventana ya está abierta, enfócala
+      Modificar_NotaCredito.focus();
+  } else {
+      // Si no está abierta, crea una nueva ventana
+      Modificar_NotaCredito = new BrowserWindow({
+          webPreferences: {
+              nodeIntegration: true,
+              contextIsolation: false,
+              webSecurity: false,
+              enableRemoteModule: true
+          },
+          icon: path.join(__dirname, 'ingresos.ico'),  // Asegúrate de tener este ícono
+          autoHideMenuBar: true
+      });
+
+      Modificar_NotaCredito.maximize();
+      Modificar_NotaCredito.loadFile(path.join(__dirname, 'vistas/ModificarNotaCredito.html'));
+
+      // Manejar el evento de cierre de la ventana
+      Modificar_NotaCredito.on('closed', () => {
+        Modificar_NotaCredito = null; // Limpiar la referencia cuando se cierre la ventana
+      });
+  }
+});
+ipcMain.on('open-Registrar_Facturas-window', () => {
+  if (Registrar_FacturasVentas) {
+      // Si la ventana ya está abierta, enfócala
+      Registrar_FacturasVentas.focus();
+  } else {
+      // Si no está abierta, crea una nueva ventana
+      Registrar_FacturasVentas = new BrowserWindow({
+          webPreferences: {
+              nodeIntegration: true,
+              contextIsolation: false,
+              webSecurity: false,
+              enableRemoteModule: true
+          },
+          icon: path.join(__dirname, 'ingresos.ico'),  // Asegúrate de tener este ícono
+          autoHideMenuBar: true
+      });
+
+      Registrar_FacturasVentas.maximize();
+      Registrar_FacturasVentas.loadFile(path.join(__dirname, 'vistas/FacturasVentas.html'));
+
+      // Manejar el evento de cierre de la ventana
+      Registrar_FacturasVentas.on('closed', () => {
+        Registrar_FacturasVentas = null; // Limpiar la referencia cuando se cierre la ventana
+      });
+  }
+});
 ipcMain.on('open-FacturasCori-window', () => {
   if (facturasCoriDetalles) {
       // Si la ventana ya está abierta, enfócala
@@ -489,6 +462,32 @@ ipcMain.on('open-FacturasCori-window', () => {
       // Manejar el evento de cierre de la ventana
       facturasCoriDetalles.on('closed', () => {
         facturasCoriDetalles = null; // Limpiar la referencia cuando se cierre la ventana
+      });
+  }
+});
+ipcMain.on('open-Sincronizar-window', () => {
+  if (sincronizarGlobales) {
+      // Si la ventana ya está abierta, enfócala
+      sincronizarGlobales.focus();
+  } else {
+      // Si no está abierta, crea una nueva ventana
+      sincronizarGlobales = new BrowserWindow({
+          webPreferences: {
+              nodeIntegration: true,
+              contextIsolation: false,
+              webSecurity: false,
+              enableRemoteModule: true
+          },
+          icon: path.join(__dirname, 'ingresos.ico'),  // Asegúrate de tener este ícono
+          autoHideMenuBar: true
+      });
+
+      sincronizarGlobales.maximize();
+      sincronizarGlobales.loadFile(path.join(__dirname, 'vistas/SincronizarGlobales.html'));
+
+      // Manejar el evento de cierre de la ventana
+      sincronizarGlobales.on('closed', () => {
+        sincronizarGlobales = null; // Limpiar la referencia cuando se cierre la ventana
       });
   }
 });

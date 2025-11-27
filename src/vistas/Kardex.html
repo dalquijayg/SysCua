@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kardex - Sistema de Inventario</title>
+    <link rel="stylesheet" href="../disenos/Reportes/Kardex.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Sección de Filtros Compacta -->
+        <div class="filtros-section">
+            <h2>Kardex de Inventario</h2>
+            
+            <div class="filtros-grid">
+                <!-- Fila 1 -->
+                <div class="filtro-item">
+                    <label for="fechaInicio">Fecha Inicio:</label>
+                    <input type="date" id="fechaInicio" class="input-field">
+                </div>
+
+                <div class="filtro-item">
+                    <label for="fechaFin">Fecha Fin:</label>
+                    <input type="date" id="fechaFin" class="input-field">
+                </div>
+
+                <div class="filtro-item">
+                    <label for="upc">UPC:</label>
+                    <input type="text" id="upc" class="input-field" placeholder="Código UPC">
+                </div>
+
+                <div class="filtro-item">
+                    <label for="saldoInicial">Saldo Inicial:</label>
+                    <input type="number" id="saldoInicial" class="input-field" placeholder="0.00" step="0.01">
+                </div>
+                <div class="filtro-item checkbox-container">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="conBonificaciones" checked>
+                        <span>Incluir Envíos en Saldo</span>
+                    </label>
+                </div>
+                <div class="filtro-item">
+                    <label for="razonSocial">Razón Social:</label>
+                    <select id="razonSocial" class="input-field">
+                        <option value="">Seleccione...</option>
+                    </select>
+                </div>
+
+                <div class="filtro-item btn-container">
+                    <button id="btnBuscar" class="btn-buscar">Buscar</button>
+                </div>
+                <div class="filtro-item btn-container">
+                    <button id="btnExportar" class="btn-exportar">Exportar a Excel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Tabla de Resultados -->
+        <div class="tabla-section">
+            <div class="tabla-container">
+                <table id="tablaKardex">
+                    <thead>
+                        <tr>
+                            <th>IdTransaccion/Inventario</th>
+                            <th>UPC</th>
+                            <th>Descripción</th>
+                            <th>Descripción Corta</th>
+                            <th>Cantidad</th>
+                            <th>Bonificación</th>
+                            <th>Costo</th>
+                            <th>Precio</th>
+                            <th>Fecha/Recepción</th>
+                            <th>Fecha Factura</th>
+                            <th>Serie</th>
+                            <th>Número</th>
+                            <th>UUID</th>
+                            <th>Sucursal</th>
+                            <th>Saldo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaKardexBody">
+                        <!-- Los datos se cargarán dinámicamente aquí -->
+                        <tr class="empty-row">
+                            <td colspan="14">No hay datos para mostrar. Realice una búsqueda.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="../logica/Reportes/Kardex.js"></script>
+</body>
+</html>

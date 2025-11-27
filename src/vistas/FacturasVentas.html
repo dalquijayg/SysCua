@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Facturas de Ventas</title>
+    <link rel="stylesheet" href="../disenos/Registrar/FacturasVentas.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <button class="btn-back" onclick="window.location.href='Menu.html'">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <div class="header-title">
+                <h1><i class="fas fa-file-invoice"></i> Registro de Facturas de Ventas</h1>
+                <p>Captura de facturas emitidas desde SAT</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="user-info">
+                <i class="fas fa-user-circle"></i>
+                <span id="userName"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor principal -->
+    <div class="main-container">
+    <!-- Sección de datos de factura Y sucursal -->
+        <div class="section-card">
+            <div class="section-header">
+                <h2><i class="fas fa-file-alt"></i> Datos de la Factura</h2>
+                <div class="connection-status" id="connectionStatus">
+                    <i class="fas fa-circle"></i>
+                    <span>Sin conexión</span>
+                </div>
+            </div>
+            <div class="section-body">
+                <div class="form-row-compact">
+                    <div class="form-group form-group-date">
+                        <label for="fechaFactura">
+                            <i class="fas fa-calendar-alt"></i> Fecha
+                        </label>
+                        <input type="date" id="fechaFactura" class="form-control" required>
+                    </div>
+                    <div class="form-group form-group-small">
+                        <label for="serieFactura">
+                            <i class="fas fa-tag"></i> Serie
+                        </label>
+                        <input type="text" id="serieFactura" class="form-control" placeholder="Ej: A" maxlength="10" required>
+                    </div>
+                    <div class="form-group form-group-small">
+                        <label for="numeroFactura">
+                            <i class="fas fa-hashtag"></i> Número
+                        </label>
+                        <input type="text" id="numeroFactura" class="form-control" placeholder="Ej: 12345" required>
+                    </div>
+                    <div class="form-group form-group-large">
+                        <label for="searchSucursal">
+                            <i class="fas fa-store"></i> Sucursal
+                        </label>
+                        <div class="search-container">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input 
+                                    type="text" 
+                                    id="searchSucursal" 
+                                    class="search-input" 
+                                    placeholder="Buscar sucursal... (Enter para buscar)"
+                                    autocomplete="off"
+                                >
+                                <button class="btn-clear" id="clearSucursal" style="display: none;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="search-results" id="sucursalResults" style="display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de productos -->
+        <div class="section-card products-section">
+            <div class="section-header">
+                <h2><i class="fas fa-box"></i> Productos</h2>
+                <span class="badge" id="productCount">0 productos</span>
+            </div>
+            <div class="section-body">
+                <div class="search-container">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input 
+                            type="text" 
+                            id="searchProducto" 
+                            class="search-input" 
+                            placeholder="Buscar producto por UPC o descripción... (presiona Enter)"
+                            autocomplete="off"
+                            disabled
+                        >
+                        <button class="btn-clear" id="clearProducto" style="display: none;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="search-results" id="productoResults" style="display: none;"></div>
+                </div>
+
+                <!-- Tabla de productos agregados -->
+                <div class="table-container">
+                    <table class="products-table">
+                        <thead>
+                            <tr>
+                                <th>UPC</th>
+                                <th>Descripción</th>
+                                <th>Cantidad</th>
+                                <th>Costo</th>
+                                <th>Precio</th>
+                                <th>Subtotal</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productosBody">
+                            <tr class="empty-state">
+                                <td colspan="7">
+                                    <i class="fas fa-inbox"></i>
+                                    <p>No hay productos agregados</p>
+                                    <small>Selecciona una sucursal y busca productos para agregar</small>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bar">
+            <div class="total-display">
+                <span class="total-label">Total:</span>
+                <span class="total-value" id="totalGeneral">Q 0.00</span>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-secondary" onclick="window.location.href='Menu.html'">
+                    <i class="fas fa-times"></i>
+                    Cancelar
+                </button>
+                <button class="btn btn-primary" id="btnGuardar" disabled>
+                    <i class="fas fa-save"></i>
+                    Guardar Factura
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../logica/Registrar/FacturasVentas.js"></script>
+</body>
+</html>

@@ -3,480 +3,1040 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Inventarios - Facturas de Compras</title>
+    <title>Actualizar Facturas de Compras</title>
     <link rel="stylesheet" href="../disenos/FacturasCompras.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
-    <div class="background">
-        <div class="shape shape1"></div>
-        <div class="shape shape2"></div>
-        <div class="shape shape3"></div>
-        <div class="shape shape4"></div>
-    </div>
-    
-    <!-- Header de navegación -->
-    <header class="header">
-        <div class="header-content">
-            <div class="header-left">
-                <div class="header-title">
-                    <i class="fas fa-file-invoice-dollar"></i>
-                    <h1>Facturas de Compras</h1>
-                </div>
-            </div>
-            <div class="header-right">
-                <div class="user-info" id="userInfo">
-                    <i class="fas fa-user-circle"></i>
-                    <span id="userName">Usuario</span>
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <!-- Contenedor principal -->
+    <!-- Contenedor Principal -->
     <div class="main-container">
-        <!-- Panel de búsqueda -->
-        <div class="search-panel">
-            <div class="panel-header">
-                <div class="panel-icon">
-                    <i class="fas fa-search"></i>
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-left">
+                    <div class="header-title">
+                        <h1>Gestión de Facturas de Compras</h1>
+                        <p class="subtitle">Buscar y actualizar facturas</p>
+                    </div>
                 </div>
-                <div class="panel-title">
-                    <h2>Búsqueda de Facturas</h2>
-                    <p>Ingrese la serie y número de la factura</p>
+                <div class="header-right">
+                    <div class="user-info">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="userName">Usuario</span>
+                    </div>
                 </div>
             </div>
-            
-            <form id="searchForm" class="search-form">
-                <div class="search-controls">
+        </header>
+
+        <!-- Sección de Búsqueda -->
+        <section class="search-section" id="searchSection">
+            <div class="search-container">
+                <div class="search-header">
+                    <div class="search-icon">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <h2>Buscar Factura</h2>
+                    <p>Ingresa la Serie o Número de factura y presiona Enter</p>
+                </div>
+                
+                <div class="search-inputs">
                     <div class="input-group">
-                        <div class="input-icon">
-                            <i class="fas fa-hashtag"></i>
-                        </div>
-                        <input type="text" id="searchSerie" required>
-                        <label for="searchSerie">Serie de la Factura</label>
-                        <div class="input-line"></div>
+                        <label for="searchSerie">
+                            <i class="fas fa-file-invoice"></i>
+                            Serie
+                        </label>
+                        <input 
+                            type="text" 
+                            id="searchSerie" 
+                            placeholder="Ej: A001"
+                            autocomplete="off"
+                        >
+                    </div>
+                    
+                    <div class="input-divider">
+                        <span>O</span>
                     </div>
                     
                     <div class="input-group">
-                        <div class="input-icon">
-                            <i class="fas fa-list-ol"></i>
-                        </div>
-                        <input type="text" id="searchNumber" required>
-                        <label for="searchNumber">Número de la Factura</label>
-                        <div class="input-line"></div>
-                    </div>
-                </div>
-                
-                <button type="submit" class="search-button">
-                    <span class="button-text">Buscar Factura</span>
-                    <span class="button-icon">
-                        <i class="fas fa-search"></i>
-                    </span>
-                </button>
-            </form>
-        </div>
-
-        <!-- Panel de resultados -->
-        <div class="results-panel" id="resultsPanel" style="display: none;">
-            <div class="panel-header">
-                <div class="panel-icon success">
-                    <i class="fas fa-check-circle"></i>
-                </div>
-                <div class="panel-title">
-                    <h2>Información de la Factura</h2>
-                    <p>Detalles de la factura encontrada</p>
-                </div>
-            </div>
-            
-            <div class="invoice-details" id="invoiceDetails">
-                <!-- Información básica -->
-                <div class="detail-section">
-                    <div class="section-header">
-                        <i class="fas fa-info-circle"></i>
-                        <h3>Información General</h3>
-                    </div>
-                    <div class="detail-grid">
-                        <div class="detail-item">
-                            <label>ID de Factura:</label>
-                            <span id="invoiceId">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Serie:</label>
-                            <span id="invoiceSerie">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Número:</label>
-                            <span id="invoiceNumber">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Monto:</label>
-                            <span id="invoiceAmount" class="amount">-</span>
-                        </div>
+                        <label for="searchNumero">
+                            <i class="fas fa-hashtag"></i>
+                            Número
+                        </label>
+                        <input 
+                            type="text" 
+                            id="searchNumero" 
+                            placeholder="Ej: 12345"
+                            autocomplete="off"
+                        >
                     </div>
                 </div>
 
-                <!-- Información del proveedor -->
-                <div class="detail-section">
-                    <div class="section-header">
-                        <i class="fas fa-building"></i>
-                        <h3>Información del Proveedor</h3>
-                    </div>
-                    <div class="detail-grid">
-                        <div class="detail-item">
-                            <label>Proveedor:</label>
-                            <span id="providerName">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>NIT:</label>
-                            <!-- CAMPO MODIFICADO: Agregar clases para hacerlo editable -->
-                            <span id="providerNit" class="nit-field" title="Doble clic para buscar otro proveedor">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Razón Social:</label>
-                            <span id="socialReason">-</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Información de fechas y usuario -->
-                <div class="detail-section">
-                    <div class="section-header">
-                        <i class="fas fa-calendar-alt"></i>
-                        <h3>Fechas y Usuario</h3>
-                    </div>
-                    <div class="detail-grid">
-                        <div class="detail-item">
-                            <label>Fecha de Factura:</label>
-                            <span id="invoiceDate">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Fecha de Recepción:</label>
-                            <span id="receptionDate">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Usuario que Ingresó:</label>
-                            <span id="userWhoEntered">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>ID Inventario:</label>
-                            <span id="inventoryId">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <label>Sucursal:</label>
-                            <span id="branchName">-</span>
-                        </div>
-                    </div>
+                <div class="search-hint">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Presiona <kbd>Enter</kbd> para buscar</span>
                 </div>
             </div>
 
-            <!-- Botones de acción -->
-            <div class="action-buttons">
-                <div class="action-buttons-row">
-                    <button class="action-button modification" id="modificationBtn">
-                        <i class="fas fa-edit"></i>
-                        Modificación
-                    </button>
-                    <button class="action-button refacturation" id="refacturationBtn">
-                        <i class="fas fa-redo"></i>
-                        Refacturación
-                    </button>
-                </div>
-                <div class="action-buttons-row" id="refacturingUpdateRow" style="display: none;">
-                    <button class="action-button update-refacturation" id="updateRefacturingBtn" disabled>
-                        <i class="fas fa-sync-alt"></i>
-                        Actualizar Refacturación
-                        <span class="fields-counter">(0/6 campos)</span>
-                    </button>
-                </div>
-                <div class="action-buttons-row">
-                    <button class="action-button primary" id="addCreditNoteBtn">
-                        <i class="fas fa-plus"></i>
-                        Agregar Nota de Crédito
-                    </button>
-                    <button class="action-button secondary" id="newSearchBtn">
-                        <i class="fas fa-search"></i>
+            <!-- Resultados de Búsqueda -->
+            <div class="results-container" id="resultsContainer" style="display: none;">
+                <div class="results-header">
+                    <h3>Resultados de Búsqueda</h3>
+                    <button class="btn-clear" id="btnClearSearch">
+                        <i class="fas fa-times"></i>
                         Nueva Búsqueda
                     </button>
                 </div>
+                <div class="results-table-wrapper">
+                    <table class="results-table" id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>Serie</th>
+                                <th>Número</th>
+                                <th>Proveedor</th>
+                                <th>Razón Social</th>
+                                <th>Monto</th>
+                                <th>Fecha Factura</th>
+                                <th>Sucursal</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTableBody">
+                            <!-- Los resultados se cargarán aquí dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="results-empty" id="resultsEmpty" style="display: none;">
+                    <i class="fas fa-inbox"></i>
+                    <p>No se encontraron facturas con los criterios de búsqueda</p>
+                </div>
             </div>
-        </div>
+        </section>
 
-        <!-- Panel de no encontrado -->
-        <div class="not-found-panel" id="notFoundPanel" style="display: none;">
-            <div class="panel-header">
-                <div class="panel-icon error">
-                    <i class="fas fa-exclamation-triangle"></i>
+        <!-- Sección de Detalle de Factura -->
+        <section class="detail-section" id="detailSection" style="display: none;">
+            <div class="detail-container">
+                <!-- Header del Detalle -->
+                <div class="detail-header">
+                    <div class="detail-header-left">
+                        <button class="btn-back-detail" id="btnBackToSearch">
+                            <i class="fas fa-arrow-left"></i>
+                            Volver a Búsqueda
+                        </button>
+                    </div>
+                    <div class="detail-header-center">
+                        <h2>Detalle de Factura</h2>
+                        <div class="factura-identifier">
+                            <span class="serie-badge" id="detailSerie">A001</span>
+                            <span class="numero-badge" id="detailNumero">12345</span>
+                        </div>
+                    </div>
+                    <div class="detail-header-right">
+                        <div id="normalModeButtons">
+                            <button class="btn-action btn-modify" id="btnModificar">
+                                <i class="fas fa-edit"></i>
+                                Modificar
+                            </button>
+                            <button class="btn-action btn-refacturar" id="btnRefacturar">
+                                <i class="fas fa-redo"></i>
+                                ReFacturar
+                            </button>
+                        </div>
+                        <div id="editModeButtons" style="display: none;">
+                            <button class="btn-action btn-cancel-edit" id="btnCancelarEdicion">
+                                <i class="fas fa-times"></i>
+                                Cancelar
+                            </button>
+                            <button class="btn-action btn-save-edit" id="btnGuardarCambios">
+                                <i class="fas fa-save"></i>
+                                Guardar Cambios
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div class="panel-title">
-                    <h2>Factura no encontrada</h2>
-                    <p>No se encontró ninguna factura con los criterios especificados</p>
-                </div>
-            </div>
-            
-            <div class="not-found-content">
-                <div class="not-found-icon">
-                    <i class="fas fa-search-minus"></i>
-                </div>
-                <p>Verifique que el número o serie ingresado sea correcto e intente nuevamente.</p>
-                
-                <button class="action-button secondary" id="tryAgainBtn">
-                    <i class="fas fa-redo"></i>
-                    Intentar de Nuevo
-                </button>
-            </div>
-        </div>
-    </div>
 
-    <!-- Modal para Nota de Crédito -->
-    <div class="modal-overlay" id="creditNoteModal" style="display: none;">
-        <div class="modal-container">
-            <div class="modal-header">
-                <div class="modal-icon">
-                    <i class="fas fa-file-invoice"></i>
-                </div>
-                <div class="modal-title">
-                    <h2>Agregar Nota de Crédito</h2>
-                    <p>Complete la información de la nota de crédito</p>
-                </div>
-                <button class="modal-close" id="closeCreditNoteModal">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <div class="modal-content">
-                <form id="creditNoteForm" class="credit-note-form">
-                    <!-- Información de la factura original -->
-                    <div class="original-invoice-info">
-                        <h3><i class="fas fa-file-invoice-dollar"></i> Factura Original</h3>
-                        <div class="invoice-summary">
-                            <span class="invoice-detail">
-                                <strong>Serie-Número:</strong> 
-                                <span id="originalInvoiceNumber">-</span>
-                            </span>
-                            <span class="invoice-detail">
-                                <strong>Monto:</strong> 
-                                <span id="originalInvoiceAmount">-</span>
-                            </span>
-                            <span class="invoice-detail">
-                                <strong>Proveedor:</strong> 
-                                <span id="originalProvider">-</span>
-                            </span>
+                <!-- Contenido del Detalle -->
+                <div class="detail-content">
+                    <!-- Información General -->
+                    <div class="detail-card">
+                        <div class="card-header">
+                            <i class="fas fa-info-circle"></i>
+                            <h3>Información General</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="detail-grid">
+                                <div class="detail-item">
+                                    <label>ID Factura</label>
+                                    <span id="detailId">-</span>
+                                </div>
+                                <div class="detail-item">
+                                    <label>
+                                        Serie
+                                        <span class="edit-indicator" style="display: none;">
+                                            <i class="fas fa-edit"></i>
+                                        </span>
+                                    </label>
+                                    <span id="detailSerieValue" class="view-mode">-</span>
+                                    <input type="text" id="editSerieValue" class="edit-input" style="display: none;">
+                                </div>
+                                <div class="detail-item">
+                                    <label>
+                                        Número
+                                        <span class="edit-indicator" style="display: none;">
+                                            <i class="fas fa-edit"></i>
+                                        </span>
+                                    </label>
+                                    <span id="detailNumeroValue" class="view-mode">-</span>
+                                    <input type="text" id="editNumeroValue" class="edit-input" style="display: none;">
+                                </div>
+                                <div class="detail-item">
+                                    <label>
+                                        Monto Factura
+                                        <span class="edit-indicator" style="display: none;">
+                                            <i class="fas fa-edit"></i>
+                                        </span>
+                                    </label>
+                                    <span id="detailMonto" class="amount view-mode">-</span>
+                                    <input type="number" step="0.01" id="editMonto" class="edit-input" style="display: none;" placeholder="0.00">
+                                </div>
+                                <div class="detail-item">
+                                    <label>
+                                        Fecha Factura
+                                        <span class="edit-indicator" style="display: none;">
+                                            <i class="fas fa-edit"></i>
+                                        </span>
+                                    </label>
+                                    <span id="detailFechaFactura" class="view-mode">-</span>
+                                    <input type="date" id="editFechaFactura" class="edit-input" style="display: none;">
+                                </div>
+                                <div class="detail-item">
+                                    <label>Fecha Recepción</label>
+                                    <span id="detailFechaRecepcion">-</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Información de la nota de crédito -->
-                    <div class="credit-note-fields">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="creditNoteType">Tipo de Nota de Crédito</label>
-                                <div class="select-wrapper">
-                                    <select id="creditNoteType" required>
-                                        <option value="">Seleccione un tipo...</option>
-                                    </select>
-                                    <div class="select-icon">
-                                        <i class="fas fa-chevron-down"></i>
+                    <!-- Información del Proveedor -->
+                    <div class="detail-card">
+                        <div class="card-header">
+                            <i class="fas fa-building"></i>
+                            <h3>Información del Proveedor</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="detail-grid">
+                                <div class="detail-item wide">
+                                    <label>
+                                        Nombre Proveedor
+                                        <span class="edit-indicator" style="display: none;">
+                                            <i class="fas fa-edit"></i>
+                                        </span>
+                                    </label>
+                                    <span id="detailNombreProveedor" class="view-mode">-</span>
+                                    <div class="edit-proveedor" style="display: none;">
+                                        <div class="proveedor-selected" id="proveedorSelected" style="display: none;">
+                                            <div class="proveedor-info">
+                                                <i class="fas fa-building"></i>
+                                                <span id="proveedorSelectedNombre">-</span>
+                                            </div>
+                                            <button type="button" class="btn-change-proveedor" id="btnCambiarProveedor">
+                                                <i class="fas fa-exchange-alt"></i>
+                                                Cambiar
+                                            </button>
+                                        </div>
+                                        <button type="button" id="btnBuscarProveedor" class="btn-search-provider" style="display: block;">
+                                            <i class="fas fa-search"></i>
+                                            Buscar Proveedor
+                                        </button>
+                                        <input type="hidden" id="editIdProveedor">
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="creditNoteAmount">Monto de la Nota de Crédito</label>
-                                <div class="input-wrapper">
-                                    <div class="input-prefix">Q</div>
-                                    <input type="number" id="creditNoteAmount" step="0.01" min="0.01" required>
+                                <div class="detail-item">
+                                    <label>NIT</label>
+                                    <span id="detailNIT">-</span>
+                                </div>
+                                <div class="detail-item wide">
+                                    <label>
+                                        Razón Social
+                                        <span class="edit-indicator" style="display: none;">
+                                            <i class="fas fa-edit"></i>
+                                        </span>
+                                    </label>
+                                    <span id="detailNombreRazon" class="view-mode">-</span>
+                                    <select id="editRazonSocial" class="edit-select" style="display: none;">
+                                        <option value="">Seleccione una razón social...</option>
+                                    </select>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group half">
-                                <label for="creditNoteSerie">Serie de la Nota</label>
-                                <input type="text" id="creditNoteSerie" required>
-                            </div>
-                            <div class="form-group half">
-                                <label for="creditNoteNumber">Número de la Nota</label>
-                                <input type="text" id="creditNoteNumber" required>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="creditNoteDate">Fecha de la Nota de Crédito *</label>
-                            <input type="date" id="creditNoteDate" required>
-                            <small style="color: #6c757d; font-style: italic; margin-top: 5px; display: block;">
-                                📅 Seleccione la fecha correspondiente a la nota de crédito
-                            </small>
                         </div>
                     </div>
 
-                    <!-- Botones de tipo de concepto -->
-                    <div class="concept-buttons">
-                        <h3><i class="fas fa-tags"></i> Seleccione el tipo de concepto</h3>
-                        <div class="concept-button-group">
-                            <button type="button" class="concept-btn" id="merchandiseBtn" data-concept="mercaderia">
-                                <div class="concept-icon">
-                                    <i class="fas fa-boxes"></i>
+                    <!-- Información de Sucursal -->
+                    <div class="detail-card">
+                        <div class="card-header">
+                            <i class="fas fa-store"></i>
+                            <h3>Información de Sucursal</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="detail-grid">
+                                <div class="detail-item">
+                                    <label>Sucursal</label>
+                                    <span id="detailSucursal">-</span>
                                 </div>
-                                <div class="concept-text">
-                                    <span class="concept-title">Mercadería</span>
-                                    <span class="concept-desc">Devoluciones de productos</span>
+                                <div class="detail-item">
+                                    <label>ID Inventario</label>
+                                    <span id="detailIdInventory">-</span>
                                 </div>
-                            </button>
-                            
-                            <button type="button" class="concept-btn" id="otherConceptsBtn" data-concept="otros">
-                                <div class="concept-icon">
-                                    <i class="fas fa-receipt"></i>
-                                </div>
-                                <div class="concept-text">
-                                    <span class="concept-title">Otros Conceptos</span>
-                                    <span class="concept-desc">Descuentos, ajustes, etc.</span>
-                                </div>
-                            </button>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Botones de acción del modal -->
-                    <div class="modal-actions">
-                        <button type="button" class="btn-secondary" id="cancelCreditNote">
-                            <i class="fas fa-times"></i>
-                            Cancelar
-                        </button>
-                        <button type="submit" class="btn-primary" id="saveCreditNote">
-                            <i class="fas fa-save"></i>
-                            Continuar
-                        </button>
+                    <!-- Información de Modificación (solo visible en modo edición) -->
+                    <div class="detail-card" id="modificacionCard" style="display: none;">
+                        <div class="card-header">
+                            <i class="fas fa-clipboard-list"></i>
+                            <h3>Información de Modificación</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="detail-grid">
+                                <div class="detail-item wide">
+                                    <label>Motivo de Modificación</label>
+                                    <span id="detailMotivoModificacion">-</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </form>
+                </div>
             </div>
-        </div>
+        </section>
+
+        <!-- Sección de Mercadería - Nota de Crédito -->
+        <section class="mercaderia-section" id="mercaderiaSection" style="display: none;">
+            <div class="mercaderia-container">
+                <!-- Header de Mercadería -->
+                <div class="mercaderia-header">
+                    <div class="mercaderia-header-left">
+                        <button class="btn-back-mercaderia" id="btnCancelarNotaMercaderia">
+                            <i class="fas fa-times"></i>
+                            Cancelar Nota
+                        </button>
+                    </div>
+                    <div class="mercaderia-header-center">
+                        <h2>Nota de Crédito - Devolución de Mercadería</h2>
+                        <p class="subtitle">Selecciona los productos a devolver</p>
+                    </div>
+                    <div class="mercaderia-header-right">
+                        <button class="btn-action btn-save-mercaderia" id="btnGuardarMercaderia" style="display: none;">
+                            <i class="fas fa-save"></i>
+                            Guardar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Información de la Nota de Crédito -->
+                <div class="nota-info-panel">
+                    <div class="nota-info-grid">
+                        <!-- Información de Factura -->
+                        <div class="info-card info-factura">
+                            <div class="info-card-header">
+                                <i class="fas fa-file-invoice"></i>
+                                <h3>Factura Original</h3>
+                            </div>
+                            <div class="info-card-body">
+                                <div class="info-item">
+                                    <label>Serie - Número:</label>
+                                    <span id="mercaderiaFacturaSerie">-</span> - <span id="mercaderiaFacturaNumero">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <label>Proveedor:</label>
+                                    <span id="mercaderiaFacturaProveedor">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <label>Monto Original:</label>
+                                    <span id="mercaderiaFacturaMonto" class="amount">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Información de Nota de Crédito -->
+                        <div class="info-card info-nota">
+                            <div class="info-card-header">
+                                <i class="fas fa-file-alt"></i>
+                                <h3>Nota de Crédito</h3>
+                            </div>
+                            <div class="info-card-body">
+                                <div class="info-item">
+                                    <label>Tipo:</label>
+                                    <span id="mercaderiaTipoNota">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <label>Serie - Número:</label>
+                                    <span id="mercaderiaNotaSerie">-</span> - <span id="mercaderiaNotaNumero">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <label>Monto Nota:</label>
+                                    <span id="mercaderiaNotaMonto" class="amount">-</span>
+                                </div>
+                                <div class="info-item">
+                                    <label>Fecha:</label>
+                                    <span id="mercaderiaNotaFecha">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Botón Editar Nota -->
+                    <div class="edit-nota-button">
+                        <button class="btn-edit-nota" id="btnEditarNotaMercaderia">
+                            <i class="fas fa-edit"></i>
+                            Editar Datos de Nota de Crédito
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tabla de Productos -->
+                <div class="productos-section">
+                    <div class="productos-header">
+                        <div class="productos-title">
+                            <i class="fas fa-boxes"></i>
+                            <h3>Productos de la Factura</h3>
+                        </div>
+                        <div class="productos-stats">
+                            <span class="stat-item">
+                                <i class="fas fa-box"></i>
+                                Total Productos: <strong id="totalProductos">0</strong>
+                            </span>
+                            <span class="stat-item">
+                                <i class="fas fa-check-circle"></i>
+                                Productos Seleccionados: <strong id="productosSeleccionados">0</strong>
+                            </span>
+                        </span>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de productos -->
+                    <div class="productos-table-wrapper">
+                        <table class="productos-table">
+                            <thead>
+                                <tr>
+                                    <th>UPC</th>
+                                    <th>Descripción</th>
+                                    <th>Cantidad Original</th>
+                                    <th>Bonificación</th>
+                                    <th>Cantidad a Devolver</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productosTableBody">
+                                <!-- Los productos se cargarán aquí dinámicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Estado vacío -->
+                    <div class="productos-empty" id="productosEmpty" style="display: none;">
+                        <i class="fas fa-inbox"></i>
+                        <p>No se encontraron productos para esta factura</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </div>
-    <!-- Modal para Motivo de Modificación -->
-    <div class="modal-overlay" id="modificationReasonModal" style="display: none;">
-        <div class="modal-container">
+
+    <!-- Modal de Modificación -->
+    <div class="modal-overlay" id="modalModificar" style="display: none;">
+        <div class="modal-container modal-large">
             <div class="modal-header">
-                <div class="modal-icon modification">
-                    <i class="fas fa-edit"></i>
-                </div>
                 <div class="modal-title">
-                    <h2>Seleccionar Motivo de Modificación</h2>
-                    <p>Seleccione la razón por la cual va a modificar esta factura</p>
+                    <i class="fas fa-edit"></i>
+                    <h3>Modificar Factura</h3>
                 </div>
-                <button class="modal-close" id="closeModificationReasonModal">
+                <button class="modal-close" id="btnCloseModal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             
-            <div class="modal-content">
-                <form id="modificationReasonForm" class="modification-reason-form">
+            <div class="modal-body">
+                <!-- Paso 1: Seleccionar Motivo -->
+                <div class="modal-step" id="step1">
+                    <div class="step-header">
+                        <i class="fas fa-clipboard-list"></i>
+                        <h4>Paso 1: Selecciona el Motivo de Modificación</h4>
+                    </div>
                     <div class="form-group">
-                        <label for="modificationReason">Motivo de la Modificación *</label>
-                        <div class="select-wrapper">
-                            <select id="modificationReason" required>
-                                <option value="">Seleccione un motivo...</option>
-                            </select>
-                            <div class="select-icon">
-                                <i class="fas fa-chevron-down"></i>
-                            </div>
-                        </div>
+                        <label for="selectMotivo">
+                            <i class="fas fa-list"></i>
+                            Motivo de Modificación *
+                        </label>
+                        <select id="selectMotivo" class="form-select">
+                            <option value="">-- Selecciona un motivo --</option>
+                        </select>
+                    </div>
+                    <div class="step-actions">
+                        <button class="btn-secondary" id="btnCancelStep1">Cancelar</button>
+                        <button class="btn-primary" id="btnNextStep1" disabled>
+                            Continuar
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Paso 2: Modificar Datos -->
+                <div class="modal-step" id="step2" style="display: none;">
+                    <div class="step-header">
+                        <i class="fas fa-edit"></i>
+                        <h4>Paso 2: Modifica los Datos de la Factura</h4>
                     </div>
                     
-                    <div class="modal-actions">
-                        <button type="button" class="btn-secondary" id="cancelModificationReason">
-                            <i class="fas fa-times"></i>
-                            Cancelar
-                        </button>
-                        <button type="submit" class="btn-primary" id="acceptModificationReason">
-                            <i class="fas fa-check"></i>
-                            Habilitar Modificación
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-    <!-- Modal para Motivo de Refacturación -->
-    <div class="modal-overlay" id="refacturingReasonModal" style="display: none;">
-        <div class="modal-container">
-            <div class="modal-header">
-                <div class="modal-icon refacturation">
-                    <i class="fas fa-redo"></i>
-                </div>
-                <div class="modal-title">
-                    <h2>Seleccionar Motivo de Refacturación</h2>
-                    <p>Seleccione la razón por la cual va a refacturar esta factura</p>
-                </div>
-                <button class="modal-close" id="closeRefacturingReasonModal">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <div class="modal-content">
-                <div class="refacturation-warning">
-                    <div class="warning-icon">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </div>
-                    <div class="warning-text">
-                        <p><strong>⚠️ Importante:</strong> La refacturación limpiará todos los campos editables.</p>
-                        <p>Deberá volver a ingresar toda la información requerida.</p>
-                    </div>
-                </div>
-                
-                <form id="refacturingReasonForm" class="refacturation-reason-form">
-                    <div class="form-group">
-                        <label for="refacturingReason">Motivo de la Refacturación *</label>
-                        <div class="select-wrapper">
-                            <select id="refacturingReason" required>
-                                <option value="">Seleccione un motivo...</option>
-                            </select>
-                            <div class="select-icon">
-                                <i class="fas fa-chevron-down"></i>
+                    <div class="modification-form">
+                        <!-- Datos de la Factura -->
+                        <div class="form-section">
+                            <h5><i class="fas fa-file-invoice"></i> Información de la Factura</h5>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="editSerie">
+                                        <i class="fas fa-tag"></i>
+                                        Serie *
+                                    </label>
+                                    <input type="text" id="editSerie" class="form-input" placeholder="Ej: A001">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="editNumero">
+                                        <i class="fas fa-hashtag"></i>
+                                        Número *
+                                    </label>
+                                    <input type="text" id="editNumero" class="form-input" placeholder="Ej: 12345">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="editMonto">
+                                        <i class="fas fa-dollar-sign"></i>
+                                        Monto Factura *
+                                    </label>
+                                    <input type="number" id="editMonto" class="form-input" step="0.01" placeholder="0.00">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="editFechaFactura">
+                                        <i class="fas fa-calendar"></i>
+                                        Fecha Factura *
+                                    </label>
+                                    <input type="date" id="editFechaFactura" class="form-input">
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="refacturingMethod">Manera de Refacturación *</label>
-                        <div class="select-wrapper">
-                            <select id="refacturingMethod" required>
-                                <option value="">Seleccione una manera...</option>
-                                <option value="1">Anulación de Factura</option>
-                                <option value="2">Nota de Crédito</option>
-                            </select>
-                            <div class="select-icon">
-                                <i class="fas fa-chevron-down"></i>
+
+                        <!-- Búsqueda de Proveedor -->
+                        <div class="form-section">
+                            <h5><i class="fas fa-building"></i> Información del Proveedor</h5>
+                            
+                            <div class="form-group">
+                                <label for="searchProveedor">
+                                    <i class="fas fa-search"></i>
+                                    Buscar Proveedor *
+                                </label>
+                                <input type="text" id="searchProveedor" class="form-input" placeholder="Escribe el nombre del proveedor y presiona Enter">
+                                <small class="form-hint">Presiona Enter para buscar</small>
+                            </div>
+
+                            <!-- Resultados de búsqueda de proveedor -->
+                            <div class="search-results" id="proveedorResults" style="display: none;">
+                                <div class="results-list" id="proveedorResultsList"></div>
+                            </div>
+
+                            <!-- Proveedor seleccionado -->
+                            <div class="selected-item" id="proveedorSelected" style="display: none;">
+                                <div class="selected-info">
+                                    <i class="fas fa-check-circle"></i>
+                                    <div>
+                                        <strong id="selectedProveedorNombre"></strong>
+                                        <span id="selectedProveedorNIT"></span>
+                                    </div>
+                                </div>
+                                <button class="btn-remove" id="btnRemoveProveedor">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="selectRazonSocial">
+                                    <i class="fas fa-briefcase"></i>
+                                    Razón Social *
+                                </label>
+                                <select id="selectRazonSocial" class="form-select">
+                                    <option value="">-- Selecciona una razón social --</option>
+                                </select>
                             </div>
                         </div>
                     </div>
 
-                    <!-- NUEVO: Campos adicionales para Nota de Crédito -->
-                    <div class="credit-note-fields-section" id="creditNoteFieldsSection" style="display: none;">
-                        <div class="form-row">
-                            <div class="form-group half">
-                                <label for="refacturingCreditNoteSerie">Serie de la Nota de Crédito *</label>
-                                <input type="text" id="refacturingCreditNoteSerie" maxlength="20">
-                            </div>
-                            <div class="form-group half">
-                                <label for="refacturingCreditNoteNumber">Número de la Nota de Crédito *</label>
-                                <input type="text" id="refacturingCreditNoteNumber" maxlength="50">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-actions">
-                        <button type="button" class="btn-secondary" id="cancelRefacturingReason">
-                            <i class="fas fa-times"></i>
-                            Cancelar
+                    <div class="step-actions">
+                        <button class="btn-secondary" id="btnBackStep2">
+                            <i class="fas fa-arrow-left"></i>
+                            Volver
                         </button>
-                        <button type="submit" class="btn-primary refacturation-btn" id="acceptRefacturingReason">
-                            <i class="fas fa-redo"></i>
-                            Iniciar Refacturación
+                        <button class="btn-success" id="btnSaveModification">
+                            <i class="fas fa-save"></i>
+                            Guardar Modificación
                         </button>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Cargando...</p>
+        </div>
+    </div>
+
+    <!-- Modal de Motivo de Modificación -->
+    <div class="modal-overlay" id="motivoModal" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3>Seleccionar Motivo de Modificación</h3>
+                <button class="modal-close" id="closeMotivosModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">Por favor selecciona el motivo por el cual deseas modificar esta factura:</p>
+                <div class="motivos-list" id="motivosList">
+                    <!-- Los motivos se cargarán aquí dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Búsqueda de Proveedor -->
+    <div class="modal-overlay" id="proveedorModal" style="display: none;">
+        <div class="modal-container modal-lg">
+            <div class="modal-header">
+                <h3>Buscar Proveedor</h3>
+                <button class="modal-close" id="closeProveedorModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="search-proveedor">
+                    <input 
+                        type="text" 
+                        id="searchProveedorInput" 
+                        placeholder="Escribe el nombre o NIT del proveedor y presiona Enter..."
+                        class="search-input"
+                    >
+                </div>
+                <div class="proveedores-results" id="proveedoresResults" style="display: none;">
+                    <table class="modal-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>NIT</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="proveedoresTableBody">
+                            <!-- Resultados aquí -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="no-results" id="noProveedoresResults" style="display: none;">
+                    <i class="fas fa-search"></i>
+                    <p>No se encontraron proveedores con ese criterio</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Refacturación -->
+    <div class="modal-overlay" id="refacturacionModal" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3>Refacturar - Paso 1: Seleccionar Motivo</h3>
+                <button class="modal-close" id="closeRefacturacionModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Paso 1: Seleccionar Motivo -->
+                <div id="refacturacionPaso1">
+                    <p class="modal-description">Por favor selecciona el motivo de la refacturación:</p>
+                    <div class="motivos-list" id="motivosRefacturacionList">
+                        <!-- Los motivos se cargarán aquí dinámicamente -->
+                    </div>
+                </div>
+
+                <!-- Paso 2: Seleccionar Manera de Refacturación -->
+                <div id="refacturacionPaso2" style="display: none;">
+                    <div class="refacturacion-header">
+                        <h4>Paso 2: Manera de Refacturación</h4>
+                        <p class="modal-description">Selecciona cómo se realizará la refacturación:</p>
+                    </div>
+                    
+                    <div class="manera-refacturacion">
+                        <div class="manera-option" data-manera="1">
+                            <div class="manera-icon">
+                                <i class="fas fa-ban"></i>
+                            </div>
+                            <div class="manera-content">
+                                <h5>Anulación de Factura</h5>
+                                <p>Se anulará la factura actual</p>
+                            </div>
+                            <div class="manera-check">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                        </div>
+
+                        <div class="manera-option" data-manera="2">
+                            <div class="manera-icon">
+                                <i class="fas fa-file-invoice"></i>
+                            </div>
+                            <div class="manera-content">
+                                <h5>Nota de Crédito</h5>
+                                <p>Se emitirá una nota de crédito</p>
+                            </div>
+                            <div class="manera-check">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Campos para Nota de Crédito -->
+                    <div class="nota-credito-fields" id="notaCreditoFields" style="display: none;">
+                        <h5 style="color: var(--text-primary); margin-bottom: var(--spacing-md);">Datos de la Nota de Crédito</h5>
+                        <div class="input-row">
+                            <div class="input-group-modal">
+                                <label>Serie</label>
+                                <input type="text" id="serieNotaCredito" placeholder="Ej: NC-001" class="edit-input">
+                            </div>
+                            <div class="input-group-modal">
+                                <label>Número</label>
+                                <input type="text" id="numeroNotaCredito" placeholder="Ej: 12345" class="edit-input">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button class="btn-modal btn-back-step" id="btnBackPaso1">
+                            <i class="fas fa-arrow-left"></i>
+                            Atrás
+                        </button>
+                        <button class="btn-modal btn-continue" id="btnContinuarRefacturacion">
+                            Continuar
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="notaCreditoModal" style="display: none;">
+        <div class="modal-container modal-large">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-file-invoice"></i>
+                    <h3 id="notaCreditoModalTitle">Crear Nota de Crédito</h3>
+                </div>
+                <button class="modal-close" id="closeNotaCreditoModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Paso 1: Seleccionar Tipo de Nota de Crédito -->
+                <div class="modal-step" id="notaCreditoPaso1">
+                    <div class="step-header">
+                        <i class="fas fa-list"></i>
+                        <h4>Paso 1: Selecciona el Tipo de Nota de Crédito</h4>
+                    </div>
+                    <p class="modal-description">Por favor selecciona el tipo de nota de crédito que deseas registrar:</p>
+                    <div class="tipos-nota-credito-list" id="tiposNotaCreditoList">
+                        <!-- Los tipos se cargarán aquí dinámicamente -->
+                    </div>
+                    <div class="step-actions">
+                        <button class="btn-secondary" id="btnCancelNotaCredito1">Cancelar</button>
+                        <button class="btn-primary" id="btnNextNotaCredito1" disabled>
+                            Continuar
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Paso 2: Llenar Datos de la Nota de Crédito -->
+                <div class="modal-step" id="notaCreditoPaso2" style="display: none;">
+                    <div class="step-header">
+                        <i class="fas fa-edit"></i>
+                        <h4>Paso 2: Datos de la Nota de Crédito</h4>
+                    </div>
+                    
+                    <!-- Información de la Factura -->
+                    <div class="factura-info-nota">
+                        <h5><i class="fas fa-file-invoice"></i> Factura Original</h5>
+                        <div class="factura-datos">
+                            <span><strong>Serie:</strong> <span id="notaFacturaSerie">-</span></span>
+                            <span><strong>Número:</strong> <span id="notaFacturaNumero">-</span></span>
+                            <span><strong>Proveedor:</strong> <span id="notaFacturaProveedor">-</span></span>
+                        </div>
+                    </div>
+
+                    <!-- Tipo Seleccionado -->
+                    <div class="tipo-seleccionado-nota">
+                        <i class="fas fa-check-circle"></i>
+                        <span><strong>Tipo:</strong> <span id="tipoNotaSeleccionado">-</span></span>
+                    </div>
+
+                    <!-- Formulario de Datos -->
+                    <div class="form-section">
+                        <h5><i class="fas fa-file-alt"></i> Información de la Nota de Crédito</h5>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="notaCreditoSerie">
+                                    <i class="fas fa-tag"></i>
+                                    Serie *
+                                </label>
+                                <input type="text" id="notaCreditoSerie" class="form-input" placeholder="Ej: NC-001" autocomplete="off">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="notaCreditoNumero">
+                                    <i class="fas fa-hashtag"></i>
+                                    Número *
+                                </label>
+                                <input type="text" id="notaCreditoNumero" class="form-input" placeholder="Ej: 12345" autocomplete="off">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="notaCreditoMonto">
+                                    <i class="fas fa-dollar-sign"></i>
+                                    Monto *
+                                </label>
+                                <input type="number" step="0.01" min="0.01" id="notaCreditoMonto" class="form-input" placeholder="0.00">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="notaCreditoFecha">
+                                    <i class="fas fa-calendar"></i>
+                                    Fecha de Nota de Crédito *
+                                </label>
+                                <input type="date" id="notaCreditoFecha" class="form-input">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="step-actions">
+                        <button class="btn-secondary" id="btnBackNotaCredito2">
+                            <i class="fas fa-arrow-left"></i>
+                            Atrás
+                        </button>
+                        <button class="btn-primary" id="btnNextNotaCredito2">
+                            Continuar
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Paso 3: Confirmación y Selección de Concepto -->
+                <div class="modal-step" id="notaCreditoPaso3" style="display: none;">
+                    <div class="step-header">
+                        <i class="fas fa-check-circle"></i>
+                        <h4>Paso 3: Confirmar Datos y Seleccionar Concepto</h4>
+                    </div>
+                    
+                    <p class="modal-description">Revisa los datos de la nota de crédito:</p>
+
+                    <!-- Resumen de Datos -->
+                    <div class="resumen-nota-credito">
+                        <!-- Factura Original -->
+                        <div class="resumen-card">
+                            <h5><i class="fas fa-file-invoice"></i> Factura Original</h5>
+                            <div class="resumen-grid">
+                                <div class="resumen-item">
+                                    <label>Serie:</label>
+                                    <span id="resumenFacturaSerie">-</span>
+                                </div>
+                                <div class="resumen-item">
+                                    <label>Número:</label>
+                                    <span id="resumenFacturaNumero">-</span>
+                                </div>
+                                <div class="resumen-item">
+                                    <label>Proveedor:</label>
+                                    <span id="resumenFacturaProveedor">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Nota de Crédito -->
+                        <div class="resumen-card">
+                            <h5><i class="fas fa-file-alt"></i> Nota de Crédito</h5>
+                            <div class="resumen-grid">
+                                <div class="resumen-item">
+                                    <label>Tipo:</label>
+                                    <span id="resumenTipoNota">-</span>
+                                </div>
+                                <div class="resumen-item">
+                                    <label>Serie:</label>
+                                    <span id="resumenNotaSerie">-</span>
+                                </div>
+                                <div class="resumen-item">
+                                    <label>Número:</label>
+                                    <span id="resumenNotaNumero">-</span>
+                                </div>
+                                <div class="resumen-item">
+                                    <label>Monto:</label>
+                                    <span id="resumenNotaMonto" class="amount">-</span>
+                                </div>
+                                <div class="resumen-item">
+                                    <label>Fecha:</label>
+                                    <span id="resumenNotaFecha">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Selección de Concepto -->
+                    <div class="concepto-selection">
+                        <h5><i class="fas fa-th-list"></i> Selecciona el Concepto</h5>
+                        <p class="modal-description">Elige cómo se aplicará la nota de crédito:</p>
+                        
+                        <div class="concepto-buttons">
+                            <button class="btn-concepto btn-mercaderia" id="btnMercaderia">
+                                <div class="concepto-icon">
+                                    <i class="fas fa-boxes"></i>
+                                </div>
+                                <div class="concepto-content">
+                                    <h6>Mercadería</h6>
+                                    <p>Devolución de productos</p>
+                                </div>
+                            </button>
+
+                            <button class="btn-concepto btn-otros" id="btnOtrosConceptos">
+                                <div class="concepto-icon">
+                                    <i class="fas fa-list-ul"></i>
+                                </div>
+                                <div class="concepto-content">
+                                    <h6>Otros Conceptos</h6>
+                                    <p>Descuentos, ajustes, etc.</p>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="step-actions">
+                        <button class="btn-secondary" id="btnBackNotaCredito3">
+                            <i class="fas fa-arrow-left"></i>
+                            Editar Datos
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="busquedaProductosModal" style="display: none;">
+        <div class="modal-container modal-large">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-search"></i>
+                    <h3>Buscar Productos</h3>
+                </div>
+                <button class="modal-close" id="closeBusquedaProductos">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Información de búsqueda -->
+                <div class="busqueda-info">
+                    <p class="modal-description">
+                        <i class="fas fa-info-circle"></i>
+                        Busca productos para agregar a la devolución. Puedes buscar por palabras clave.
+                    </p>
+                    <div class="busqueda-sucursal">
+                        <i class="fas fa-store"></i>
+                        <span>Sucursal: <strong id="busquedaSucursalNombre">-</strong></span>
+                    </div>
+                </div>
+
+                <!-- Campo de búsqueda -->
+                <div class="busqueda-input-container">
+                    <div class="busqueda-input-wrapper">
+                        <i class="fas fa-search"></i>
+                        <input 
+                            type="text" 
+                            id="inputBusquedaProducto" 
+                            class="busqueda-input" 
+                            placeholder="Escribe para buscar... Ej: leche desc, arroz gruma, coca 2 litros"
+                            autocomplete="off"
+                        />
+                        <button class="btn-clear-search" id="btnClearSearch" style="display: none;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <button class="btn-buscar" id="btnBuscarProducto">
+                        <i class="fas fa-search"></i>
+                        Buscar
+                    </button>
+                </div>
+
+                <!-- Estado inicial / vacío -->
+                <div class="busqueda-estado" id="busquedaEstadoInicial">
+                    <i class="fas fa-search"></i>
+                    <p>Escribe algo en el buscador para comenzar</p>
+                    <small>Puedes buscar por palabras clave, abreviaciones, etc.</small>
+                </div>
+
+                <!-- Loading -->
+                <div class="busqueda-estado" id="busquedaLoading" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <p>Buscando productos...</p>
+                </div>
+
+                <!-- Sin resultados -->
+                <div class="busqueda-estado" id="busquedaSinResultados" style="display: none;">
+                    <i class="fas fa-inbox"></i>
+                    <p>No se encontraron productos</p>
+                    <small>Intenta con otras palabras clave</small>
+                </div>
+
+                <!-- Resultados -->
+                <div class="busqueda-resultados-container" id="busquedaResultados" style="display: none;">
+                    <div class="resultados-header">
+                        <h4>
+                            <i class="fas fa-list"></i>
+                            Resultados de búsqueda
+                        </h4>
+                        <span class="resultados-count">
+                            <strong id="resultadosCount">0</strong> productos encontrados
+                        </span>
+                    </div>
+                    
+                    <div class="resultados-tabla-wrapper">
+                        <table class="resultados-tabla">
+                            <thead>
+                                <tr>
+                                    <th>UPC</th>
+                                    <th>Descripción</th>
+                                    <th style="width: 80px;">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultadosTableBody">
+                                <!-- Productos se cargarán aquí -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-secondary" id="btnCerrarBusqueda">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="../logica/FacturasCompras.js"></script>
 </body>
 </html>

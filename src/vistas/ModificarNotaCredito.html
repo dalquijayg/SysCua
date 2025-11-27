@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modificar Nota de Crédito</title>
+    <link rel="stylesheet" href="../disenos/Modificaciones/ModificarNotaCredito.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="main-header">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="header-title">
+                    <h1><i class="fas fa-file-invoice"></i> Modificar Nota de Crédito</h1>
+                    <p>Buscar y editar notas de crédito de proveedores</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="userName">Usuario</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenedor principal -->
+    <main class="main-container">
+        <!-- Panel de búsqueda -->
+        <section class="search-panel">
+            <div class="panel-header">
+                <h2><i class="fas fa-search"></i> Buscar Nota de Crédito</h2>
+            </div>
+            
+            <div class="search-content">
+                <!-- Selector de tipo de búsqueda -->
+                <div class="search-type-selector">
+                    <button class="search-type-btn active" data-type="rango">
+                        <i class="fas fa-calendar-range"></i>
+                        <span>Por Rango de Fechas</span>
+                    </button>
+                    <button class="search-type-btn" data-type="numero">
+                        <i class="fas fa-hashtag"></i>
+                        <span>Por Número</span>
+                    </button>
+                    <button class="search-type-btn" data-type="serie">
+                        <i class="fas fa-barcode"></i>
+                        <span>Por Serie</span>
+                    </button>
+                </div>
+
+                <!-- Formulario de búsqueda por rango de fechas -->
+                <div class="search-form active" id="searchByRango">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="fechaInicio">
+                                <i class="fas fa-calendar-start"></i> Fecha Inicio
+                            </label>
+                            <input type="date" id="fechaInicio" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="fechaFin">
+                                <i class="fas fa-calendar-end"></i> Fecha Fin
+                            </label>
+                            <input type="date" id="fechaFin" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-primary" id="btnBuscarRango">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formulario de búsqueda por número -->
+                <div class="search-form" id="searchByNumero">
+                    <div class="form-row">
+                        <div class="form-group flex-grow">
+                            <label for="numeroNC">
+                                <i class="fas fa-hashtag"></i> Número de Nota de Crédito
+                            </label>
+                            <input type="number" id="numeroNC" class="form-control" 
+                                   placeholder="Ingrese el número" required>
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-primary" id="btnBuscarNumero">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formulario de búsqueda por serie -->
+                <div class="search-form" id="searchBySerie">
+                    <div class="form-row">
+                        <div class="form-group flex-grow">
+                            <label for="serieNC">
+                                <i class="fas fa-barcode"></i> Serie de Nota de Crédito
+                            </label>
+                            <input type="text" id="serieNC" class="form-control" 
+                                   placeholder="Ingrese la serie" required>
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-primary" id="btnBuscarSerie">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Panel de resultados -->
+        <section class="results-panel">
+            <div class="panel-header">
+                <h2><i class="fas fa-list"></i> Resultados de la Búsqueda</h2>
+                <div class="results-actions">
+                    <span class="results-count" id="resultsCount">0 registros encontrados</span>
+                    <button class="btn btn-secondary btn-sm" id="btnLimpiar">
+                        <i class="fas fa-broom"></i> Limpiar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabla de resultados -->
+            <div class="table-container">
+                <div class="loading-overlay" id="loadingOverlay">
+                    <div class="spinner"></div>
+                    <p>Buscando notas de crédito...</p>
+                </div>
+
+                <table class="results-table" id="tableResults">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Serie</th>
+                            <th>Número</th>
+                            <th>Proveedor</th>
+                            <th>NIT</th>
+                            <th>Monto</th>
+                            <th>Tipo NC</th>
+                            <th>Concepto</th>
+                            <th>Fecha NC</th>
+                            <th>Usuario</th>
+                            <th>Observaciones</th>
+                            <th class="action-column">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Mensaje inicial -->
+                        <tr class="empty-state">
+                            <td colspan="12">
+                                <div class="empty-content">
+                                    <i class="fas fa-search"></i>
+                                    <p>Realiza una búsqueda para ver los resultados</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginación (opcional para futuro) -->
+            <div class="pagination-container" id="paginationContainer" style="display: none;">
+                <button class="btn-pagination" id="btnPrevPage">
+                    <i class="fas fa-chevron-left"></i> Anterior
+                </button>
+                <span class="pagination-info" id="pageInfo">Página 1 de 1</span>
+                <button class="btn-pagination" id="btnNextPage">
+                    Siguiente <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Scripts -->
+    <script src="../logica/Modificaciones/ModificarNotaCredito.js"></script>
+</body>
+</html>

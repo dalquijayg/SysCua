@@ -192,16 +192,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ipcRenderer.send('open-VMegared-window');
     });
 
-    document.getElementById('VSurti').addEventListener('click', (e) => {
-        e.preventDefault();
-        ipcRenderer.send('open-VSurti-window');
-    });
-
-    document.getElementById('NSurti').addEventListener('click', (e) => {
-        e.preventDefault();
-        ipcRenderer.send('open-NSurti-window');
-    });
-
     document.getElementById('NMegared').addEventListener('click', (e) => {
         e.preventDefault();
         ipcRenderer.send('open-NMegared-window');
@@ -215,11 +205,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('VBodegonaAntigua').addEventListener('click', (e) => {
         e.preventDefault();
         ipcRenderer.send('open-VBodegonaAntigua-window');
-    });
-
-    document.getElementById('NBodegonaAntigua').addEventListener('click', (e) => {
-        e.preventDefault();
-        ipcRenderer.send('open-NBodegonaAntigua-window');
     });
     document.getElementById('FacturasCori').addEventListener('click', (e) => {
         e.preventDefault();
@@ -274,7 +259,104 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error al verificar permisos:', error);
         }
     });
+    document.getElementById('ModificacionesNotasCredito').addEventListener('click', async (e) => {
+        e.preventDefault();
+        
+        // Mostrar indicador de carga mientras verifica permisos
+        const loadingAlert = Swal.fire({
+            title: 'Verificando permisos...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
 
+        try {
+            // Verificar permiso en tiempo real consultando la base de datos
+            const tienePermiso = await verificarPermisoEnTiempoReal('Modificar_NotaCredito');
+            
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            if (tienePermiso) {
+                // Mostrar mensaje de acceso concedido
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Acceso Concedido',
+                    text: 'Abriendo módulo de Existencias Globales...',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => {
+                    ipcRenderer.send('open-Modificar_NotaCredito-window');
+                });
+            } else {
+                mostrarAccesoDenegado('Modificar Notas de Crédito');
+            }
+        } catch (error) {
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            // Manejar error de verificación
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Verificación',
+                text: 'No se pudo verificar los permisos. Inténtelo nuevamente.',
+                confirmButtonColor: '#6e78ff'
+            });
+            console.error('Error al verificar permisos:', error);
+        }
+    });
+    document.getElementById('RegistrarFacturasVentas').addEventListener('click', async (e) => {
+        e.preventDefault();
+        
+        // Mostrar indicador de carga mientras verifica permisos
+        const loadingAlert = Swal.fire({
+            title: 'Verificando permisos...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        try {
+            // Verificar permiso en tiempo real consultando la base de datos
+            const tienePermiso = await verificarPermisoEnTiempoReal('Registrar_Facturas_Ventas');
+            
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            if (tienePermiso) {
+                // Mostrar mensaje de acceso concedido
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Acceso Concedido',
+                    text: 'Abriendo ventana Registrar Facturas...',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => {
+                    ipcRenderer.send('open-Registrar_Facturas-window');
+                });
+            } else {
+                mostrarAccesoDenegado('Registrar Facturas Ventas');
+            }
+        } catch (error) {
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            // Manejar error de verificación
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Verificación',
+                text: 'No se pudo verificar los permisos. Inténtelo nuevamente.',
+                confirmButtonColor: '#6e78ff'
+            });
+            console.error('Error al verificar permisos:', error);
+        }
+    });
     // Event listener para "Actualizar Facturas" con verificación de permisos en tiempo real
     document.getElementById('actualizarFacturasLink').addEventListener('click', async (e) => {
         e.preventDefault();
@@ -410,6 +492,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             } else {
                 mostrarAccesoDenegado('Historial de Cambios Facturas Comprasd');
+            }
+        } catch (error) {
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            // Manejar error de verificación
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Verificación',
+                text: 'No se pudo verificar los permisos. Inténtelo nuevamente.',
+                confirmButtonColor: '#6e78ff'
+            });
+            console.error('Error al verificar permisos:', error);
+        }
+    });
+    document.getElementById('Sincronizacionesglobales').addEventListener('click', async (e) => {
+        e.preventDefault();
+        
+        // Mostrar indicador de carga mientras verifica permisos
+        const loadingAlert = Swal.fire({
+            title: 'Verificando permisos...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        try {
+            // Verificar permiso en tiempo real consultando la base de datos
+            const tienePermiso = await verificarPermisoEnTiempoReal('Sincronizar_Globales');
+            
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            if (tienePermiso) {
+                // Mostrar mensaje de acceso concedido
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Acceso Concedido',
+                    text: 'Abriendo módulo de Reporte de Facturas...',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => {
+                    ipcRenderer.send('open-Sincronizar-window');
+                });
+            } else {
+                mostrarAccesoDenegado('Auditoria de cuadre de datos');
             }
         } catch (error) {
             // Cerrar el indicador de carga
