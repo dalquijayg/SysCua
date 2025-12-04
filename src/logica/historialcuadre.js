@@ -1,8 +1,14 @@
-
 const xlsx = require('xlsx');
 const odbc = require('odbc');
 const Swal = require('sweetalert2');
 const conexionfacturas = 'DSN=facturas';
+
+// Variables globales para la virtualización
+let allData = [];
+let displayedData = [];
+const BATCH_SIZE = 100; // Cargar 100 filas a la vez
+const ROW_HEIGHT = 41; // Altura aproximada de cada fila en px
+let isLoading = false;
 
 async function conectar() {
     try {
@@ -14,6 +20,7 @@ async function conectar() {
         throw error;
     }
 }
+
 async function populateDepartmentMultiSelect(connection, query) {
     try {
         const result = await connection.query(query);
@@ -143,14 +150,6 @@ async function populateAllComboboxes() {
                AND usuarios.IdNivel IN (11, 30)`,
             'user'
         );
-        
-        Swal.fire({
-            icon: 'success',
-            title: 'Éxito',
-            text: 'Todos los comboboxes han sido poblados exitosamente',
-            timer: 2000,
-            showConfirmButton: false
-        });
     } catch (error) {
         console.error('Error al poblar los comboboxes:', error);
         Swal.fire({
@@ -177,7 +176,10 @@ async function populateAllComboboxes() {
 }
 
 // Ejecutar la función cuando el DOM esté completamente cargado
-document.addEventListener('DOMContentLoaded', populateAllComboboxes);
+document.addEventListener('DOMContentLoaded', () => {
+    populateAllComboboxes();
+    setupVirtualScroll();
+});
 
 // Función para mostrar errores de forma genérica
 function showError(title, text, error) {
@@ -193,7 +195,9 @@ function showError(title, text, error) {
         confirmButtonText: 'Entendido'
     });
 }
+
 function formatofecha(dateString) {
+    if (!dateString) return '';
     // Parseamos la fecha asumiendo que está en UTC
     const date = new Date(dateString + 'T00:00:00Z');
     
@@ -207,10 +211,11 @@ function formatofecha(dateString) {
         day: '2-digit'
     });
 }
+
 async function performSearch() {
     Swal.fire({
         title: 'Cargando Historial de cuadre',
-        text: 'Por favor espere...',
+        html: '<div id="progress-text">Consultando base de datos...</div>',
         allowOutsideClick: false,
         allowEscapeKey: false,
         allowEnterKey: false,
@@ -219,6 +224,7 @@ async function performSearch() {
             Swal.showLoading();
         }
     });
+    
     let connection;
     try {
         connection = await conectar();
@@ -244,6 +250,7 @@ async function performSearch() {
                 cuadrecostos.Serie, 
                 cuadrecostos.costosistema, 
                 cuadrecostos.costofacturado, 
+                cuadrecostos.CostoFacSinDescuento,
                 cuadrecostos.diferencia, 
                 cuadrecostos.sucursal, 
                 cuadrecostos.fechacuadre, 
@@ -305,22 +312,42 @@ async function performSearch() {
             params.push(upc.padStart(13, '0'));
         }
 
-        // Si no se ha aplicado ningún filtro, limitar los resultados para evitar sobrecarga
+        // Si no se ha aplicado ningún filtro, advertir al usuario
         if (params.length === 0) {
-            query += ' LIMIT 1000'; // Ajusta este número según sea necesario
+            const result = await Swal.fire({
+                icon: 'warning',
+                title: 'Sin filtros aplicados',
+                text: 'No has aplicado ningún filtro. Esto puede resultar en una gran cantidad de datos. ¿Deseas continuar?',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, continuar',
+                cancelButtonText: 'Cancelar'
+            });
+            
+            if (!result.isConfirmed) {
+                if (connection) await connection.close();
+                return;
+            }
+            
+            query += ' ORDER BY cuadrecostos.fechacuadre DESC LIMIT 10000'; // Limitar a 10,000 registros
         }
 
-        const result = await connection.query(query, params);
-        Swal.close();
-        updateDataTable(result);
+        // Actualizar progreso
+        document.getElementById('progress-text').textContent = 'Obteniendo registros...';
 
-        Swal.fire({
-            icon: 'success',
-            title: 'Búsqueda completada',
-            text: `Se encontraron ${result.length} resultados.`,
-            timer: 2000,
-            showConfirmButton: false
-        });
+        const result = await connection.query(query, params);
+        
+        // Guardar todos los datos
+        allData = result;
+        displayedData = [];
+        
+        Swal.close();
+        
+        // Limpiar la tabla
+        const tbody = document.querySelector('#data-table tbody');
+        tbody.innerHTML = '';
+        
+        // Cargar el primer lote
+        loadMoreRows();
 
     } catch (error) {
         console.error('Error al realizar la búsqueda:', error);
@@ -341,101 +368,199 @@ async function performSearch() {
         }
     }
 }
+
 function formatDateForInput(dateString) {
     const date = new Date(dateString + 'T00:00:00Z');
     const localDate = new Date(date.getTime() + date.getTimezoneOffset() * 60000);
     return localDate.toISOString().split('T')[0];
 }
-function updateDataTable(data) {
-    const table = document.getElementById('data-table');
-    const tbody = table.querySelector('tbody');
-    tbody.innerHTML = '';
 
-    data.forEach(row => {
+// Cargar más filas (virtualización)
+function loadMoreRows() {
+    if (isLoading || displayedData.length >= allData.length) return;
+    
+    isLoading = true;
+    const start = displayedData.length;
+    const end = Math.min(start + BATCH_SIZE, allData.length);
+    const batch = allData.slice(start, end);
+    
+    const tbody = document.querySelector('#data-table tbody');
+    const fragment = document.createDocumentFragment();
+    
+    batch.forEach(row => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${row.Idcuadre}</td>
-            <td>${row.Upc}</td>
-            <td>${row.Descripcion}</td>
-            <td>${row.Departamento}</td>
-            <td>${row.Proveedor}</td>
-            <td>${row.CantidadIngresada}</td>
-            <td>${row.BonificacionIngresada}</td>
+            <td>${row.Idcuadre || ''}</td>
+            <td>${row.Upc || ''}</td>
+            <td>${row.Descripcion || ''}</td>
+            <td>${row.Departamento || ''}</td>
+            <td>${row.Proveedor || ''}</td>
+            <td>${row.CantidadIngresada || ''}</td>
+            <td>${row.BonificacionIngresada || ''}</td>
             <td>${formatofecha(row.FechaFactura)}</td>
-            <td>${row.NoFactura}</td>
-            <td>${row.Serie}</td>
-            <td>${row.costosistema}</td>
-            <td>${row.costofacturado}</td>
-            <td>${row.Costofiscal}</td>
-            <td>${row.diferencia}</td>
-            <td>${row.sucursal}</td>
+            <td>${row.NoFactura || ''}</td>
+            <td>${row.Serie || ''}</td>
+            <td>${row.costosistema || ''}</td>
+            <td>${row.costofacturado || ''}</td>
+            <td>${row.CostoFacSinDescuento || ''}</td>
+            <td>${row.Costofiscal || ''}</td>
+            <td>${row.diferencia || ''}</td>
+            <td>${row.sucursal || ''}</td>
             <td>${formatofecha(row.fechacuadre)}</td>
-            <td>${row.Usuario}</td>
-            <td>${row.NombreRazon}</td>
+            <td>${row.Usuario || ''}</td>
+            <td>${row.NombreRazon || ''}</td>
         `;
-        tbody.appendChild(tr);
+        fragment.appendChild(tr);
+    });
+    
+    tbody.appendChild(fragment);
+    displayedData.push(...batch);
+    
+    // Actualizar contador en consola
+    console.log(`Cargadas ${displayedData.length} de ${allData.length} filas`);
+    
+    isLoading = false;
+}
+
+// Configurar el scroll infinito
+function setupVirtualScroll() {
+    const tableContainer = document.querySelector('.data-table > div');
+    if (!tableContainer) return;
+    
+    tableContainer.addEventListener('scroll', () => {
+        const scrollTop = tableContainer.scrollTop;
+        const scrollHeight = tableContainer.scrollHeight;
+        const clientHeight = tableContainer.clientHeight;
+        
+        // Si está cerca del final (últimos 200px), cargar más
+        if (scrollHeight - scrollTop - clientHeight < 200) {
+            loadMoreRows();
+        }
     });
 }
+
 function exportToExcel() {
-    // Obtener la tabla
-    const table = document.getElementById('data-table');
-    
-    // Convertir la tabla a una matriz de datos
-    const data = Array.from(table.querySelectorAll('tr')).map(row => 
-        Array.from(row.querySelectorAll('th, td')).map(cell => cell.textContent)
-    );
-    
-    // Crear una nueva hoja de trabajo
-    const ws = xlsx.utils.aoa_to_sheet(data);
-    
-    // Formatear la columna UPC como texto
-    const range = xlsx.utils.decode_range(ws['!ref']);
-    const upcColumnIndex = 1; // Asumiendo que UPC es la segunda columna (índice 1)
-    
-    for (let row = range.s.r + 1; row <= range.e.r; row++) {
-        const cellAddress = xlsx.utils.encode_cell({r: row, c: upcColumnIndex});
-        if (ws[cellAddress]) {
-            ws[cellAddress].t = 's'; // Establecer el tipo de celda como string
-            ws[cellAddress].v = String(ws[cellAddress].v).padStart(13, '0'); // Asegurar 13 dígitos
-            ws[cellAddress].z = '@'; // Aplicar formato de texto
-        }
+    if (allData.length === 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Sin datos',
+            text: 'No hay datos para exportar. Por favor realiza una búsqueda primero.',
+            confirmButtonText: 'Entendido'
+        });
+        return;
     }
     
-    // Crear un nuevo libro de trabajo
-    const wb = xlsx.utils.book_new();
+    // Mostrar progreso
+    Swal.fire({
+        title: 'Exportando a Excel',
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        willOpen: () => {
+            Swal.showLoading();
+        }
+    });
     
-    // Añadir la hoja de trabajo al libro
-    xlsx.utils.book_append_sheet(wb, ws, "Historial de Cuadre");
-    
-    // Generar el archivo XLSX
-    const wbout = xlsx.write(wb, {bookType:'xlsx', type:'binary'});
-    
-    // Convertir a un Blob
-    const blob = new Blob([s2ab(wbout)], {type:"application/octet-stream"});
-    
-    // Crear un enlace de descarga
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = 'historial_cuadre.xlsx';
-    
-    // Simular un clic en el enlace para iniciar la descarga
-    document.body.appendChild(a);
-    a.click();
-    
-    // Limpiar
+    // Usar setTimeout para no bloquear el UI
     setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        // Mostrar alerta de confirmación
-        Swal.fire({
-            icon: 'success',
-            title: 'Exportación Completada',
-            text: 'El archivo de Excel se ha descargado exitosamente.',
-            timer: 3000,
-            showConfirmButton: false
-        });
+        try {
+            // Crear los datos para el Excel
+            const headers = [
+                'Id Inventario', 'UPC', 'Descripción', 'Departamento', 'Proveedor',
+                'Unidades Ingresadas', 'Bonificación', 'Fecha Factura', 'No. Factura',
+                'Serie', 'Costo Sistema', 'Costo Facturado', 'Costo Fac Sin Descuento', 
+                'Costo Fiscal', 'Diferencia', 'Sucursal', 'Fecha de Cuadre', 'Usuario', 
+                'Razón Social'
+            ];
+            
+            const data = [headers];
+            
+            // Procesar por lotes para mostrar progreso
+            allData.forEach((row, index) => {
+                
+                data.push([
+                    row.Idcuadre || '',
+                    String(row.Upc || '').padStart(13, '0'),
+                    row.Descripcion || '',
+                    row.Departamento || '',
+                    row.Proveedor || '',
+                    row.CantidadIngresada || '',
+                    row.BonificacionIngresada || '',
+                    formatofecha(row.FechaFactura),
+                    row.NoFactura || '',
+                    row.Serie || '',
+                    row.costosistema || '',
+                    row.costofacturado || '',
+                    row.CostoFacSinDescuento || '',
+                    row.Costofiscal || '',
+                    row.diferencia || '',
+                    row.sucursal || '',
+                    formatofecha(row.fechacuadre),
+                    row.Usuario || '',
+                    row.NombreRazon || ''
+                ]);
+            });
+            
+            // Crear la hoja de trabajo
+            const ws = xlsx.utils.aoa_to_sheet(data);
+            
+            // Formatear la columna UPC como texto
+            const range = xlsx.utils.decode_range(ws['!ref']);
+            const upcColumnIndex = 1;
+            
+            for (let row = range.s.r + 1; row <= range.e.r; row++) {
+                const cellAddress = xlsx.utils.encode_cell({r: row, c: upcColumnIndex});
+                if (ws[cellAddress]) {
+                    ws[cellAddress].t = 's';
+                    ws[cellAddress].z = '@';
+                }
+            }
+            
+            // Crear el libro de trabajo
+            const wb = xlsx.utils.book_new();
+            xlsx.utils.book_append_sheet(wb, ws, "Historial de Cuadre");
+            
+            // Generar el archivo
+            const wbout = xlsx.write(wb, {bookType:'xlsx', type:'binary'});
+            const blob = new Blob([s2ab(wbout)], {type:"application/octet-stream"});
+            
+            // Crear enlace de descarga
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            const timestamp = new Date().toISOString().slice(0, 10);
+            a.download = `historial_cuadre_${timestamp}.xlsx`;
+            
+            document.body.appendChild(a);
+            a.click();
+            
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Exportación Completada',
+                    html: `<p>El archivo de Excel se ha descargado exitosamente.</p>
+                           <p style="font-size: 0.9em; color: #666; margin-top: 10px;">
+                               Total de registros: <strong>${allData.length.toLocaleString()}</strong>
+                           </p>`,
+                    timer: 3000,
+                    showConfirmButton: false
+                });
+            }, 100);
+            
+        } catch (error) {
+            console.error('Error al exportar:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error en la exportación',
+                text: 'No se pudo generar el archivo Excel.',
+                footer: `<details>
+                            <summary>Detalles del error</summary>
+                            <p>${error.message}</p>
+                        </details>`
+            });
+        }
     }, 100);
 }
 
@@ -446,6 +571,7 @@ function s2ab(s) {
     for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
     return buf;
 }
+
 // Agregar evento al botón de búsqueda
 document.getElementById('search-btn').addEventListener('click', performSearch);
 document.getElementById('export-btn').addEventListener('click', exportToExcel);

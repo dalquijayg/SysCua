@@ -5,10 +5,10 @@ const path = require('path');
 
 // Configuración de conexión
 const dbConfig = {
-    host: '172.30.1.17',
+    host: '172.30.1.100',
     database: 'Gestion',
-    user: 'compras',
-    password: 'bode.24451988',
+    user: 'Gestion',
+    password: 'Gestion.2445',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,

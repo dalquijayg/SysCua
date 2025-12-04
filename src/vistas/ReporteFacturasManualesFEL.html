@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte de Facturas Manuales FEL</title>
+    <link rel="stylesheet" href="../disenos/Reportes/ReporteFacturasManualesFEL.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <button class="btn-back" onclick="window.location.href='Menu.html'">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <div class="header-title">
+                <h1><i class="fas fa-file-invoice-dollar"></i> Reporte de Facturas Manuales FEL</h1>
+                <p>Consulta y análisis de facturas registradas</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="user-info">
+                <i class="fas fa-user-circle"></i>
+                <span id="userName"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor principal -->
+    <div class="main-container">
+        <!-- Filtros compactos -->
+        <div class="filters-card">
+            <div class="filters-content">
+                <!-- Filtros básicos en línea -->
+                <div class="filters-inline">
+                    <div class="filter-group">
+                        <label><i class="fas fa-calendar-alt"></i> Desde</label>
+                        <input type="date" id="fechaDesde" class="filter-input">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label><i class="fas fa-calendar-alt"></i> Hasta</label>
+                        <input type="date" id="fechaHasta" class="filter-input">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label><i class="fas fa-filter"></i> Tipo</label>
+                        <select id="filtroTipo" class="filter-input">
+                            <option value="">Todos</option>
+                            <option value="1">Solo Venta</option>
+                            <option value="2">Venta-Compra</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label><i class="fas fa-store"></i> Sucursal</label>
+                        <input type="text" id="filtroSucursal" class="filter-input" placeholder="Buscar sucursal...">
+                    </div>
+                    
+                    <div class="filter-actions">
+                        <button class="btn-filter" id="btnBuscar">
+                            <i class="fas fa-search"></i>
+                            Buscar
+                        </button>
+                        <button class="btn-clear-filters" id="btnLimpiar">
+                            <i class="fas fa-eraser"></i>
+                        </button>
+                        <button class="btn-export" id="btnExportar" disabled>
+                            <i class="fas fa-file-excel"></i>
+                            Exportar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de resultados -->
+        <div class="table-card">
+            <div class="table-header">
+                <div class="table-header-left">
+                    <h2><i class="fas fa-table"></i> Facturas Registradas</h2>
+                    <span class="badge" id="registrosCount">0 registros</span>
+                </div>
+                <div class="table-header-right">
+                    <div class="pagination-info" id="paginationInfo">
+                        Página 1 de 1
+                    </div>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Fecha Factura</th>
+                            <th>Serie-Número</th>
+                            <th>Tipo</th>
+                            <th>Sucursal Vende</th>
+                            <th>Total Factura</th>
+                            <th>Usuario</th>
+                            <th>Fecha Registro</th>
+                            <th>UPC</th>
+                            <th>Descripción</th>
+                            <th>Cantidad</th>
+                            <th>Costo</th>
+                            <th>Precio</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr class="empty-state">
+                            <td colspan="13">
+                                <i class="fas fa-search"></i>
+                                <p>No hay datos para mostrar</p>
+                                <small>Selecciona un rango de fechas y presiona "Buscar"</small>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Paginación -->
+            <div class="pagination" id="paginationControls" style="display: none;">
+                <button class="btn-page" id="btnPrimera">
+                    <i class="fas fa-angle-double-left"></i>
+                </button>
+                <button class="btn-page" id="btnAnterior">
+                    <i class="fas fa-angle-left"></i>
+                </button>
+                <div class="page-numbers" id="pageNumbers"></div>
+                <button class="btn-page" id="btnSiguiente">
+                    <i class="fas fa-angle-right"></i>
+                </button>
+                <button class="btn-page" id="btnUltima">
+                    <i class="fas fa-angle-double-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de detalle (se mostrará al hacer clic en una factura) -->
+    <div class="modal" id="modalDetalle" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-file-invoice"></i> Detalle de Factura</h2>
+                <button class="btn-close-modal" id="btnCerrarModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="detalle-info" id="detalleInfo">
+                    <!-- Información de la factura -->
+                </div>
+                <div class="detalle-productos">
+                    <h3><i class="fas fa-box"></i> Productos</h3>
+                    <table class="detalle-table">
+                        <thead>
+                            <tr>
+                                <th>UPC</th>
+                                <th>Descripción</th>
+                                <th>Cantidad</th>
+                                <th>Costo</th>
+                                <th>Precio</th>
+                                <th>Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detalleProductosBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btnCerrar">
+                    <i class="fas fa-times"></i>
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../logica/Reportes/ReporteFacturasManualesFEL.js"></script>
+</body>
+</html>

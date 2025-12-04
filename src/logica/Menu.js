@@ -556,6 +556,55 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error al verificar permisos:', error);
         }
     });
+    document.getElementById('FacturasFEL').addEventListener('click', async (e) => {
+        e.preventDefault();
+        
+        // Mostrar indicador de carga mientras verifica permisos
+        const loadingAlert = Swal.fire({
+            title: 'Verificando permisos...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        try {
+            // Verificar permiso en tiempo real consultando la base de datos
+            const tienePermiso = await verificarPermisoEnTiempoReal('FacManuales_FEL');
+            
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            if (tienePermiso) {
+                // Mostrar mensaje de acceso concedido
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Acceso Concedido',
+                    text: 'Abriendo módulo de Reporte de Facturas Manuales FEL...',
+                    timer: 1500,
+                    showConfirmButton: false
+                }).then(() => {
+                    ipcRenderer.send('open-FacturasManualesFEL-window');
+                });
+            } else {
+                mostrarAccesoDenegado('Facturas Manuales FEL');
+            }
+        } catch (error) {
+            // Cerrar el indicador de carga
+            loadingAlert.close();
+            
+            // Manejar error de verificación
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Verificación',
+                text: 'No se pudo verificar los permisos. Inténtelo nuevamente.',
+                confirmButtonColor: '#6e78ff'
+            });
+            console.error('Error al verificar permisos:', error);
+        }
+    });
     // Función para obtener el saludo e icono según la hora del día
     function getGreetingAndIcon() {
         const hour = new Date().getHours();

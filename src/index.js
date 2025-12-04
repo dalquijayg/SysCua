@@ -27,6 +27,7 @@ let facturasCoriDetalles = null;
 let Modificar_NotaCredito = null;
 let Registrar_FacturasVentas = null;
 let sincronizarGlobales = null;
+let facturasManualesFEL = null;
 app.on('ready',  createWindow)
 
 autoUpdater.on('update-available', (info) => {
@@ -488,6 +489,32 @@ ipcMain.on('open-Sincronizar-window', () => {
       // Manejar el evento de cierre de la ventana
       sincronizarGlobales.on('closed', () => {
         sincronizarGlobales = null; // Limpiar la referencia cuando se cierre la ventana
+      });
+  }
+});
+ipcMain.on('open-FacturasManualesFEL-window', () => {
+  if (facturasManualesFEL) {
+      // Si la ventana ya está abierta, enfócala
+      facturasManualesFEL.focus();
+  } else {
+      // Si no está abierta, crea una nueva ventana
+      facturasManualesFEL = new BrowserWindow({
+          webPreferences: {
+              nodeIntegration: true,
+              contextIsolation: false,
+              webSecurity: false,
+              enableRemoteModule: true
+          },
+          icon: path.join(__dirname, 'ingresos.ico'),  // Asegúrate de tener este ícono
+          autoHideMenuBar: true
+      });
+
+      facturasManualesFEL.maximize();
+      facturasManualesFEL.loadFile(path.join(__dirname, 'vistas/ReporteFacturasManualesFEL.html'));
+
+      // Manejar el evento de cierre de la ventana
+      facturasManualesFEL.on('closed', () => {
+        facturasManualesFEL = null; // Limpiar la referencia cuando se cierre la ventana
       });
   }
 });

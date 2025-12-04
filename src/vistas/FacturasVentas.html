@@ -11,9 +11,6 @@
     <!-- Header -->
     <div class="header">
         <div class="header-left">
-            <button class="btn-back" onclick="window.location.href='Menu.html'">
-                <i class="fas fa-arrow-left"></i>
-            </button>
             <div class="header-title">
                 <h1><i class="fas fa-file-invoice"></i> Registro de Facturas de Ventas</h1>
                 <p>Captura de facturas emitidas desde SAT</p>
@@ -29,126 +26,184 @@
 
     <!-- Contenedor principal -->
     <div class="main-container">
-    <!-- Sección de datos de factura Y sucursal -->
-        <div class="section-card">
-            <div class="section-header">
-                <h2><i class="fas fa-file-alt"></i> Datos de la Factura</h2>
-                <div class="connection-status" id="connectionStatus">
-                    <i class="fas fa-circle"></i>
-                    <span>Sin conexión</span>
+        <!-- Selección de tipo de operación -->
+        <div class="tipo-operacion-container" id="tipoOperacionContainer">
+            <div class="tipo-card">
+                <h2><i class="fas fa-hand-pointer"></i> Selecciona el tipo de operación</h2>
+                <div class="tipo-buttons">
+                    <button class="btn-tipo" id="btnSoloVenta" onclick="seleccionarTipo('venta')">
+                        <div class="tipo-icon">
+                            <i class="fas fa-shopping-cart"></i>
+                        </div>
+                        <h3>Solo Venta</h3>
+                        <p>Registro de venta desde una sucursal</p>
+                    </button>
+                    <button class="btn-tipo" id="btnVentaCompra" onclick="seleccionarTipo('venta-compra')">
+                        <div class="tipo-icon">
+                            <i class="fas fa-exchange-alt"></i>
+                        </div>
+                        <h3>Venta-Compra</h3>
+                        <p>Transferencia entre dos sucursales</p>
+                    </button>
                 </div>
             </div>
-            <div class="section-body">
-                <div class="form-row-compact">
-                    <div class="form-group form-group-date">
-                        <label for="fechaFactura">
-                            <i class="fas fa-calendar-alt"></i> Fecha
-                        </label>
-                        <input type="date" id="fechaFactura" class="form-control" required>
+        </div>
+
+        <!-- Contenido del formulario (oculto inicialmente) -->
+        <div class="formulario-container" id="formularioContainer" style="display: none;">
+            <!-- Sección de datos de factura Y sucursales - ULTRA COMPACTA -->
+            <div class="section-card section-compact">
+                <div class="section-header-inline">
+                    <div class="header-info">
+                        <h2><i class="fas fa-file-alt"></i> Datos de la Factura</h2>
+                        <div class="tipo-badge" id="tipoBadge"></div>
                     </div>
-                    <div class="form-group form-group-small">
-                        <label for="serieFactura">
-                            <i class="fas fa-tag"></i> Serie
-                        </label>
-                        <input type="text" id="serieFactura" class="form-control" placeholder="Ej: A" maxlength="10" required>
-                    </div>
-                    <div class="form-group form-group-small">
-                        <label for="numeroFactura">
-                            <i class="fas fa-hashtag"></i> Número
-                        </label>
-                        <input type="text" id="numeroFactura" class="form-control" placeholder="Ej: 12345" required>
-                    </div>
-                    <div class="form-group form-group-large">
-                        <label for="searchSucursal">
-                            <i class="fas fa-store"></i> Sucursal
-                        </label>
-                        <div class="search-container">
-                            <div class="search-box">
-                                <i class="fas fa-search"></i>
-                                <input 
-                                    type="text" 
-                                    id="searchSucursal" 
-                                    class="search-input" 
-                                    placeholder="Buscar sucursal... (Enter para buscar)"
-                                    autocomplete="off"
-                                >
-                                <button class="btn-clear" id="clearSucursal" style="display: none;">
-                                    <i class="fas fa-times"></i>
-                                </button>
+                    
+                    <!-- Todos los campos en una sola línea -->
+                    <div class="inline-form">
+                        <div class="inline-group">
+                            <label><i class="fas fa-calendar-alt"></i></label>
+                            <input type="date" id="fechaFactura" class="input-inline" required>
+                        </div>
+                        
+                        <div class="inline-group">
+                            <label><i class="fas fa-tag"></i></label>
+                            <input type="text" id="serieFactura" class="input-inline input-small" placeholder="Serie" maxlength="10" required>
+                        </div>
+                        
+                        <div class="inline-group">
+                            <label><i class="fas fa-hashtag"></i></label>
+                            <input type="text" id="numeroFactura" class="input-inline input-small" placeholder="Número" required>
+                        </div>
+                        
+                        <div class="inline-group inline-sucursal">
+                            <label><i class="fas fa-store"></i> Vende:</label>
+                            <div class="search-container-inline">
+                                <div class="search-box">
+                                    <input 
+                                        type="text" 
+                                        id="searchSucursalVende" 
+                                        class="search-input-inline" 
+                                        placeholder="Buscar... (Enter)"
+                                        autocomplete="off"
+                                    >
+                                    <button class="btn-clear-inline" id="clearSucursalVende" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <div class="search-results" id="sucursalVendeResults" style="display: none;"></div>
                             </div>
-                            <div class="search-results" id="sucursalResults" style="display: none;"></div>
+                            <div class="connection-status-inline" id="connectionStatusVende">
+                                <i class="fas fa-circle"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="inline-group inline-sucursal" id="sucursalCompraGroup" style="display: none;">
+                            <label><i class="fas fa-store"></i> Compra:</label>
+                            <div class="search-container-inline">
+                                <div class="search-box">
+                                    <input 
+                                        type="text" 
+                                        id="searchSucursalCompra" 
+                                        class="search-input-inline" 
+                                        placeholder="Buscar... (Enter)"
+                                        autocomplete="off"
+                                    >
+                                    <button class="btn-clear-inline" id="clearSucursalCompra" style="display: none;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <div class="search-results" id="sucursalCompraResults" style="display: none;"></div>
+                            </div>
+                            <div class="connection-status-inline" id="connectionStatusCompra">
+                                <i class="fas fa-circle"></i>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Sección de productos -->
-        <div class="section-card products-section">
-            <div class="section-header">
-                <h2><i class="fas fa-box"></i> Productos</h2>
-                <span class="badge" id="productCount">0 productos</span>
-            </div>
-            <div class="section-body">
-                <div class="search-container">
-                    <div class="search-box">
-                        <i class="fas fa-search"></i>
-                        <input 
-                            type="text" 
-                            id="searchProducto" 
-                            class="search-input" 
-                            placeholder="Buscar producto por UPC o descripción... (presiona Enter)"
-                            autocomplete="off"
-                            disabled
-                        >
-                        <button class="btn-clear" id="clearProducto" style="display: none;">
-                            <i class="fas fa-times"></i>
-                        </button>
+            <!-- Sección de productos -->
+            <div class="section-card products-section">
+                <div class="section-header-products">
+                    <div class="products-header-left">
+                        <h2><i class="fas fa-box"></i> Productos</h2>
+                        <span class="badge" id="productCount">0 productos</span>
                     </div>
-                    <div class="search-results" id="productoResults" style="display: none;"></div>
+                    <div class="products-header-actions">
+                        <button class="btn-import" id="btnImportExcel" disabled title="Importar desde Excel">
+                            <i class="fas fa-file-excel"></i>
+                            Importar Excel
+                        </button>
+                        <input type="file" id="fileExcelInput" accept=".xlsx,.xls" style="display: none;">
+                        <div class="search-container-products">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input 
+                                    type="text" 
+                                    id="searchProducto" 
+                                    class="search-input-products" 
+                                    placeholder="Buscar por UPC o descripción... (Enter)"
+                                    autocomplete="off"
+                                    disabled
+                                >
+                                <button class="btn-clear" id="clearProducto" style="display: none;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="search-results" id="productoResults" style="display: none;"></div>
+                        </div>
+                    </div>
                 </div>
+                <div class="section-body-products">
 
-                <!-- Tabla de productos agregados -->
-                <div class="table-container">
-                    <table class="products-table">
-                        <thead>
-                            <tr>
-                                <th>UPC</th>
-                                <th>Descripción</th>
-                                <th>Cantidad</th>
-                                <th>Costo</th>
-                                <th>Precio</th>
-                                <th>Subtotal</th>
-                                <th>Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody id="productosBody">
-                            <tr class="empty-state">
-                                <td colspan="7">
-                                    <i class="fas fa-inbox"></i>
-                                    <p>No hay productos agregados</p>
-                                    <small>Selecciona una sucursal y busca productos para agregar</small>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <!-- Tabla de productos agregados -->
+                    <div class="table-container">
+                        <table class="products-table">
+                            <thead>
+                                <tr>
+                                    <th>UPC</th>
+                                    <th>Descripción</th>
+                                    <th>Cantidad</th>
+                                    <th>Costo</th>
+                                    <th>Precio</th>
+                                    <th>Subtotal</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productosBody">
+                                <tr class="empty-state">
+                                    <td colspan="7">
+                                        <i class="fas fa-inbox"></i>
+                                        <p>No hay productos agregados</p>
+                                        <small>Selecciona una sucursal y busca productos para agregar</small>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-        </div>
-        <div class="footer-bar">
-            <div class="total-display">
-                <span class="total-label">Total:</span>
-                <span class="total-value" id="totalGeneral">Q 0.00</span>
-            </div>
-            <div class="action-buttons">
-                <button class="btn btn-secondary" onclick="window.location.href='Menu.html'">
-                    <i class="fas fa-times"></i>
-                    Cancelar
-                </button>
-                <button class="btn btn-primary" id="btnGuardar" disabled>
-                    <i class="fas fa-save"></i>
-                    Guardar Factura
-                </button>
+            
+            <div class="footer-bar">
+                <div class="total-display">
+                    <span class="total-label">Total:</span>
+                    <span class="total-value" id="totalGeneral">Q 0.00</span>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" id="btnCambiarTipo">
+                        <i class="fas fa-undo"></i>
+                        Cambiar Tipo
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.location.href='Menu.html'">
+                        <i class="fas fa-times"></i>
+                        Cancelar
+                    </button>
+                    <button class="btn btn-primary" id="btnGuardar" disabled>
+                        <i class="fas fa-save"></i>
+                        Guardar Factura
+                    </button>
+                </div>
             </div>
         </div>
     </div>

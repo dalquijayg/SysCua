@@ -257,10 +257,10 @@ let resultadosVerificacionMegared = [];
 const BATCH_SIZE_VERIFICACION = 5;
 
 const configLocal = {
-    host: '172.30.1.17',
+    host: '172.30.1.100',
     database: 'Gestion',
-    user: 'compras',
-    password: 'bode.24451988'
+    user: 'Gestion',
+    password: 'Gestion.2445'
 };
 
 async function initVentasMegared() {

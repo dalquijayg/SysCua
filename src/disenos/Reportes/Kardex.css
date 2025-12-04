@@ -306,3 +306,23 @@ select.input-field option {
 .checkbox-label:hover span {
     color: #4CAF50;
 }
+.subtitulo-producto {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+
+.subtitulo-producto td {
+    background-color: #4CAF50 !important;
+    color: white !important;
+}
+.virtual-spacer-top,
+.virtual-spacer-bottom {
+    pointer-events: none;
+}
+
+.virtual-spacer-top td,
+.virtual-spacer-bottom td {
+    padding: 0 !important;
+    border: none !important;
+}
