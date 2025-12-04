@@ -240,9 +240,9 @@ async function conectarBaseDatos() {
     
     try {
         const config = {
-            host: '172.30.1.17',
-            user: 'compras',
-            password: 'bode.24451988',
+            host: '172.30.1.100',
+            user: 'Gestion',
+            password: 'Gestion.2445',
             database: 'Gestion'
         };
         
