@@ -535,6 +535,8 @@ async function exportarExcel() {
             });
             
             worksheet.columns = [
+                { header: 'Fecha Factura', key: 'FechaFactura', width: 15 },
+                { header: 'Fecha Recepción', key: 'FechaRecepcion', width: 15 },
                 { header: 'Id Inventario', key: 'IdInventario', width: 15 },
                 { header: 'UPC', key: 'Upc', width: 15 },
                 { header: 'Descripción', key: 'Descripcion', width: 40 },
