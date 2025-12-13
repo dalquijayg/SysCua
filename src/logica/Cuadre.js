@@ -1931,9 +1931,21 @@ async function guardarCuadre() {
 }
 // Proceso de guardado
 async function realizarGuardado() {
-    const idInventario = document.getElementById('inventario-id').value;
-    const idSucursal = document.getElementById('sucursal-select').value;
-    
+    const inventarioIdElement = document.getElementById('inventario-id');
+    const sucursalSelectElement = document.getElementById('sucursal-select');
+
+    // Validar que los elementos existan
+    if (!inventarioIdElement || !inventarioIdElement.value) {
+        throw new Error('No se ha seleccionado ningún inventario. Por favor, busque un inventario primero.');
+    }
+
+    if (!sucursalSelectElement || !sucursalSelectElement.value) {
+        throw new Error('No se ha seleccionado ninguna sucursal. Por favor, seleccione una sucursal primero.');
+    }
+
+    const idInventario = inventarioIdElement.value;
+    const idSucursal = sucursalSelectElement.value;
+
     // Verificar si el cuadre existe
     const existeInventario = await verificarExistenciaInventario(idInventario, idSucursal);
     
@@ -2070,7 +2082,9 @@ async function realizarGuardado() {
 // Limpiar formulario
 function limpiarFormulario() {
     const inventarioIdInput = document.getElementById('inventario-id');
-    inventarioIdInput.value = '';
+    if (inventarioIdInput) {
+        inventarioIdInput.value = '';
+    }
 
     // Limpiar información del inventario
     const infoElements = ['fecha', 'serie', 'numero', 'fecha-factura', 'departamento', 'proveedor', 'razon-social', 'observaciones', 'criterio-cuadre'];
@@ -2367,6 +2381,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Obtener el ID real del inventario para verificar si existe cuadre
                 const idInventarioReal = inventario.info.idInventarios || searchValue;
+
+                // Guardar el ID del inventario en el campo oculto
+                const inventarioIdInput = document.getElementById('inventario-id');
+                if (inventarioIdInput) {
+                    inventarioIdInput.value = idInventarioReal;
+                }
 
                 // Verificar si el cuadre ya existe
                 const existeInventario = await verificarExistenciaInventario(idInventarioReal, idSucursal);

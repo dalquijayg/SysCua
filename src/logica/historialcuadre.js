@@ -627,7 +627,7 @@ async function performSearch() {
             query += ' AND cuadrecostos.Upc = ?';
             params.push(upc.padStart(13, '0'));
         }
-
+        query += ' ORDER BY cuadrecostos.FechaFactura DESC';
         // Si no se ha aplicado ningún filtro, advertir al usuario
         if (params.length === 0) {
             const result = await Swal.fire({
@@ -644,7 +644,8 @@ async function performSearch() {
                 return;
             }
             
-            query += ' ORDER BY cuadrecostos.fechacuadre ASC LIMIT 10000'; // Limitar a 10,000 registros
+            // Solo limitamos a 10,000 si no hay filtros para proteger la memoria
+            query += ' LIMIT 10000'; 
         }
 
         // Actualizar progreso
