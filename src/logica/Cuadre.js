@@ -11,6 +11,10 @@ let startCell = null;
 let endCell = null;
 let copiedContent = "";
 
+// Variables para autocompletado de sucursales
+let sucursalesData = [];
+let selectedSucursalIndex = -1;
+
 // Conexiones a bases de datos
 async function conectar() {
     try {
@@ -68,20 +72,124 @@ async function conexionsurtialterno() {
     }
 }
 
+// Función de búsqueda fuzzy mejorada
+function fuzzyMatch(searchTerm, targetText) {
+    // Normalizar ambos textos (quitar acentos, minúsculas, espacios extra)
+    const normalize = (text) => {
+        return text
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "") // Quitar acentos
+            .replace(/\s+/g, ' ') // Normalizar espacios
+            .trim();
+    };
+
+    const search = normalize(searchTerm);
+    const target = normalize(targetText);
+
+    // Si está vacío, no coincide
+    if (!search) return { matches: false, score: 0, highlights: [] };
+
+    // Búsqueda exacta (mejor puntuación)
+    if (target.includes(search)) {
+        return {
+            matches: true,
+            score: 100,
+            highlights: [{ start: target.indexOf(search), end: target.indexOf(search) + search.length }]
+        };
+    }
+
+    // Búsqueda por palabras
+    const searchWords = search.split(' ').filter(w => w.length > 0);
+    const targetWords = target.split(' ');
+
+    let wordMatches = 0;
+    let highlights = [];
+
+    searchWords.forEach(searchWord => {
+        targetWords.forEach((targetWord, index) => {
+            if (targetWord.startsWith(searchWord)) {
+                wordMatches++;
+                // Encontrar posición en el texto original
+                let pos = 0;
+                for (let i = 0; i < index; i++) {
+                    pos += targetWords[i].length + 1;
+                }
+                highlights.push({ start: pos, end: pos + searchWord.length });
+            }
+        });
+    });
+
+    if (wordMatches > 0) {
+        return {
+            matches: true,
+            score: (wordMatches / searchWords.length) * 90,
+            highlights: highlights
+        };
+    }
+
+    // Búsqueda por iniciales (ej: "bcp" coincide con "Bodega Canastas Pastores")
+    const initials = targetWords.map(w => w[0]).join('');
+    if (initials.includes(search)) {
+        return { matches: true, score: 70, highlights: [] };
+    }
+
+    // Búsqueda secuencial de caracteres
+    let searchIndex = 0;
+    let matchCount = 0;
+
+    for (let i = 0; i < target.length && searchIndex < search.length; i++) {
+        if (target[i] === search[searchIndex]) {
+            searchIndex++;
+            matchCount++;
+        }
+    }
+
+    if (searchIndex === search.length) {
+        return {
+            matches: true,
+            score: (matchCount / search.length) * 60,
+            highlights: []
+        };
+    }
+
+    return { matches: false, score: 0, highlights: [] };
+}
+
+// Resaltar coincidencias en el texto
+function highlightMatches(text, highlights) {
+    if (!highlights || highlights.length === 0) return text;
+
+    let result = '';
+    let lastIndex = 0;
+
+    // Ordenar highlights por posición
+    highlights.sort((a, b) => a.start - b.start);
+
+    highlights.forEach(highlight => {
+        result += text.substring(lastIndex, highlight.start);
+        result += '<mark>' + text.substring(highlight.start, highlight.end) + '</mark>';
+        lastIndex = highlight.end;
+    });
+
+    result += text.substring(lastIndex);
+    return result;
+}
+
 // Carga inicial de sucursales
 async function loadSucursales() {
     try {
         mostrarCargando('Cargando sucursales...');
-        
+
         const connection = await conectar();
         const result = await connection.query(`
             SELECT
-                sucursales.idSucursal, 
+                sucursales.idSucursal,
                 sucursales.TipoSucursal,
-                sucursales.NombreSucursal, 
-                sucursales.serverr, 
-                sucursales.databasee, 
-                sucursales.Uid, 
+                sucursales.NombreSucursal,
+                sucursales.serverr,
+                sucursales.databasee,
+                sucursales.Uid,
                 sucursales.Pwd,
                 sucursales.Puerto
             FROM
@@ -92,27 +200,214 @@ async function loadSucursales() {
             ORDER BY
                 sucursales.NombreSucursal ASC
         `);
-        
-        const select = document.getElementById('sucursal-select');
-        result.forEach(row => {
-            const option = document.createElement('option');
-            option.value = row.idSucursal;
-            option.dataset.tipoSucursal = row.TipoSucursal;
-            option.textContent = row.NombreSucursal;
-            option.dataset.serverr = row.serverr;
-            option.dataset.databasee = row.databasee;
-            option.dataset.uid = row.Uid;
-            option.dataset.pwd = row.Pwd;
-            option.dataset.puerto = row.Puerto; // Agregar el puerto como data attribute
-            select.appendChild(option);
-        });
+
+        // Guardar datos de sucursales para autocompletado
+        sucursalesData = result.map(row => ({
+            idSucursal: row.idSucursal,
+            tipoSucursal: row.TipoSucursal,
+            nombreSucursal: row.NombreSucursal,
+            serverr: row.serverr,
+            databasee: row.databasee,
+            uid: row.Uid,
+            pwd: row.Pwd,
+            puerto: row.Puerto
+        }));
 
         connection.close();
+
+        // Inicializar autocompletado
+        inicializarAutocompletadoSucursales();
+
         Swal.close();
     } catch (error) {
         console.error('Error al cargar las sucursales:', error);
         mostrarError('Error', 'No se pudieron cargar las sucursales');
     }
+}
+
+// Inicializar autocompletado de sucursales
+function inicializarAutocompletadoSucursales() {
+    const input = document.getElementById('sucursal-input');
+    const dropdown = document.getElementById('sucursal-dropdown');
+    const hiddenInput = document.getElementById('sucursal-select');
+
+    if (!input || !dropdown) return;
+
+    // Evento de escritura
+    input.addEventListener('input', function() {
+        const searchTerm = this.value.trim();
+
+        if (searchTerm.length === 0) {
+            dropdown.classList.remove('show');
+            dropdown.innerHTML = '';
+            hiddenInput.value = '';
+            input.classList.remove('has-selection');
+            selectedSucursalIndex = -1;
+            return;
+        }
+
+        // Buscar coincidencias
+        const matches = sucursalesData
+            .map(sucursal => {
+                const matchResult = fuzzyMatch(searchTerm, sucursal.nombreSucursal);
+                return { ...sucursal, ...matchResult };
+            })
+            .filter(item => item.matches)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 8); // Limitar a 8 resultados
+
+        // Mostrar resultados
+        mostrarResultadosAutocompletado(matches, dropdown, input, hiddenInput);
+    });
+
+    // Navegación con teclado
+    input.addEventListener('keydown', function(e) {
+        const items = dropdown.querySelectorAll('.autocomplete-item');
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedSucursalIndex = Math.min(selectedSucursalIndex + 1, items.length - 1);
+            actualizarSeleccionAutocompletado(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedSucursalIndex = Math.max(selectedSucursalIndex - 1, -1);
+            actualizarSeleccionAutocompletado(items);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (selectedSucursalIndex >= 0 && items[selectedSucursalIndex]) {
+                items[selectedSucursalIndex].click();
+            }
+        } else if (e.key === 'Escape') {
+            dropdown.classList.remove('show');
+            selectedSucursalIndex = -1;
+        }
+    });
+
+    // Cerrar al hacer clic fuera
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.classList.remove('show');
+            selectedSucursalIndex = -1;
+        }
+    });
+}
+
+// Mostrar resultados de autocompletado
+function mostrarResultadosAutocompletado(matches, dropdown, input, hiddenInput) {
+    dropdown.innerHTML = '';
+    selectedSucursalIndex = -1;
+
+    if (matches.length === 0) {
+        dropdown.innerHTML = '<div class="autocomplete-no-results">No se encontraron sucursales</div>';
+        dropdown.classList.add('show');
+        return;
+    }
+
+    matches.forEach((sucursal, index) => {
+        const item = document.createElement('div');
+        item.className = 'autocomplete-item';
+        item.innerHTML = highlightMatches(sucursal.nombreSucursal, sucursal.highlights);
+
+        item.dataset.idSucursal = sucursal.idSucursal;
+        item.dataset.tipoSucursal = sucursal.tipoSucursal;
+        item.dataset.nombreSucursal = sucursal.nombreSucursal;
+        item.dataset.serverr = sucursal.serverr;
+        item.dataset.databasee = sucursal.databasee;
+        item.dataset.uid = sucursal.uid;
+        item.dataset.pwd = sucursal.pwd;
+        item.dataset.puerto = sucursal.puerto;
+
+        item.addEventListener('click', function() {
+            seleccionarSucursal(this, input, hiddenInput, dropdown);
+        });
+
+        dropdown.appendChild(item);
+    });
+
+    dropdown.classList.add('show');
+}
+
+// Actualizar selección con teclado
+function actualizarSeleccionAutocompletado(items) {
+    items.forEach((item, index) => {
+        if (index === selectedSucursalIndex) {
+            item.classList.add('active');
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('active');
+        }
+    });
+}
+
+// Seleccionar una sucursal
+function seleccionarSucursal(item, input, hiddenInput, dropdown) {
+    const nombreSucursal = item.dataset.nombreSucursal;
+
+    // Actualizar campos
+    input.value = nombreSucursal;
+    input.classList.add('has-selection');
+    hiddenInput.value = item.dataset.idSucursal;
+
+    // Guardar datos en el hidden input para acceso posterior
+    hiddenInput.dataset.tipoSucursal = item.dataset.tipoSucursal;
+    hiddenInput.dataset.serverr = item.dataset.serverr;
+    hiddenInput.dataset.databasee = item.dataset.databasee;
+    hiddenInput.dataset.uid = item.dataset.uid;
+    hiddenInput.dataset.pwd = item.dataset.pwd;
+    hiddenInput.dataset.puerto = item.dataset.puerto;
+
+    // Cerrar dropdown
+    dropdown.classList.remove('show');
+    dropdown.innerHTML = '';
+    selectedSucursalIndex = -1;
+
+    // Mostrar botón de limpiar
+    const clearBtn = document.getElementById('clear-sucursal-btn');
+    if (clearBtn) {
+        clearBtn.classList.add('show');
+    }
+
+    // Enfocar siguiente campo
+    document.getElementById('inventario-id')?.focus();
+}
+
+// Limpiar selección de sucursal
+function limpiarSeleccionSucursal() {
+    const input = document.getElementById('sucursal-input');
+    const hiddenInput = document.getElementById('sucursal-select');
+    const dropdown = document.getElementById('sucursal-dropdown');
+    const clearBtn = document.getElementById('clear-sucursal-btn');
+
+    // Limpiar campos
+    if (input) {
+        input.value = '';
+        input.classList.remove('has-selection');
+        input.focus();
+    }
+
+    if (hiddenInput) {
+        hiddenInput.value = '';
+        // Limpiar todos los datasets
+        delete hiddenInput.dataset.tipoSucursal;
+        delete hiddenInput.dataset.serverr;
+        delete hiddenInput.dataset.databasee;
+        delete hiddenInput.dataset.uid;
+        delete hiddenInput.dataset.pwd;
+        delete hiddenInput.dataset.puerto;
+    }
+
+    // Ocultar botón de limpiar
+    if (clearBtn) {
+        clearBtn.classList.remove('show');
+    }
+
+    // Cerrar dropdown si está abierto
+    if (dropdown) {
+        dropdown.classList.remove('show');
+        dropdown.innerHTML = '';
+    }
+
+    selectedSucursalIndex = -1;
 }
 
 // Obtención de criterio de cuadre
@@ -233,7 +528,7 @@ function obtenerFechaLocal() {
     
     return fechaLocal.toISOString().slice(0, 19).replace('T', ' ');
 }
-async function obtenerInventario(sucursalData, idInventario) {
+async function obtenerInventario(sucursalData, searchValue, searchType = 'id') {
     mostrarCargando('Cargando inventario...');
 
     let connection;
@@ -241,14 +536,27 @@ async function obtenerInventario(sucursalData, idInventario) {
     try {
         connection = await mysql.createConnection({
             host: sucursalData.serverr,
-            port: sucursalData.puerto || 3306, // Usar puerto personalizado o 3306 por defecto
+            port: sucursalData.puerto || 3306,
             user: sucursalData.uid,
             database: sucursalData.databasee,
             password: sucursalData.pwd
         });
 
+        // Determinar la condición WHERE según el tipo de búsqueda
+        let whereClause;
+        let queryParams;
+
+        if (searchType === 'numero') {
+            whereClause = 'inventarios.Numero = ?';
+            queryParams = [searchValue];
+        } else {
+            whereClause = 'inventarios.idInventarios = ?';
+            queryParams = [searchValue];
+        }
+
         const [rows] = await connection.execute(`
             SELECT
+                inventarios.idInventarios,
                 inventarios.Fecha,
                 inventarios.Serie,
                 inventarios.Numero,
@@ -265,10 +573,10 @@ async function obtenerInventario(sucursalData, idInventario) {
                 detalleinventarios.Cantidad_Rechequeo,
                 productos.Costo,
                 productos.Nivel1,
-                CASE 
-                    WHEN detalleinventarios.UnidadesFardo IS NULL OR detalleinventarios.UnidadesFardo = '' OR detalleinventarios.UnidadesFardo = 0 
-                    THEN detalleinventarios.Bonificacion_Rechequeo 
-                    ELSE detalleinventarios.Bonificacion_Rechequeo * detalleinventarios.UnidadesFardo 
+                CASE
+                    WHEN detalleinventarios.UnidadesFardo IS NULL OR detalleinventarios.UnidadesFardo = '' OR detalleinventarios.UnidadesFardo = 0
+                    THEN detalleinventarios.Bonificacion_Rechequeo
+                    ELSE detalleinventarios.Bonificacion_Rechequeo * detalleinventarios.UnidadesFardo
                 END AS Bonificacion
             FROM
                 detalleinventarios
@@ -278,11 +586,12 @@ async function obtenerInventario(sucursalData, idInventario) {
                 LEFT JOIN razonessociales ON inventarios.IdRazon = razonessociales.Id
                 LEFT JOIN productos ON detalleinventarios.Upc = productos.Upc
             WHERE
-                inventarios.idInventarios = ? AND
-				detalleinventarios.Detalle_Rechequeo = 0
-        `, [idInventario]);
+                ${whereClause} AND
+                detalleinventarios.Detalle_Rechequeo = 0
+        `, queryParams);
 
         const inventarioInfo = rows[0] ? {
+            idInventarios: rows[0].idInventarios,
             Fecha: rows[0].Fecha,
             Serie: rows[0].Serie,
             Numero: rows[0].Numero,
@@ -571,9 +880,9 @@ function mostrarInventario(inventario) {
     // Mostrar los detalles del inventario
     const tbody = document.querySelector('.data-table tbody');
     tbody.innerHTML = ''; // Limpiar la tabla antes de agregar nuevas filas
-    
+
     const sucursalSelect = document.getElementById('sucursal-select');
-    const tipoSucursal = sucursalSelect.selectedOptions[0].dataset.tipoSucursal;
+    const tipoSucursal = sucursalSelect?.dataset?.tipoSucursal || '';
 
     // Mostrar u ocultar la columna de Costo Alterno
     const costoAlternoHeader = document.querySelector('th.costo-alterno-column');
@@ -588,15 +897,15 @@ function mostrarInventario(inventario) {
             tr.innerHTML = `
                 <td class="upc-column"><input type="text" value="${detalle.Upc}" class="upc-input"></td>
                 <td class="descripcion-column">${detalle.DescLarga || ''}</td>
-                <td class="cantidad-column"><input type="number" value="${detalle.Cantidad || ''}" class="cantidad-input"></td>
-                <td class="costo-column"><input type="number" value="${detalle.Costo || ''}" class="costo-input"></td>
-                ${tipoSucursal === '2' ? 
-                  `<td class="costo-alterno-column"><input type="number" value="${detalle.CostoAlterno || ''}" class="costo-alterno-input" readonly></td>` : 
-                  `<td class="costo-alterno-column" style="display: none;"><input type="number" value="${detalle.CostoAlterno || ''}" class="costo-alterno-input" readonly></td>`
+                ${tipoSucursal === '2' ?
+                  `<td class="costo-alterno-column"><input type="text" value="${detalle.CostoAlterno || ''}" class="costo-alterno-input numeric-input" readonly></td>` :
+                  `<td class="costo-alterno-column" style="display: none;"><input type="text" value="${detalle.CostoAlterno || ''}" class="costo-alterno-input numeric-input" readonly></td>`
                 }
-                <td class="bonificacion-column"><input type="number" value="${detalle.Bonificacion}" class="bonificacion-input"></td>
-                <td class="precio-column"><input type="text" value="${detalle.PrecioFacturado || ''}" class="precio-facturado-input"></td>
-                <td class="descuento-column"><input type="number" value="${detalle.Descuento || '0'}" class="descuento-input"></td>
+                <td class="cantidad-column"><input type="text" value="${detalle.Cantidad || ''}" class="cantidad-input numeric-input"></td>
+                <td class="costo-column"><input type="text" value="${detalle.Costo || ''}" class="costo-input numeric-input"></td>
+                <td class="bonificacion-column"><input type="text" value="${detalle.Bonificacion}" class="bonificacion-input numeric-input"></td>
+                <td class="precio-column"><input type="text" value="${detalle.PrecioFacturado || ''}" class="precio-facturado-input numeric-input"></td>
+                <td class="descuento-column"><input type="text" value="${detalle.Descuento || '0'}" class="descuento-input"></td>
                 <td class="costo-sin-descuento-column costo-sin-descuento-cell">0.00</td>
                 <td class="costo-facturado-column costo-facturado-cell">0.00</td>
                 <td class="diferencia-column diferencia-cell">0.00</td>
@@ -625,6 +934,11 @@ function mostrarInventario(inventario) {
             // Eventos específicos para cada campo
             precioFacturadoInput.addEventListener('input', () => {
                 precioFacturadoInput.dataset.originalValue = precioFacturadoInput.value;
+                actualizarTotalFactura();
+            });
+
+            // Actualizar totales cuando cambie el descuento
+            descuentoInput.addEventListener('input', () => {
                 actualizarTotalFactura();
             });
 
@@ -664,22 +978,83 @@ function mostrarInventario(inventario) {
 }
 // Actualizar total de la factura
 function actualizarTotalFactura() {
-    const preciosFacturados = document.querySelectorAll('.precio-facturado-input');
-    let total = 0;
-    
-    preciosFacturados.forEach(input => {
-        const valor = parseFloat(input.value) || 0;
-        total += valor;
+    const rows = document.querySelectorAll('.data-table tbody tr');
+    let totalFactura = 0;
+    let totalDescuentos = 0;
+
+    rows.forEach(row => {
+        const precioFacturadoInput = row.querySelector('.precio-facturado-input');
+        const descuentoInput = row.querySelector('.descuento-input');
+
+        const precioFacturado = parseFloat(precioFacturadoInput?.value) || 0;
+        let descuentoValor = descuentoInput?.value?.toString().trim() || '0';
+
+        // Acumular precio facturado
+        totalFactura += precioFacturado;
+
+        // Determinar el tipo de descuento y calcular su valor real
+        let descuentoReal = 0;
+
+        // Verificar si el descuento ya fue aplicado con el botón "Aplicar Descuento"
+        const esDescuentoPorcentualAplicado = descuentoInput?.getAttribute('data-porcentual') === 'true';
+        const esSinIva = descuentoInput?.getAttribute('data-sin-iva') === 'true';
+
+        if (esDescuentoPorcentualAplicado || esSinIva) {
+            // El descuento ya fue calculado y aplicado, usar el valor directo
+            // PERO necesitamos calcular el monto real del descuento aplicado
+            const porcentaje = parseFloat(descuentoValor) || 0;
+
+            if (esSinIva) {
+                // Descuento sin IVA: descuento aplicado sobre precio sin IVA
+                const precioSinIva = precioFacturado / 1.12;
+                descuentoReal = precioSinIva * (porcentaje / 100);
+            } else {
+                // Descuento porcentual normal
+                descuentoReal = precioFacturado * (porcentaje / 100);
+            }
+        } else if (descuentoValor.includes('%')) {
+            // Descuento porcentual NO aplicado aún: convertir a valor absoluto
+            const porcentaje = parseFloat(descuentoValor.replace('%', '')) || 0;
+            descuentoReal = (precioFacturado * porcentaje) / 100;
+        } else {
+            // Descuento directo (monetario)
+            descuentoReal = parseFloat(descuentoValor) || 0;
+        }
+
+        totalDescuentos += descuentoReal;
     });
-    
-    const totalElement = document.getElementById('total-factura');
-    totalElement.textContent = total.toFixed(2);
-    
-    // Añadir efecto de animación al cambiar el total
-    totalElement.classList.add('animate-update');
-    setTimeout(() => {
-        totalElement.classList.remove('animate-update');
-    }, 500);
+
+    const totalConDescuento = totalFactura - totalDescuentos;
+
+    // Actualizar Total Factura
+    const totalFacturaElement = document.getElementById('total-factura');
+    if (totalFacturaElement) {
+        totalFacturaElement.textContent = totalFactura.toFixed(2);
+        totalFacturaElement.classList.add('animate-update');
+        setTimeout(() => {
+            totalFacturaElement.classList.remove('animate-update');
+        }, 500);
+    }
+
+    // Actualizar Total Descuentos
+    const totalDescuentosElement = document.getElementById('total-descuentos');
+    if (totalDescuentosElement) {
+        totalDescuentosElement.textContent = totalDescuentos.toFixed(2);
+        totalDescuentosElement.classList.add('animate-update');
+        setTimeout(() => {
+            totalDescuentosElement.classList.remove('animate-update');
+        }, 500);
+    }
+
+    // Actualizar Total con Descuento
+    const totalConDescuentoElement = document.getElementById('total-con-descuento');
+    if (totalConDescuentoElement) {
+        totalConDescuentoElement.textContent = totalConDescuento.toFixed(2);
+        totalConDescuentoElement.classList.add('animate-update');
+        setTimeout(() => {
+            totalConDescuentoElement.classList.remove('animate-update');
+        }, 500);
+    }
 }
 
 // Calcular expresión en campo de precio facturado
@@ -772,9 +1147,27 @@ function navigateTable(e) {
 // Asignar eventos de teclado para la navegación
 function asignarEventosTeclado() {
     const table = document.querySelector('.data-table');
-    
+
     table.addEventListener('keydown', (e) => {
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) {
+            const target = e.target;
+
+            // Para todos los inputs de texto, verificar posición del cursor
+            if (target.tagName === 'INPUT' && target.type === 'text') {
+                const cursorAtStart = target.selectionStart === 0;
+                const cursorAtEnd = target.selectionStart === target.value.length;
+
+                // Si presiona ArrowLeft y el cursor NO está al inicio, permitir mover cursor
+                if (e.key === 'ArrowLeft' && !cursorAtStart) {
+                    return;
+                }
+
+                // Si presiona ArrowRight y el cursor NO está al final, permitir mover cursor
+                if (e.key === 'ArrowRight' && !cursorAtEnd) {
+                    return;
+                }
+            }
+
             e.preventDefault();
             navigateTable(e);
         }
@@ -903,7 +1296,7 @@ async function manejarUpckeydown(event) {
         const upc = formatUPC(input);
         if (upc) {
             const sucursalSelect = document.getElementById('sucursal-select');
-            const sucursalData = sucursalSelect.selectedOptions[0].dataset;
+            const sucursalData = sucursalSelect?.dataset || {};
             
             try {
                 mostrarCargando('Buscando producto...');
@@ -1256,7 +1649,7 @@ if (typeof mostrarInfo !== 'function') {
 function agregarfila() {
     const tbody = document.querySelector('.data-table tbody');
     const sucursalSelect = document.getElementById('sucursal-select');
-    const tipoSucursal = sucursalSelect?.selectedOptions[0]?.dataset?.tipoSucursal || '';
+    const tipoSucursal = sucursalSelect?.dataset?.tipoSucursal || '';
     
     // Crear nueva fila
     const newRow = document.createElement('tr');
@@ -1265,15 +1658,15 @@ function agregarfila() {
     newRow.innerHTML = `
         <td class="upc-column"><input type="text" class="upc-input"></td>
         <td class="descripcion-column"></td>
-        <td class="cantidad-column"><input type="number" class="cantidad-input" value="0"></td>
-        <td class="costo-column"><input type="number" class="costo-input" value="0"></td>
-        ${tipoSucursal === '2' ? 
-            `<td class="costo-alterno-column"><input type="number" class="costo-alterno-input" readonly></td>` : 
-            `<td class="costo-alterno-column" style="display: none;"><input type="number" class="costo-alterno-input" readonly></td>`
+        <td class="cantidad-column"><input type="text" class="cantidad-input numeric-input" value="0"></td>
+        <td class="costo-column"><input type="text" class="costo-input numeric-input" value="0"></td>
+        ${tipoSucursal === '2' ?
+            `<td class="costo-alterno-column"><input type="text" class="costo-alterno-input numeric-input" readonly></td>` :
+            `<td class="costo-alterno-column" style="display: none;"><input type="text" class="costo-alterno-input numeric-input" readonly></td>`
         }
-        <td class="bonificacion-column"><input type="number" class="bonificacion-input" value="0"></td>
-        <td class="precio-column"><input type="text" class="precio-facturado-input" value="0"></td>
-        <td class="descuento-column"><input type="number" class="descuento-input" value="0"></td>
+        <td class="bonificacion-column"><input type="text" class="bonificacion-input numeric-input" value="0"></td>
+        <td class="precio-column"><input type="text" class="precio-facturado-input numeric-input" value="0"></td>
+        <td class="descuento-column"><input type="text" class="descuento-input" value="0"></td>
         <td class="costo-sin-descuento-column costo-sin-descuento-cell">0.00</td>
         <td class="costo-facturado-column costo-facturado-cell">0.00</td>
         <td class="diferencia-column diferencia-cell">0.00</td>
@@ -1555,10 +1948,11 @@ async function realizarGuardado() {
         connection = await conectarfacturas();
         
         const sucursalSelect = document.getElementById('sucursal-select');
+        const sucursalInput = document.getElementById('sucursal-input');
         const fechaFactura = formatearFechaParaMySQL(document.getElementById('fecha-factura')?.textContent);
         const numero = document.getElementById('numero')?.textContent;
         const serie = document.getElementById('serie')?.textContent;
-        const nombreSucursal = sucursalSelect?.options[sucursalSelect.selectedIndex]?.text;
+        const nombreSucursal = sucursalInput?.value || '';
         const fechaCuadre = obtenerFechaLocal();
         const usuario = localStorage.getItem('userName') || 'Usuario';
         const idUsuario = localStorage.getItem('userId') || '0';
@@ -1696,12 +2090,17 @@ function limpiarFormulario() {
     if (tbody) {
         tbody.innerHTML = '';
     }
-    
-    // Reiniciar el total
+
+    // Reiniciar los totales
     document.getElementById('total-factura').textContent = '0.00';
-    
-    // Darle foco al campo de ID de inventario
-    inventarioIdInput.focus();
+    document.getElementById('total-descuentos').textContent = '0.00';
+    document.getElementById('total-con-descuento').textContent = '0.00';
+
+    // Darle foco al campo de búsqueda
+    const searchValueInput = document.getElementById('search-value');
+    if (searchValueInput) {
+        searchValueInput.focus();
+    }
     
     console.log('Formulario limpiado exitosamente (manteniendo la sucursal seleccionada)');
 }
@@ -1857,8 +2256,12 @@ function inicializarDescuentoSinIva() {
 document.addEventListener('DOMContentLoaded', () => {
     // Inicialización de elementos principales
     const sucursalSelect = document.getElementById('sucursal-select');
+    const clearSucursalBtn = document.getElementById('clear-sucursal-btn');
     const buscarBtn = document.getElementById('buscar-btn');
-    const inventarioIdInput = document.getElementById('inventario-id');
+    const searchValueInput = document.getElementById('search-value');
+    const searchLabel = document.getElementById('search-label');
+    const searchByIdRadio = document.getElementById('search-by-id');
+    const searchByNumeroRadio = document.getElementById('search-by-numero');
     const guardarBtn = document.getElementById('guardar-btn');
     const descuentoBtn = document.getElementById('descuento-btn');
     const addRowBtn = document.querySelector('.add-row');
@@ -1866,6 +2269,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeSearchBtn = document.getElementById('closeSearch');
     const searchBtn = document.getElementById('searchButton');
     const searchInput = document.getElementById('searchInput');
+
+    // Evento para botón de limpiar sucursal
+    if (clearSucursalBtn) {
+        clearSucursalBtn.addEventListener('click', limpiarSeleccionSucursal);
+    }
+
+    // Eventos para cambiar el tipo de búsqueda
+    if (searchByIdRadio && searchByNumeroRadio && searchLabel && searchValueInput) {
+        searchByIdRadio.addEventListener('change', function() {
+            if (this.checked) {
+                searchLabel.textContent = 'ID Inventario:';
+                searchValueInput.placeholder = 'Ingrese ID';
+                searchValueInput.value = '';
+                searchValueInput.focus();
+            }
+        });
+
+        searchByNumeroRadio.addEventListener('change', function() {
+            if (this.checked) {
+                searchLabel.textContent = 'Número de Factura:';
+                searchValueInput.placeholder = 'Ingrese Número';
+                searchValueInput.value = '';
+                searchValueInput.focus();
+            }
+        });
+    }
     
     // Panel colapsable
     const infoHeader = document.getElementById('info-header');
@@ -1904,55 +2333,68 @@ document.addEventListener('DOMContentLoaded', () => {
         guardarBtn.addEventListener('click', guardarCuadre);
     }
     
-    if (buscarBtn && inventarioIdInput) {
+    if (buscarBtn && searchValueInput) {
         buscarBtn.addEventListener('click', async () => {
-            const idInventario = inventarioIdInput.value;
-            const sucursalData = sucursalSelect.selectedOptions[0]?.dataset;
+            const searchValue = searchValueInput.value.trim();
+            const sucursalInput = document.getElementById('sucursal-input');
+            const sucursalData = sucursalSelect?.dataset;
             const idSucursal = sucursalSelect.value;
-            const nombreSucursal = sucursalSelect.selectedOptions[0]?.text;
-    
-            if (!idInventario || !sucursalData) {
+            const nombreSucursal = sucursalInput?.value || '';
+
+            // Determinar tipo de búsqueda
+            const searchType = searchByNumeroRadio?.checked ? 'numero' : 'id';
+            const searchTypeLabel = searchType === 'numero' ? 'número de factura' : 'ID de inventario';
+
+            if (!searchValue || !idSucursal) {
                 mostrarError(
-                    'Advertencia', 
-                    'Debe seleccionar una sucursal e ingresar un ID de inventario.'
+                    'Advertencia',
+                    `Debe seleccionar una sucursal e ingresar un ${searchTypeLabel}.`
                 );
                 return;
             }
-    
+
             try {
-                // Primero verificamos si el cuadre ya existe
-                const existeInventario = await verificarExistenciaInventario(idInventario, idSucursal);
-                
+                // Buscar inventario (por ID o número según selección)
+                const inventario = await obtenerInventario(sucursalData, searchValue, searchType);
+
+                if (!inventario || !inventario.info) {
+                    mostrarError(
+                        'No encontrado',
+                        `No se encontró ningún inventario con el ${searchTypeLabel}: ${searchValue}`
+                    );
+                    return;
+                }
+
+                // Obtener el ID real del inventario para verificar si existe cuadre
+                const idInventarioReal = inventario.info.idInventarios || searchValue;
+
+                // Verificar si el cuadre ya existe
+                const existeInventario = await verificarExistenciaInventario(idInventarioReal, idSucursal);
+
                 if (existeInventario) {
                     mostrarConfirmacion(
                         'Cuadre Existente',
-                        `Ya existe información guardada para el inventario ${idInventario} de la sucursal ${nombreSucursal}. ¿Desea continuar y sobrescribir?`,
-                        async () => {
-                            const inventario = await obtenerInventario(sucursalData, idInventario);
-                            if (inventario) {
-                                mostrarInventario(inventario);
-                            }
+                        `Ya existe información guardada para el inventario ${idInventarioReal} de la sucursal ${nombreSucursal}. ¿Desea continuar y sobrescribir?`,
+                        () => {
+                            mostrarInventario(inventario);
                         }
                     );
                 } else {
-                    // Si no existe el cuadre, procedemos con la búsqueda
-                    const inventario = await obtenerInventario(sucursalData, idInventario);
-                    if (inventario) {
-                        mostrarInventario(inventario);
-                    }
+                    // Si no existe el cuadre, mostrar directamente
+                    mostrarInventario(inventario);
                 }
             } catch (error) {
                 console.error('Error al buscar el inventario:', error);
                 mostrarError(
-                    'Error', 
+                    'Error',
                     'Ocurrió un error al buscar el inventario.',
                     error.message
                 );
             }
         });
         
-        // Permitir usar Enter en el campo ID para buscar
-        inventarioIdInput.addEventListener('keydown', (e) => {
+        // Permitir usar Enter en el campo de búsqueda
+        searchValueInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 buscarBtn.click();

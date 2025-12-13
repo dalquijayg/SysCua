@@ -10,6 +10,16 @@ const BATCH_SIZE = 100; // Cargar 100 filas a la vez
 const ROW_HEIGHT = 41; // Altura aproximada de cada fila en px
 let isLoading = false;
 
+// Variables globales para autocomplete de proveedor
+let allProviders = [];
+let selectedProviderId = null;
+
+// Variables globales para autocomplete de sucursal
+let allSucursales = [];
+let selectedSucursalNombre = null;
+
+const conexionsucursales = 'DSN=DBsucursal';
+
 async function conectar() {
     try {
         const connection = await odbc.connect(conexionfacturas);
@@ -17,6 +27,17 @@ async function conectar() {
         return connection;
     } catch (error) {
         console.error('Error al conectar a la base de datos:', error);
+        throw error;
+    }
+}
+
+async function conectarSucursales() {
+    try {
+        const connection = await odbc.connect(conexionsucursales);
+        await connection.query('SET NAMES utf8mb4');
+        return connection;
+    } catch (error) {
+        console.error('Error al conectar a la base de datos de sucursales:', error);
         throw error;
     }
 }
@@ -103,15 +124,204 @@ function updateSelectedText() {
     selectedText.textContent = selectedDepts.length > 0 ? selectedDepts.join(', ') : 'Seleccionar Departamento';
 }
 
+// Función para búsqueda difusa (fuzzy matching)
+function fuzzyMatch(searchTerm, targetText) {
+    const normalize = (text) => {
+        return text
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "") // Remove accents
+            .replace(/\s+/g, ' ') // Normalize spaces
+            .trim();
+    };
+
+    const search = normalize(searchTerm);
+    const target = normalize(targetText);
+
+    if (!search) return { matches: false, score: 0, highlights: [] };
+
+    // Exact match (100 points)
+    if (target.includes(search)) {
+        return {
+            matches: true,
+            score: 100,
+            highlights: [{ start: target.indexOf(search), end: target.indexOf(search) + search.length }]
+        };
+    }
+
+    // Word matching (90 points)
+    const targetWords = target.split(' ');
+    const searchWords = search.split(' ');
+
+    let wordMatches = 0;
+    searchWords.forEach(searchWord => {
+        if (targetWords.some(targetWord => targetWord.startsWith(searchWord))) {
+            wordMatches++;
+        }
+    });
+
+    if (wordMatches > 0) {
+        return {
+            matches: true,
+            score: 90,
+            highlights: []
+        };
+    }
+
+    // Initials matching (70 points)
+    const initials = targetWords.map(word => word[0]).join('');
+    if (initials.includes(search)) {
+        return {
+            matches: true,
+            score: 70,
+            highlights: []
+        };
+    }
+
+    // Sequential character matching (60 points)
+    let searchIndex = 0;
+    for (let i = 0; i < target.length && searchIndex < search.length; i++) {
+        if (target[i] === search[searchIndex]) {
+            searchIndex++;
+        }
+    }
+
+    if (searchIndex === search.length) {
+        return {
+            matches: true,
+            score: 60,
+            highlights: []
+        };
+    }
+
+    return { matches: false, score: 0, highlights: [] };
+}
+
+// Función para filtrar y mostrar proveedores
+function filterProviders(searchTerm) {
+    const dropdown = document.getElementById('provider-dropdown');
+
+    if (!searchTerm) {
+        dropdown.style.display = 'none';
+        return;
+    }
+
+    // Filtrar proveedores que coincidan
+    const matches = allProviders
+        .map(provider => ({
+            ...provider,
+            matchResult: fuzzyMatch(searchTerm, provider.Nombre)
+        }))
+        .filter(provider => provider.matchResult.matches)
+        .sort((a, b) => b.matchResult.score - a.matchResult.score)
+        .slice(0, 10); // Mostrar máximo 10 resultados
+
+    if (matches.length === 0) {
+        dropdown.innerHTML = '<div class="autocomplete-item no-results">No se encontraron coincidencias</div>';
+        dropdown.style.display = 'block';
+        return;
+    }
+
+    // Mostrar resultados
+    dropdown.innerHTML = matches.map(provider =>
+        `<div class="autocomplete-item" data-id="${provider.Id}">${provider.Nombre}</div>`
+    ).join('');
+
+    dropdown.style.display = 'block';
+
+    // Agregar eventos de click a los items
+    dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+        item.addEventListener('click', function() {
+            selectProvider(this.dataset.id, this.textContent);
+        });
+    });
+}
+
+// Función para seleccionar un proveedor
+function selectProvider(id, name) {
+    document.getElementById('provider').value = id;
+    document.getElementById('provider-input').value = name;
+    document.getElementById('provider-dropdown').style.display = 'none';
+    document.getElementById('clear-provider-btn').style.display = 'flex';
+    selectedProviderId = id;
+}
+
+// Función para limpiar selección de proveedor
+function limpiarSeleccionProveedor() {
+    document.getElementById('provider').value = '';
+    document.getElementById('provider-input').value = '';
+    document.getElementById('provider-dropdown').style.display = 'none';
+    document.getElementById('clear-provider-btn').style.display = 'none';
+    selectedProviderId = null;
+}
+
+// Función para filtrar y mostrar sucursales
+function filterSucursales(searchTerm) {
+    const dropdown = document.getElementById('sucursal-dropdown');
+
+    if (!searchTerm) {
+        dropdown.style.display = 'none';
+        return;
+    }
+
+    // Filtrar sucursales que coincidan
+    const matches = allSucursales
+        .map(sucursal => ({
+            ...sucursal,
+            matchResult: fuzzyMatch(searchTerm, sucursal.NombreSucursal)
+        }))
+        .filter(sucursal => sucursal.matchResult.matches)
+        .sort((a, b) => b.matchResult.score - a.matchResult.score)
+        .slice(0, 10); // Mostrar máximo 10 resultados
+
+    if (matches.length === 0) {
+        dropdown.innerHTML = '<div class="autocomplete-item no-results">No se encontraron coincidencias</div>';
+        dropdown.style.display = 'block';
+        return;
+    }
+
+    // Mostrar resultados
+    dropdown.innerHTML = matches.map(sucursal =>
+        `<div class="autocomplete-item" data-nombre="${sucursal.NombreSucursal}">${sucursal.NombreSucursal}</div>`
+    ).join('');
+
+    dropdown.style.display = 'block';
+
+    // Agregar eventos de click a los items
+    dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+        item.addEventListener('click', function() {
+            selectSucursal(this.dataset.nombre);
+        });
+    });
+}
+
+// Función para seleccionar una sucursal
+function selectSucursal(nombre) {
+    document.getElementById('sucursal').value = nombre;
+    document.getElementById('sucursal-input').value = nombre;
+    document.getElementById('sucursal-dropdown').style.display = 'none';
+    document.getElementById('clear-sucursal-btn').style.display = 'flex';
+    selectedSucursalNombre = nombre;
+}
+
+// Función para limpiar selección de sucursal
+function limpiarSeleccionSucursal() {
+    document.getElementById('sucursal').value = '';
+    document.getElementById('sucursal-input').value = '';
+    document.getElementById('sucursal-dropdown').style.display = 'none';
+    document.getElementById('clear-sucursal-btn').style.display = 'none';
+    selectedSucursalNombre = null;
+}
+
 // Función para ejecutar una consulta y llenar un combobox
 async function populateCombobox(connection, query, comboboxId) {
     try {
         const result = await connection.query(query);
         const combobox = document.getElementById(comboboxId);
-        
+
         // Limpiar opciones existentes
         combobox.innerHTML = '<option value="">Seleccionar</option>';
-        
+
         // Añadir nuevas opciones
         result.forEach(row => {
             const option = document.createElement('option');
@@ -125,28 +335,108 @@ async function populateCombobox(connection, query, comboboxId) {
     }
 }
 
+// Función para cargar proveedores en autocomplete
+async function loadProvidersForAutocomplete(connection) {
+    try {
+        const result = await connection.query('SELECT proveedores_facturas.Id, proveedores_facturas.Nombre FROM proveedores_facturas');
+        allProviders = result;
+
+        // Configurar el input de búsqueda
+        const providerInput = document.getElementById('provider-input');
+        const clearBtn = document.getElementById('clear-provider-btn');
+
+        providerInput.addEventListener('input', function() {
+            filterProviders(this.value);
+            clearBtn.style.display = this.value ? 'flex' : 'none';
+        });
+
+        providerInput.addEventListener('focus', function() {
+            if (this.value) {
+                filterProviders(this.value);
+            }
+        });
+
+        clearBtn.addEventListener('click', function() {
+            limpiarSeleccionProveedor();
+            providerInput.focus();
+        });
+
+        // Cerrar dropdown al hacer click fuera
+        document.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('provider-dropdown');
+            if (!e.target.closest('.autocomplete-wrapper')) {
+                dropdown.style.display = 'none';
+            }
+        });
+    } catch (error) {
+        console.error('Error al cargar proveedores:', error);
+        throw error;
+    }
+}
+
+// Función para cargar sucursales en autocomplete
+async function loadSucursalesForAutocomplete(connectionSucursales) {
+    try {
+        const result = await connectionSucursales.query(`
+            SELECT
+                sucursales.idSucursal,
+                sucursales.NombreSucursal
+            FROM
+                sucursales
+            WHERE
+                sucursales.Activo = 1
+                AND sucursales.TipoSucursal IN (1, 2, 3)
+            ORDER BY
+                sucursales.NombreSucursal ASC
+        `);
+        allSucursales = result;
+
+        // Configurar el input de búsqueda
+        const sucursalInput = document.getElementById('sucursal-input');
+        const clearBtn = document.getElementById('clear-sucursal-btn');
+
+        sucursalInput.addEventListener('input', function() {
+            filterSucursales(this.value);
+            clearBtn.style.display = this.value ? 'flex' : 'none';
+        });
+
+        sucursalInput.addEventListener('focus', function() {
+            if (this.value) {
+                filterSucursales(this.value);
+            }
+        });
+
+        clearBtn.addEventListener('click', function() {
+            limpiarSeleccionSucursal();
+            sucursalInput.focus();
+        });
+    } catch (error) {
+        console.error('Error al cargar sucursales:', error);
+        throw error;
+    }
+}
+
 // Función principal para poblar todos los comboboxes
 async function populateAllComboboxes() {
     let connection;
+    let connectionSucursales;
     try {
         connection = await conectar();
-        
-        await populateCombobox(
-            connection,
-            'SELECT proveedores_facturas.Id, proveedores_facturas.Nombre FROM proveedores_facturas',
-            'provider'
-        );
-        
+        connectionSucursales = await conectarSucursales();
+
+        await loadProvidersForAutocomplete(connection);
+        await loadSucursalesForAutocomplete(connectionSucursales);
+
         await populateDepartmentMultiSelect(
             connection,
             'SELECT Costosdep.Id, Costosdep.Nombre FROM Costosdep WHERE Costosdep.Activo = 1'
-        ); 
-        
+        );
+
         await populateCombobox(
             connection,
-            `SELECT usuarios.Id, CONCAT(usuarios.Nombres, ' ', usuarios.Apellidos) AS NombreCompleto 
-             FROM usuarios 
-             WHERE usuarios.Activo = 1 
+            `SELECT usuarios.Id, CONCAT(usuarios.Nombres, ' ', usuarios.Apellidos) AS NombreCompleto
+             FROM usuarios
+             WHERE usuarios.Activo = 1
                AND usuarios.IdNivel IN (11, 30)`,
             'user'
         );
@@ -170,6 +460,14 @@ async function populateAllComboboxes() {
                 console.log('Conexión a la base de datos cerrada');
             } catch (closeError) {
                 console.error('Error al cerrar la conexión:', closeError);
+            }
+        }
+        if (connectionSucursales) {
+            try {
+                await connectionSucursales.close();
+                console.log('Conexión a la base de datos de sucursales cerrada');
+            } catch (closeError) {
+                console.error('Error al cerrar la conexión de sucursales:', closeError);
             }
         }
     }
@@ -200,16 +498,28 @@ function formatofecha(dateString) {
     if (!dateString) return '';
     // Parseamos la fecha asumiendo que está en UTC
     const date = new Date(dateString + 'T00:00:00Z');
-    
+
     // Ajustamos la fecha a la zona horaria local
     const localDate = new Date(date.getTime() + date.getTimezoneOffset() * 60000);
-    
+
     // Formateamos la fecha
     return localDate.toLocaleDateString('es-ES', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit'
     });
+}
+
+// Función para formatear valores numéricos (mostrar 0.00 en lugar de vacío)
+function formatNumericValue(value) {
+    if (value === null || value === undefined || value === '') {
+        return '0.00';
+    }
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) {
+        return '0.00';
+    }
+    return numValue.toFixed(2);
 }
 
 async function performSearch() {
@@ -230,6 +540,7 @@ async function performSearch() {
         connection = await conectar();
 
         const proveedor = document.getElementById('provider').value;
+        const sucursal = document.getElementById('sucursal').value;
         const departamentos = Array.from(document.querySelectorAll('#department-select input[type="checkbox"]:checked')).map(cb => cb.value);
         const usuario = document.getElementById('user').value;
         const fechaInicio = document.getElementById('start-date').value;
@@ -275,6 +586,11 @@ async function performSearch() {
         if (proveedor) {
             query += ' AND cuadrecostos.Proveedor = ?';
             params.push(proveedor);
+        }
+
+        if (sucursal) {
+            query += ' AND cuadrecostos.sucursal = ?';
+            params.push(sucursal);
         }
 
         if (departamentos.length > 0) {
@@ -328,7 +644,7 @@ async function performSearch() {
                 return;
             }
             
-            query += ' ORDER BY cuadrecostos.fechacuadre DESC LIMIT 10000'; // Limitar a 10,000 registros
+            query += ' ORDER BY cuadrecostos.fechacuadre ASC LIMIT 10000'; // Limitar a 10,000 registros
         }
 
         // Actualizar progreso
@@ -400,11 +716,11 @@ function loadMoreRows() {
             <td>${formatofecha(row.FechaFactura)}</td>
             <td>${row.NoFactura || ''}</td>
             <td>${row.Serie || ''}</td>
-            <td>${row.costosistema || ''}</td>
-            <td>${row.costofacturado || ''}</td>
-            <td>${row.CostoFacSinDescuento || ''}</td>
-            <td>${row.Costofiscal || ''}</td>
-            <td>${row.diferencia || ''}</td>
+            <td>${formatNumericValue(row.costosistema)}</td>
+            <td>${formatNumericValue(row.costofacturado)}</td>
+            <td>${formatNumericValue(row.CostoFacSinDescuento)}</td>
+            <td>${formatNumericValue(row.Costofiscal)}</td>
+            <td>${formatNumericValue(row.diferencia)}</td>
             <td>${row.sucursal || ''}</td>
             <td>${formatofecha(row.fechacuadre)}</td>
             <td>${row.Usuario || ''}</td>
@@ -476,7 +792,7 @@ function exportToExcel() {
             
             // Procesar por lotes para mostrar progreso
             allData.forEach((row, index) => {
-                
+
                 data.push([
                     row.Idcuadre || '',
                     String(row.Upc || '').padStart(13, '0'),
@@ -488,11 +804,11 @@ function exportToExcel() {
                     formatofecha(row.FechaFactura),
                     row.NoFactura || '',
                     row.Serie || '',
-                    row.costosistema || '',
-                    row.costofacturado || '',
-                    row.CostoFacSinDescuento || '',
-                    row.Costofiscal || '',
-                    row.diferencia || '',
+                    formatNumericValue(row.costosistema),
+                    formatNumericValue(row.costofacturado),
+                    formatNumericValue(row.CostoFacSinDescuento),
+                    formatNumericValue(row.Costofiscal),
+                    formatNumericValue(row.diferencia),
                     row.sucursal || '',
                     formatofecha(row.fechacuadre),
                     row.Usuario || '',

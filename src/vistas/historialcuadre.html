@@ -12,10 +12,6 @@
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>Historial de Cuadre</h1>
-        </header>
-        
         <section class="filters">
             <div class="filter-group large">
                 <label for="start-date">Fecha Inicio:</label>
@@ -26,10 +22,26 @@
                 <input type="date" id="end-date">
             </div>
             <div class="filter-group large">
-                <label for="provider">Proveedor:</label>
-                <select id="provider">
-                    <option value="">Seleccionar</option>
-                </select>
+                <label for="provider-input">Proveedor:</label>
+                <div class="autocomplete-wrapper">
+                    <input type="text" id="provider-input" class="styled-input"
+                           placeholder="Escriba para buscar..." autocomplete="off">
+                    <button type="button" id="clear-provider-btn" class="clear-btn"
+                            title="Limpiar selección">×</button>
+                    <div id="provider-dropdown" class="autocomplete-dropdown"></div>
+                    <input type="hidden" id="provider">
+                </div>
+            </div>
+            <div class="filter-group large">
+                <label for="sucursal-input">Sucursal:</label>
+                <div class="autocomplete-wrapper">
+                    <input type="text" id="sucursal-input" class="styled-input"
+                           placeholder="Escriba para buscar..." autocomplete="off">
+                    <button type="button" id="clear-sucursal-btn" class="clear-btn"
+                            title="Limpiar selección">×</button>
+                    <div id="sucursal-dropdown" class="autocomplete-dropdown"></div>
+                    <input type="hidden" id="sucursal">
+                </div>
             </div>
             <div class="filter-group large">
                 <label for="department">Departamento:</label>
