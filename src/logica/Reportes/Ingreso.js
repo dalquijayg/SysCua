@@ -71,7 +71,7 @@ async function cargarSucursales() {
         const connection = await pool.getConnection();
         
         const [sucursales] = await connection.query(
-            'SELECT idSucursal, NombreSucursal FROM sucursales WHERE RazonSocial = 2 AND Activo = 1 ORDER BY NombreSucursal'
+            'SELECT idSucursal, NombreSucursal FROM sucursales WHERE Activo = 1 ORDER BY NombreSucursal'
         );
         
         connection.release();
